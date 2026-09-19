@@ -1,4 +1,4 @@
-import { MapPin, Phone, Clock, Camera, Mail } from 'lucide-react'
+import { MapPin, Phone, Clock, Instagram, Mail } from 'lucide-react'
 import logoWhite from '../../assets/brand/logo-main-white.png'
 
 const contactInfo = [
@@ -71,7 +71,7 @@ export default function Footer() {
                 onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
                 aria-label="Instagram"
               >
-                <Camera size={18} style={{ color: 'rgba(255,255,255,0.8)' }} />
+                <Instagram size={22} style={{ color: 'rgba(255,255,255,0.9)' }} />
               </a>
             </div>
           </div>
