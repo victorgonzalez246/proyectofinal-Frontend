@@ -44,6 +44,19 @@ export default function PhilosophySection() {
         zIndex: 1
       }}
     >
+      {/* Transición suave desde la sección anterior */}
+      <div 
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '180px',
+          background: 'linear-gradient(to bottom, var(--cream-bg) 0%, rgba(219,229,223,0) 100%)',
+          zIndex: 0,
+          pointerEvents: 'none'
+        }}
+      />
       {/* Background Watermark Image */}
       <motion.div
         initial={{ opacity: 0 }}
