@@ -54,7 +54,7 @@ export default function Footer() {
             {/* Social */}
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
               <a
-                href="https://instagram.com"
+                href="https://www.instagram.com/dralau.armonizacion?stkn=MTBqNXhnZ2QyODJqcw%3D%3D&utm_source=qr"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
