@@ -1,0 +1,388 @@
+/* ============================================================
+   SISTEMA DE DISEÑO — Dra. Laura Jiménez
+   Manual de Identidad Visual (SoyFioDesign) · Julio 2026
+   ============================================================ */
+
+@import "tailwindcss";
+
+/* ── 1. TOKENS DE COLOR (Paleta Cromática Oficial) ────────── */
+:root {
+  /* Colores primarios del Manual de Marca */
+  --nude-rose: #DBB299;
+  --olive-maison: #707B63;
+  --taupe-atelier: #93826D;
+  --celadon-pearl: #DBE5DF;
+  --champagne-linen: #E9DFCE;
+  --sage-satin: #B5B99F;
+
+  /* Neutrales y contraste */
+  --charcoal: #1C1B1A;
+  --charcoal-soft: #2D2B2A;
+  --stone-muted: #736F6E;
+  --stone-light: #A39E9B;
+  --cream-bg: #FAF8F5;
+  --white: #FFFFFF;
+
+  /* Transparencias de marca */
+  --nude-rose-10: rgba(219, 178, 153, 0.10);
+  --nude-rose-20: rgba(219, 178, 153, 0.20);
+  --olive-maison-10: rgba(112, 123, 99, 0.10);
+  --celadon-pearl-30: rgba(219, 229, 223, 0.30);
+  --champagne-linen-50: rgba(233, 223, 206, 0.50);
+
+  /* Tipografía */
+  --font-serif: 'Cormorant Garamond', 'Georgia', serif;
+  --font-sans: 'Plus Jakarta Sans', 'Helvetica Neue', sans-serif;
+  --font-body: 'Montserrat', 'Helvetica Neue', sans-serif;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 3px rgba(28, 27, 26, 0.06);
+  --shadow-md: 0 4px 16px rgba(28, 27, 26, 0.08);
+  --shadow-lg: 0 8px 32px rgba(28, 27, 26, 0.10);
+  --shadow-xl: 0 16px 48px rgba(28, 27, 26, 0.12);
+  --shadow-glass: 0 8px 32px rgba(147, 130, 109, 0.12);
+
+  /* Bordes */
+  --border-subtle: rgba(147, 130, 109, 0.15);
+  --border-light: rgba(219, 229, 223, 0.50);
+
+  /* Radios */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 9999px;
+
+  /* Transiciones */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-base: all 0.3s var(--ease-out);
+  --transition-slow: all 0.5s var(--ease-out);
+}
+
+/* ── 2. RESET Y ESTILOS BASE ─────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  color: var(--charcoal);
+  background-color: var(--cream-bg);
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+::selection {
+  background-color: var(--nude-rose-20);
+  color: var(--charcoal);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+ul, ol {
+  list-style: none;
+}
+
+/* ── 3. TIPOGRAFÍA ────────────────────────────────────────── */
+h1, h2, h3, h4 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--charcoal);
+}
+
+h1 {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 300;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: 400;
+}
+
+h3 {
+  font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+  font-weight: 500;
+}
+
+h4 {
+  font-size: clamp(1.1rem, 1.5vw, 1.3rem);
+  font-weight: 500;
+  font-family: var(--font-sans);
+}
+
+.label-upper {
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--stone-muted);
+}
+
+.text-serif-italic {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--olive-maison);
+}
+
+/* ── 4. COMPONENTES REUTILIZABLES ─────────────────────────── */
+
+/* Contenedor principal */
+.container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .container { padding: 0 2rem; }
+}
+
+/* Sección con padding vertical estándar */
+.section {
+  padding: 5rem 0;
+}
+
+@media (min-width: 768px) {
+  .section { padding: 7rem 0; }
+}
+
+/* Botón Primario */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 2rem;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--white);
+  background: linear-gradient(135deg, var(--charcoal), var(--charcoal-soft));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md);
+  transition: var(--transition-base);
+  white-space: nowrap;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--olive-maison), var(--sage-satin));
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+/* Botón Secundario */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 2rem;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--charcoal);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-base);
+  white-space: nowrap;
+}
+
+.btn-secondary:hover {
+  background: var(--white);
+  color: var(--charcoal);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+/* Glass Card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.60);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-glass);
+  transition: var(--transition-base);
+}
+
+.glass-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* Divider / separador decorativo */
+.divider {
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--nude-rose), var(--sage-satin));
+  border: none;
+  margin: 1.5rem 0;
+}
+
+.divider-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ── 5. FORMULARIOS ───────────────────────────────────────── */
+.form-input {
+  width: 100%;
+  padding: 0.875rem 1.25rem;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--charcoal);
+  background: var(--white);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: var(--transition-base);
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: var(--olive-maison);
+  box-shadow: 0 0 0 3px var(--olive-maison-10);
+}
+
+.form-input::placeholder {
+  color: var(--stone-light);
+  font-weight: 300;
+}
+
+.form-label {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--stone-muted);
+  margin-bottom: 0.5rem;
+}
+
+.form-error {
+  font-size: 0.8rem;
+  color: #C0392B;
+  margin-top: 0.35rem;
+  font-weight: 500;
+}
+
+.form-select {
+  width: 100%;
+  padding: 0.875rem 1.25rem;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--charcoal);
+  background: var(--white);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: var(--transition-base);
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23736F6E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+}
+
+.form-select:focus {
+  border-color: var(--olive-maison);
+  box-shadow: 0 0 0 3px var(--olive-maison-10);
+}
+
+/* ── 6. UTILIDADES ────────────────────────────────────────── */
+.text-center { text-align: center; }
+.text-olive { color: var(--olive-maison); }
+.text-taupe { color: var(--taupe-atelier); }
+.text-nude { color: var(--nude-rose); }
+.text-muted { color: var(--stone-muted); }
+.bg-celadon { background-color: var(--celadon-pearl); }
+.bg-champagne { background-color: var(--champagne-linen); }
+.bg-cream { background-color: var(--cream-bg); }
+
+/* ── 7. ANIMACIONES ───────────────────────────────────────── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes subtlePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s var(--ease-out) both;
+}
+
+.animate-pulse-subtle {
+  animation: subtlePulse 2.5s ease-in-out infinite;
+}
+
+/* Stagger animation delays for children */
+.stagger > *:nth-child(1) { animation-delay: 0s; }
+.stagger > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger > *:nth-child(3) { animation-delay: 0.2s; }
+.stagger > *:nth-child(4) { animation-delay: 0.3s; }
+.stagger > *:nth-child(5) { animation-delay: 0.4s; }
+.stagger > *:nth-child(6) { animation-delay: 0.5s; }
+
+/* ── 8. SCROLLBAR PERSONALIZADO ───────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--cream-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--sage-satin);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--taupe-atelier);
+}
