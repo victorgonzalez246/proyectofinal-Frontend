@@ -74,8 +74,40 @@ export default function CasesSection() {
     <section
       id="casos"
       className="section"
-      style={{ background: 'var(--champagne-linen)' }}
+      style={{ 
+        background: 'var(--champagne-linen)',
+        position: 'relative',
+        overflow: 'hidden',
+        zIndex: 1
+      }}
     >
+      {/* Transición suave desde la sección anterior */}
+      <div 
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '180px',
+          background: 'linear-gradient(to bottom, var(--cream-bg) 0%, rgba(233,223,206,0) 100%)',
+          zIndex: 0,
+          pointerEvents: 'none'
+        }}
+      />
+
+      {/* Transición suave hacia la sección siguiente */}
+      <div 
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '180px',
+          background: 'linear-gradient(to top, var(--cream-bg) 0%, rgba(233,223,206,0) 100%)',
+          zIndex: 0,
+          pointerEvents: 'none'
+        }}
+      />
       <div className="container">
         {/* Header */}
         <motion.div
