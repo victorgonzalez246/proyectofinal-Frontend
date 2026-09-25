@@ -1,5 +1,47 @@
 {
-  "users": [],
+  "users": [
+    {
+      "id": "u-doc-1",
+      "name": "Dra. Laura Jiménez",
+      "email": "doctora@laurajimenez.com",
+      "phone": "+52 55 1234 5678",
+      "password": "$2b$10$37KORlYyGF7nm3hGVILtGekt0u9rAH5zDBKzYw4WgqDfrYUdlK1dG",
+      "role": "doctor",
+      "specialty": "Medicina Estética y Rejuvenecimiento Facial",
+      "dateJoined": "2026-01-01T00:00:00.000Z",
+      "coupons": []
+    },
+    {
+      "id": "usr_1790065212816_1j11rn",
+      "name": "valery borbon",
+      "email": "ffasfa@gmail.com",
+      "phone": "",
+      "password": "$2b$10$N.a01eKDvgxr38yWhxDHXeuV80k5Oi/6d3igsynLMcSwnBu4EHmuW",
+      "role": "member",
+      "dateJoined": "2026-09-22T08:20:12.816Z",
+      "subscribedToOffers": true,
+      "coupons": [
+        {
+          "code": "BIENVENIDA15",
+          "title": "15% OFF en tu Primer Tratamiento",
+          "discount": "15%",
+          "description": "Válido en cualquier tratamiento facial o valoración integral.",
+          "validUntil": "2026-12-31",
+          "category": "Facial & Armonización",
+          "status": "active"
+        },
+        {
+          "code": "VIPSKIN2026",
+          "title": "Hydrafacial Glow de Cortesía con Sesión Láser",
+          "discount": "100% en Hydrafacial complementario",
+          "description": "Beneficio exclusivo para miembros suscritos al club de beneficios.",
+          "validUntil": "2026-10-31",
+          "category": "Promoción Club VIP",
+          "status": "active"
+        }
+      ]
+    }
+  ],
   "patients": [],
   "appointments": []
 }

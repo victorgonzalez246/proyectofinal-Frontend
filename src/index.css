@@ -5,6 +5,132 @@
 
 @import "tailwindcss";
 
+@theme {
+  --color-background: #fbf9f5;
+  --color-on-surface: #1b1c1a;
+  --color-surface-variant: #e4e2de;
+  --color-surface: #fbf9f5;
+  --color-surface-container-high: #eae8e4;
+  --color-primary-fixed-dim: #e9c08a;
+  --color-error-container: #ffdad6;
+  --color-inverse-on-surface: #f2f0ed;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-fixed: #181c1f;
+  --color-primary-container: #b38e5d;
+  --color-on-primary-fixed-variant: #5e4117;
+  --color-on-secondary-fixed-variant: #43474a;
+  --color-on-tertiary: #ffffff;
+  --color-surface-tint: #78592d;
+  --color-tertiary-container: #ab906a;
+  --color-surface-bright: #fbf9f5;
+  --color-secondary-fixed: #e0e3e6;
+  --color-on-background: #1b1c1a;
+  --color-outline-variant: #d2c4b6;
+  --color-on-surface-variant: #4e453b;
+  --color-surface-container-low: #f5f3ef;
+  --color-on-error: #ffffff;
+  --color-outline: #807569;
+  --color-surface-container-highest: #e4e2de;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-tertiary-fixed: #281800;
+  --color-on-primary-fixed: #291800;
+  --color-primary: #78592d;
+  --color-secondary: #5b5f62;
+  --color-inverse-primary: #e9c08a;
+  --color-on-primary: #ffffff;
+  --color-on-error-container: #93000a;
+  --color-secondary-fixed-dim: #c4c7ca;
+  --color-tertiary-fixed: #fedeb2;
+  --color-secondary-container: #dde0e4;
+  --color-tertiary-fixed-dim: #e0c298;
+  --color-primary-fixed: #ffddb4;
+  --color-surface-dim: #dbdad6;
+  --color-on-tertiary-container: #3c2a0c;
+  --color-on-tertiary-fixed-variant: #584323;
+  --color-inverse-surface: #30312e;
+  --color-error: #ba1a1a;
+  --color-tertiary: #725b38;
+  --color-surface-container: #efeeea;
+  --color-on-primary-container: #402801;
+  --color-on-secondary-container: #5f6366;
+
+  --font-headline-xl-mobile: Playfair Display;
+  --font-body-lg: Manrope;
+  --font-headline-lg-mobile: Playfair Display;
+  --font-headline-xl: Playfair Display;
+  --font-body-md: Manrope;
+  --font-headline-sm: Playfair Display;
+  --font-label-md: Manrope;
+  --font-body-sm: Manrope;
+  --font-label-lg: Manrope;
+  --font-headline-md: Playfair Display;
+  --font-title-md: Manrope;
+  --font-label-sm: Manrope;
+  --font-headline-lg: Playfair Display;
+
+  --text-headline-xl-mobile: 32px;
+  --text-headline-xl-mobile--line-height: 40px;
+  --text-headline-xl-mobile--letter-spacing: -0.01em;
+  --text-headline-xl-mobile--font-weight: 400;
+
+  --text-body-lg: 17px;
+  --text-body-lg--line-height: 28px;
+  --text-body-lg--font-weight: 400;
+
+  --text-headline-lg-mobile: 26px;
+  --text-headline-lg-mobile--line-height: 34px;
+  --text-headline-lg-mobile--letter-spacing: -0.01em;
+  --text-headline-lg-mobile--font-weight: 400;
+
+  --text-headline-xl: 48px;
+  --text-headline-xl--line-height: 56px;
+  --text-headline-xl--letter-spacing: -0.02em;
+  --text-headline-xl--font-weight: 400;
+
+  --text-body-md: 15px;
+  --text-body-md--line-height: 24px;
+  --text-body-md--font-weight: 400;
+
+  --text-headline-sm: 20px;
+  --text-headline-sm--line-height: 28px;
+  --text-headline-sm--font-weight: 600;
+
+  --text-label-md: 11px;
+  --text-label-md--line-height: 14px;
+  --text-label-md--letter-spacing: 0.1em;
+  --text-label-md--font-weight: 600;
+
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 20px;
+  --text-body-sm--font-weight: 400;
+
+  --text-label-lg: 12px;
+  --text-label-lg--line-height: 16px;
+  --text-label-lg--letter-spacing: 0.08em;
+  --text-label-lg--font-weight: 600;
+
+  --text-headline-md: 24px;
+  --text-headline-md--line-height: 32px;
+  --text-headline-md--font-weight: 500;
+
+  --text-title-md: 16px;
+  --text-title-md--line-height: 24px;
+  --text-title-md--letter-spacing: 0.01em;
+  --text-title-md--font-weight: 600;
+
+  --text-label-sm: 10px;
+  --text-label-sm--line-height: 12px;
+  --text-label-sm--letter-spacing: 0.12em;
+  --text-label-sm--font-weight: 500;
+
+  --text-headline-lg: 36px;
+  --text-headline-lg--line-height: 44px;
+  --text-headline-lg--letter-spacing: -0.015em;
+  --text-headline-lg--font-weight: 400;
+}
+
+
+
 /* ── 1. TOKENS DE COLOR (Paleta Cromática Oficial) ────────── */
 :root {
   /* Colores primarios del Manual de Marca */
@@ -14,6 +140,8 @@
   --celadon-pearl: #DBE5DF;
   --champagne-linen: #E9DFCE;
   --sage-satin: #B5B99F;
+  --champagne-gold: #B38E5D;
+  --champagne-gold-10: rgba(179, 142, 93, 0.10);
 
   /* Neutrales y contraste */
   --charcoal: #1C1B1A;
@@ -22,6 +150,9 @@
   --stone-light: #A39E9B;
   --cream-bg: #FAF8F5;
   --white: #FFFFFF;
+  --surface-container-low: #F5F3EF;
+  --surface-container: #EFEEEA;
+  --surface-container-high: #EAE8E4;
 
   /* Transparencias de marca */
   --nude-rose-10: rgba(219, 178, 153, 0.10);

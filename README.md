@@ -76,3 +76,12 @@ El proyecto está configurado para pruebas unitarias y de componentes.
 
 ---
 *Este documento será actualizado progresivamente conforme se vayan añadiendo páginas, componentes y flujos de negocio.*
+
+---
+
+## ✅ Estado de Avance (Hitos Completados)
+
+### 1. Módulo de Autenticación y Registro VIP
+- **Diseño UI/UX Premium:** Interfaz de pantalla dividida con fotografía editorial y un formulario minimalista, respetando estrictamente el manual de marca y los espaciados (*whitespace*).
+- **Integración Segura:** Protección de candado local en `server.js` (`json-server`) conectada al frontend, guardando contraseñas en formato hash.
+- **Flujo de Usuarios:** Funcionalidad completa para que pacientes se registren (recibiendo cupones) y el equipo médico acceda a su portal de administración de forma exclusiva y limpia.

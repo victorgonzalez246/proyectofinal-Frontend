@@ -102,6 +102,27 @@ export default function Navbar() {
 
         {/* CTA + Mobile Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <a
+            href="/auth"
+            className="label-upper"
+            style={{
+              display: 'none',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.55rem 0.95rem',
+              borderRadius: 'var(--radius-full)',
+              border: '1px solid rgba(147,130,109,0.25)',
+              color: 'var(--charcoal)',
+              fontSize: '0.65rem',
+              letterSpacing: '0.15em',
+              textDecoration: 'none',
+              transition: 'var(--transition-base)'
+            }}
+            id="nav-club-desktop"
+          >
+            <span>Club VIP / Cupones</span>
+          </a>
+
           <a href="#agendar" className="btn-primary" style={{ display: 'none' }} id="nav-cta-desktop">
             <Calendar size={14} />
             <span>Agendar Cita</span>
@@ -133,6 +154,7 @@ export default function Navbar() {
         @media (min-width: 1024px) {
           .desktop-nav { display: flex !important; }
           #nav-cta-desktop { display: inline-flex !important; }
+          #nav-club-desktop { display: inline-flex !important; }
           .mobile-toggle { display: none !important; }
         }
       `}</style>
