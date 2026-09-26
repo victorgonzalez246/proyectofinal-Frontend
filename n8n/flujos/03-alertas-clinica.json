@@ -1,0 +1,186 @@
+{
+  "name": "Clínica · 03 Alertas: check-in y línea de tranquilidad",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "clinica/alertas",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "95bbae25-092c-4c05-a192-3f47ef06d142",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "c69cd5c8-6cb2-49ff-ac2d-233e7a0d2c7a"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bdc554b8-1f08-4f10-a57e-01c5d3339c68",
+              "name": "whatsappPhoneNumberId",
+              "value": "REEMPLAZAR_PHONE_NUMBER_ID",
+              "type": "string"
+            },
+            {
+              "id": "97b8ef8b-6c59-48f5-ae44-005b11bad78a",
+              "name": "graphApiVersion",
+              "value": "v21.0",
+              "type": "string"
+            },
+            {
+              "id": "f0262c9c-2c4b-457d-ad4b-a6fb6ed28f1a",
+              "name": "templateLanguage",
+              "value": "es",
+              "type": "string"
+            },
+            {
+              "id": "ae993325-fcba-4010-ac29-6cb29c2a9179",
+              "name": "clinicWhatsapp",
+              "value": "50688888888",
+              "type": "string"
+            },
+            {
+              "id": "650f51e2-555b-4681-abe3-c59571df8931",
+              "name": "portalUrl",
+              "value": "http://localhost:5173",
+              "type": "string"
+            },
+            {
+              "id": "b0698d56-9696-4a15-a0f1-8f52d4b1c65b",
+              "name": "apiUrl",
+              "value": "http://localhost:3001",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3ef9d29b-52b8-45a0-a289-d129ae60111a",
+      "name": "Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true\n}",
+        "options": {}
+      },
+      "id": "dd771499-a66b-4c4e-a264-7c6aa74dd129",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuración editable del flujo (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\n  const body = $('Webhook').first().json.body || {};\n  const paciente = body.patient || {};\n  const ANIMOS = { 'muy-bien': 'Muy bien', bien: 'Bien', regular: 'Regular', molestias: 'Con molestias', preocupacion: 'Con preocupación' };\n  const MOTIVOS = { dolor: 'Dolor fuerte', inflamacion: 'La inflamación aumentó', aspecto: 'Algo no se ve como esperaba', duda: 'Duda urgente' };\n\n  if (body.event === 'checkin.alert') {\n    const c = body.checkin || {};\n    const detalle = 'Check-in: ' + (ANIMOS[c.mood] || c.mood) + ', molestia ' + c.pain + '/10' + (c.note ? '. Nota: ' + c.note : '');\n    return [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Seguimiento', paciente.name, paciente.phone, detalle])];\n  }\n  if (body.event === 'sos.triggered') {\n    const a = body.alert || {};\n    const detalle = 'SOS: ' + (MOTIVOS[a.reason] || a.reason) + (a.note ? '. Nota: ' + a.note : '');\n    return [\n      msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Urgente', paciente.name, paciente.phone, detalle]),\n      msg(paciente.phone, 'sos_recibido', [firstName(paciente.name)]),\n    ];\n  }\n  return [];\n"
+      },
+      "id": "af2d9c01-981a-4bfe-a96e-516d6e04468e",
+      "name": "Preparar mensajes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Configuración').first().json.graphApiVersion }}/{{ $('Configuración').first().json.whatsappPhoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.to, type: 'template', template: { name: $json.template, language: { code: $('Configuración').first().json.templateLanguage }, components: [{ type: 'body', parameters: $json.params.map(text => ({ type: 'text', text })) }] } }) }}",
+        "options": {}
+      },
+      "id": "9d823586-cc4e-490f-a90d-9e78ed1064b7",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder OK": {
+      "main": [
+        [
+          {
+            "node": "Preparar mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar mensajes": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Costa_Rica",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": false
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
