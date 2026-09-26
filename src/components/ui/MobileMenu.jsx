@@ -1,7 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { Calendar } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Calendar, UserRound } from 'lucide-react'
 
-export default function MobileMenu({ isOpen, navLinks, onClose }) {
+const MotionLink = motion.create(Link)
+
+export default function MobileMenu({ isOpen, navLinks, portal, onClose }) {
   // Variantes para el contenedor (fondo)
   const overlayVariants = {
     closed: {
@@ -58,7 +61,7 @@ export default function MobileMenu({ isOpen, navLinks, onClose }) {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: '2.5rem'
+              gap: '1.75rem'
             }}
           >
             {navLinks.map((link) => (
@@ -90,6 +93,27 @@ export default function MobileMenu({ isOpen, navLinks, onClose }) {
               <Calendar size={18} />
               <span>Agendar Cita</span>
             </motion.a>
+
+            {portal && (
+              <MotionLink
+                variants={linkVariants}
+                to={portal.to}
+                onClick={onClose}
+                className="btn-secondary"
+              >
+                <UserRound size={16} />
+                <span>{portal.label}</span>
+              </MotionLink>
+            )}
+            <MotionLink
+              variants={linkVariants}
+              to="/auth"
+              onClick={onClose}
+              className="label-upper"
+              style={{ textDecoration: 'underline', textUnderlineOffset: '4px' }}
+            >
+              Club VIP y cupones
+            </MotionLink>
           </motion.div>
         </motion.div>
       )}

@@ -16,7 +16,9 @@ const InstagramIcon = ({ size = 22, color = 'currentColor' }) => (
     <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
   </svg>
 )
-import logoWhite from '../../assets/brand/logo-main-white.png'
+import { Link } from 'react-router-dom'
+// logo-isotipo.png es el logo blanco con transparencia (los nombres de los archivos de marca están cruzados)
+import logoWhite from '../../assets/brand/logo-isotipo.png'
 
 const contactInfo = [
   { icon: MapPin, text: 'Escazú, San José, Costa Rica' },
@@ -31,6 +33,8 @@ const quickLinks = [
   { label: 'Resultados', href: '#casos' },
   { label: 'La Doctora', href: '#doctora' },
   { label: 'Agendar Cita', href: '#agendar' },
+  { label: 'Portal de pacientes', href: '/portal/acceso' },
+  { label: 'Club de beneficios', href: '/auth' },
 ]
 
 export default function Footer() {
@@ -109,10 +113,13 @@ export default function Footer() {
               Enlaces Rápidos
             </h4>
             <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {quickLinks.map((link) => (
-                <a
+              {quickLinks.map((link) => {
+                const Anchor = link.href.startsWith('/') ? Link : 'a'
+                const target = link.href.startsWith('/') ? { to: link.href } : { href: link.href }
+                return (
+                <Anchor
                   key={link.href}
-                  href={link.href}
+                  {...target}
                   style={{
                     fontSize: '0.9rem',
                     fontWeight: 300,
@@ -123,8 +130,9 @@ export default function Footer() {
                   onMouseLeave={(e) => e.target.style.color = 'rgba(255,255,255,0.65)'}
                 >
                   {link.label}
-                </a>
-              ))}
+                </Anchor>
+                )
+              })}
             </nav>
           </div>
 

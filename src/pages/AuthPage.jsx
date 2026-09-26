@@ -327,7 +327,14 @@ export default function AuthPage() {
 
             <Spacer h="48px" />
 
-            <div className="text-center w-full">
+            <div className="text-center w-full flex flex-col items-center gap-4">
+              <Link
+                to="/portal/acceso"
+                className="text-[11px] uppercase tracking-[0.25em] font-medium text-[var(--stone-muted)] hover:text-[var(--charcoal)] transition-colors inline-flex items-center justify-center gap-2"
+              >
+                ¿Eres paciente? <span className="underline underline-offset-4 decoration-[var(--border-subtle)] hover:decoration-[var(--charcoal)] transition-colors">Entra con tu WhatsApp</span>
+                <ArrowRight size={12} strokeWidth={1.5} />
+              </Link>
               <button
                 type="button"
                 onClick={fillDoctorCredentials}

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Menu, X, Calendar } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Menu, X, Calendar, UserRound } from 'lucide-react'
 import logoMain from '../../assets/brand/logo-main.png'
 import MobileMenu from '../ui/MobileMenu'
+import { usePortalLink } from '../../hooks/usePortalLink.js'
 
 const navLinks = [
   { label: 'Filosofía', href: '#filosofia' },
@@ -14,6 +16,7 @@ const navLinks = [
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const portal = usePortalLink()
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 40)
@@ -102,8 +105,8 @@ export default function Navbar() {
 
         {/* CTA + Mobile Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <a
-            href="/auth"
+          <Link
+            to={portal.to}
             className="label-upper"
             style={{
               display: 'none',
@@ -120,8 +123,9 @@ export default function Navbar() {
             }}
             id="nav-club-desktop"
           >
-            <span>Club VIP / Cupones</span>
-          </a>
+            <UserRound size={13} />
+            <span>{portal.label}</span>
+          </Link>
 
           <a href="#agendar" className="btn-primary" style={{ display: 'none' }} id="nav-cta-desktop">
             <Calendar size={14} />
@@ -145,8 +149,9 @@ export default function Navbar() {
       {/* Mobile Menu Component */}
       <MobileMenu 
         isOpen={mobileOpen} 
-        navLinks={navLinks} 
-        onClose={handleLinkClick} 
+        navLinks={navLinks}
+        portal={portal}
+        onClose={handleLinkClick}
       />
 
       {/* Responsive styles */}

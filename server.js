@@ -88,6 +88,7 @@ const notifyN8n = (url, event, payload) => {
 };
 
 const str = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+const phoneKey = (phone) => String(phone || '').replace(/\D/g, '').slice(-8); // últimos 8 dígitos (CR)
 const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 // Límite simple de solicitudes por IP para endpoints públicos (anti-spam / fuerza bruta)
@@ -140,7 +141,8 @@ server.post('/login', rateLimit(10, 15 * 60 * 1000), (req, res) => {
   const user = db.get('users').find({ email }).value();
 
   // Mismo mensaje para correo inexistente o contraseña incorrecta (no revela qué cuentas existen)
-  if (!user || !bcrypt.compareSync(password, user.password)) {
+  // Pacientes creados desde una cita no tienen contraseña: solo entran con enlace mágico
+  if (!user || !user.password || !bcrypt.compareSync(password, user.password)) {
     return res.status(401).json({ error: 'Credenciales inválidas. Por favor verifica tu correo y contraseña.' });
   }
 
@@ -165,6 +167,26 @@ server.post('/appointments', rateLimit(5, 10 * 60 * 1000), (req, res) => {
     return res.status(400).json({ error: 'Datos de la cita inválidos.' });
   }
 
+  // Conecta la landing con el portal: quien agenda queda registrado como paciente
+  // (sin contraseña) y puede entrar a su portal con este mismo número de WhatsApp.
+  let patient = db.get('users').find((u) => u.role === 'member' && phoneKey(u.phone) === phoneKey(appointment.telefono)).value();
+  if (!patient) {
+    const emailTaken = appointment.email && db.get('users').find({ email: appointment.email.toLowerCase() }).value();
+    patient = {
+      id: `usr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+      name: appointment.nombre,
+      email: isEmail(appointment.email) && !emailTaken ? appointment.email.toLowerCase() : '',
+      phone: appointment.telefono,
+      password: null,
+      role: 'member',
+      source: 'landing-cita',
+      dateJoined: appointment.createdAt,
+      subscribedToOffers: false,
+      coupons: [],
+    };
+    db.get('users').push(patient).write();
+  }
+  appointment.userId = patient.id;
   db.get('appointments').push(appointment).write();
 
   // Automatización n8n (opcional): confirmar por WhatsApp, recordatorio 24 h, instrucciones previas
@@ -177,7 +199,6 @@ server.post('/appointments', rateLimit(5, 10 * 60 * 1000), (req, res) => {
 // ── Portal de pacientes: acceso sin contraseña por WhatsApp ──
 const magicLinks = new Map(); // sha256(token) -> { userId, expiresAt }
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
-const phoneKey = (phone) => String(phone || '').replace(/\D/g, '').slice(-8); // últimos 8 dígitos (CR)
 
 server.post('/auth/magic-link', rateLimit(5, 15 * 60 * 1000), (req, res) => {
   const key = phoneKey(req.body.phone);

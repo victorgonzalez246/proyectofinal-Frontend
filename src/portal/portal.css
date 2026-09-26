@@ -647,6 +647,18 @@
 .p-cert dt { display: inline; }
 .p-cert dd { display: inline; margin-left: 0.3rem; color: var(--p-ink-soft); font-weight: 600; }
 
+.p-coupon {
+  margin: 0.9rem 0 0.35rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px dashed var(--p-rose);
+  border-radius: var(--p-radius-md);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--p-rose-ink);
+  user-select: all;
+}
+
 .p-videos { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1.25rem; }
 .p-video__thumb {
   position: relative;

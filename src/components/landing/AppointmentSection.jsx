@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { motion } from 'framer-motion'
-import { Calendar, Send, CheckCircle } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Calendar, Send, CheckCircle, UserRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { sanitizeInput } from '../../utils/security.js'
 import api from '../../services/api.js'
@@ -98,8 +99,8 @@ export default function AppointmentSection() {
       setSubmitted(true)
       reset()
 
-      // Reset success state after 8 seconds
-      setTimeout(() => setSubmitted(false), 8000)
+      // Vuelve al formulario después de 20 segundos (tiempo para ver el acceso al portal)
+      setTimeout(() => setSubmitted(false), 20000)
     } catch (error) {
       console.error('Error al agendar cita:', error)
       toast.error('Error al enviar la solicitud', {
@@ -186,6 +187,14 @@ export default function AppointmentSection() {
                 Tu solicitud fue registrada exitosamente. Revisa WhatsApp para confirmar
                 tu cita directamente con nuestro equipo.
               </p>
+              <p style={{ color: 'var(--stone-muted)', fontWeight: 300, maxWidth: '400px', fontSize: '0.9rem' }}>
+                Tu portal privado ya está listo: ahí verás tu plan, tus cuidados y tus próximas citas.
+                Entra con este mismo número de WhatsApp.
+              </p>
+              <Link to="/portal/acceso" className="btn-secondary">
+                <UserRound size={14} />
+                <span>Entrar a mi portal</span>
+              </Link>
             </div>
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} noValidate>

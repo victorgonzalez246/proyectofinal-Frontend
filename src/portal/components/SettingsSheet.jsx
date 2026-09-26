@@ -1,4 +1,5 @@
-import { LogOut } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { LogOut, Globe } from 'lucide-react';
 import Sheet from './Sheet.jsx';
 
 const THEMES = [
@@ -88,7 +89,10 @@ export default function SettingsSheet({ prefs, update, onClose, onLogout }) {
         <p className="p-small">Desenfoca tus fotos y los nombres de tus tratamientos.</p>
       </div>
 
-      <button type="button" className="p-btn p-btn--quiet p-btn--block" style={{ marginTop: '1.5rem' }} onClick={onLogout}>
+      <Link to="/" className="p-btn p-btn--quiet p-btn--block" style={{ marginTop: '1.5rem' }}>
+        <Globe size={18} /> Ir al sitio de la clínica
+      </Link>
+      <button type="button" className="p-btn p-btn--quiet p-btn--block" style={{ marginTop: '0.75rem' }} onClick={onLogout}>
         <LogOut size={18} /> Cerrar sesión
       </button>
     </Sheet>

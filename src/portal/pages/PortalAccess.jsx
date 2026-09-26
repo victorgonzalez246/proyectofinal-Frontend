@@ -46,7 +46,9 @@ export default function PortalAccess() {
       </figure>
 
       <main className="p-access__panel">
-        <img src={resolvedTheme === 'dark' ? logoMainWhite : logoMain} alt="Dra. Laura Jiménez" />
+        <Link to="/" aria-label="Volver al sitio de la clínica" style={{ alignSelf: 'flex-start' }}>
+          <img src={resolvedTheme === 'dark' ? logoMainWhite : logoMain} alt="Dra. Laura Jiménez" style={{ height: '3rem', width: 'auto' }} />
+        </Link>
 
         {status === 'sent' ? (
           <div role="status">
