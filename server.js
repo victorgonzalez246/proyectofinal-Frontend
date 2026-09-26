@@ -16,12 +16,10 @@ const DB_FILE = process.env.DB_FILE || 'db.json';
 const PORT = Number(process.env.PORT) || 3001;
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 horas
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:4173').split(',');
-// Webhook de n8n para nuevas citas (opcional). Se queda en el servidor: el navegador nunca ve la URL.
-const N8N_APPOINTMENT_WEBHOOK = process.env.N8N_APPOINTMENT_WEBHOOK || '';
-// Envío del enlace mágico por WhatsApp (evento auth.magic_link)
-const N8N_AUTH_WEBHOOK = process.env.N8N_AUTH_WEBHOOK || '';
-// Alertas a la clínica: check-in preocupante y botón SOS (eventos checkin.alert, sos.triggered)
-const N8N_ALERTS_WEBHOOK = process.env.N8N_ALERTS_WEBHOOK || '';
+// Webhook único del cerebro maestro de n8n (opcional). Recibe todos los eventos:
+// appointment.created, auth.magic_link, checkin.alert, sos.triggered.
+// Se queda en el servidor: el navegador nunca ve la URL.
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
 // Secreto compartido con n8n: viaja en X-N8N-Secret en ambos sentidos
 const N8N_SHARED_SECRET = process.env.N8N_SHARED_SECRET || '';
 const PORTAL_URL = process.env.PORTAL_URL || 'http://localhost:5173';
@@ -81,9 +79,9 @@ const getSession = (req) => {
 };
 
 // Envía un evento a un webhook de n8n sin bloquear la respuesta al usuario
-const notifyN8n = (url, event, payload) => {
-  if (!url) return;
-  fetch(url, {
+const notifyN8n = (event, payload) => {
+  if (!N8N_WEBHOOK_URL) return;
+  fetch(N8N_WEBHOOK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-N8N-Secret': N8N_SHARED_SECRET },
     body: JSON.stringify({ event, sentAt: new Date().toISOString(), ...payload }),
@@ -193,7 +191,7 @@ server.post('/appointments', rateLimit(5, 10 * 60 * 1000), (req, res) => {
   db.get('appointments').push(appointment).write();
 
   // Automatización n8n (opcional): confirmar por WhatsApp, recordatorio 24 h, instrucciones previas
-  notifyN8n(N8N_APPOINTMENT_WEBHOOK, 'appointment.created', { appointment });
+  notifyN8n('appointment.created', { appointment });
 
   // Al visitante solo se le confirma la recepción: no se devuelven datos almacenados
   res.status(201).json({ ok: true, id: appointment.id });
@@ -215,8 +213,8 @@ server.post('/auth/magic-link', rateLimit(5, 15 * 60 * 1000), (req, res) => {
     magicLinks.set(hashToken(token), { userId: user.id, expiresAt: Date.now() + MAGIC_LINK_TTL_MS });
     const link = `${PORTAL_URL}/portal/verificar#${token}`;
 
-    if (N8N_AUTH_WEBHOOK) {
-      notifyN8n(N8N_AUTH_WEBHOOK, 'auth.magic_link', { phone: user.phone, name: user.name, link });
+    if (N8N_WEBHOOK_URL) {
+      notifyN8n('auth.magic_link', { phone: user.phone, name: user.name, link });
     } else {
       // Sin n8n configurado (solo desarrollo) el enlace se muestra en consola y en pantalla
       console.log(`🔑 Enlace mágico para ${user.name}: ${link}`);
@@ -357,7 +355,7 @@ server.post('/me/checkins', rateLimit(10, 60 * 60 * 1000), (req, res) => {
   db.get('checkins').push(checkin).write();
 
   if (needsFollowUp) {
-    notifyN8n(N8N_ALERTS_WEBHOOK, 'checkin.alert', { patient: patientContact(req.session.userId), checkin });
+    notifyN8n('checkin.alert', { patient: patientContact(req.session.userId), checkin });
   }
   res.status(201).json(checkin);
 });
@@ -372,7 +370,7 @@ server.post('/me/sos', rateLimit(3, 10 * 60 * 1000), (req, res) => {
     createdAt: new Date().toISOString(),
   };
   db.get('sosAlerts').push(alert).write();
-  notifyN8n(N8N_ALERTS_WEBHOOK, 'sos.triggered', { patient: patientContact(req.session.userId), alert });
+  notifyN8n('sos.triggered', { patient: patientContact(req.session.userId), alert });
   res.status(201).json({ ok: true, id: alert.id });
 });
 
@@ -398,6 +396,5 @@ server.use(router);
 server.listen(PORT, () => {
   console.log(`✅ Base de datos simulada corriendo en puerto ${PORT}`);
   console.log('🔒 Candado de Seguridad Local: ACTIVADO');
-  const status = (url) => (url ? 'ACTIVO' : 'no configurado');
-  console.log(`🔗 n8n · citas: ${status(N8N_APPOINTMENT_WEBHOOK)} · acceso WhatsApp: ${status(N8N_AUTH_WEBHOOK)} · alertas: ${status(N8N_ALERTS_WEBHOOK)}`);
+  console.log(N8N_WEBHOOK_URL ? '🧠 Cerebro maestro de n8n: CONECTADO' : '🧠 Cerebro maestro de n8n: no configurado (N8N_WEBHOOK_URL)');
 });
