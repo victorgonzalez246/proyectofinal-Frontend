@@ -53,7 +53,21 @@ server.use(jsonServer.defaults({ noCors: true, static: 'public' }));
 server.use(jsonServer.bodyParser);
 
 // ── Utilidades ─────────────────────────────────────────────
-const sessions = new Map(); // token -> { userId, role, expiresAt }
+// Sesiones: se guardan en disco (solo el hash del token) para sobrevivir a reinicios del servidor
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+const SESSIONS_FILE = process.env.SESSIONS_FILE || DB_FILE.replace(/\.json$/, '') + '.sesiones.json';
+const sessions = new Map(); // sha256(token) -> { userId, role, expiresAt }
+try {
+  for (const [key, value] of Object.entries(JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8')))) {
+    if (value.expiresAt > Date.now()) sessions.set(key, value);
+  }
+} catch {
+  // Primera ejecución o archivo ilegible: se empieza sin sesiones
+}
+const saveSessions = () => {
+  const vigentes = Object.fromEntries([...sessions].filter(([, v]) => v.expiresAt > Date.now()));
+  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(vigentes));
+};
 
 const withoutPassword = (user) => {
   if (!user || typeof user !== 'object') return user;
@@ -63,20 +77,23 @@ const withoutPassword = (user) => {
 
 const issueSession = (user) => {
   const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, { userId: user.id, role: user.role, expiresAt: Date.now() + SESSION_TTL_MS });
+  sessions.set(hashToken(token), { userId: user.id, role: user.role, expiresAt: Date.now() + SESSION_TTL_MS });
+  saveSessions();
   return token;
 };
 
 const getSession = (req) => {
   const header = req.header('Authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const session = sessions.get(token);
+  const key = hashToken(token);
+  const session = sessions.get(key);
   if (!session) return null;
   if (session.expiresAt < Date.now()) {
-    sessions.delete(token);
+    sessions.delete(key);
+    saveSessions();
     return null;
   }
-  return { ...session, token };
+  return { ...session, key };
 };
 
 // Envía un evento a un webhook de n8n sin bloquear la respuesta al usuario
@@ -187,6 +204,12 @@ server.post('/appointments', rateLimit(5, 10 * 60 * 1000), (req, res) => {
     createdAt: new Date().toISOString(),
   };
 
+  // Consentimiento informado (Ley 8968): sin él no se registran datos de salud
+  if (req.body.consentimiento !== true) {
+    return res.status(400).json({ error: 'Necesitamos tu aceptación del aviso de privacidad para registrar la cita.' });
+  }
+  appointment.consentimiento = { version: str(req.body.avisoVersion, 40) || 'sin-version', fecha: appointment.createdAt };
+
   if (appointment.nombre.length < 3 || appointment.telefono.length < 8 || !appointment.tratamiento || !/^\d{4}-\d{2}-\d{2}$/.test(appointment.fecha)) {
     return res.status(400).json({ error: 'Datos de la cita inválidos.' });
   }
@@ -203,7 +226,6 @@ server.post('/appointments', rateLimit(5, 10 * 60 * 1000), (req, res) => {
 
 // ── Portal de pacientes: acceso sin contraseña por WhatsApp ──
 const magicLinks = new Map(); // sha256(token) -> { userId, expiresAt }
-const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
 server.post('/auth/magic-link', rateLimit(5, 15 * 60 * 1000), (req, res) => {
   const key = phoneKey(req.body.phone);
@@ -388,7 +410,8 @@ server.use((req, res, next) => {
 });
 
 server.post('/logout', (req, res) => {
-  sessions.delete(req.session.token);
+  sessions.delete(req.session.key);
+  saveSessions();
   res.json({ ok: true });
 });
 
