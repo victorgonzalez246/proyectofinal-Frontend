@@ -18,7 +18,7 @@ const uuidFrom = (seed) => {
 // Cuerpo de una función como texto: el código de los nodos Code se escribe como JS real
 const bodyOf = (fn) => fn.toString().replace(/^[^{]*\{\n?/, '').replace(/\}\s*$/, '').replace(/^ {2}/gm, '');
 
-// ── Código compartido por los nodos "Mensajes: …" ──
+// ── Código compartido por los nodos que preparan mensajes ──
 const HELPERS = bodyOf(() => {
   // Configuración editable (nodo "Configuración")
   const cfg = $('Configuración').first().json;
@@ -37,21 +37,25 @@ const HELPERS = bodyOf(() => {
   const msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });
 });
 
-// ── Constructores de nodos ──
+// ── Constructores ──
 const nodes = [];
 const connections = {};
+const CFG = "$('Configuración').first().json";
+// Mensaje original del chat: se lee siempre de aquí, aunque un nodo de IA intermedio falle
+const CHAT = "$('Red de seguridad clínica').first().json.payload";
 
 const add = (name, type, typeVersion, position, parameters, extra = {}) => {
   nodes.push({ parameters, id: uuidFrom(name), name, type, typeVersion, position, ...extra });
   return name;
 };
 
-// Conecta from -> to. `output` es la salida del nodo origen (el Switch tiene varias)
-const link = (from, to, output = 0) => {
-  connections[from] ??= { main: [] };
-  const outs = connections[from].main;
+// Conecta from -> to. `output` es la salida del nodo origen; `kind` distingue las conexiones de IA
+const link = (from, to, output = 0, kind = 'main') => {
+  connections[from] ??= {};
+  connections[from][kind] ??= [];
+  const outs = connections[from][kind];
   while (outs.length <= output) outs.push([]);
-  outs[output].push({ node: to, type: 'main', index: 0 });
+  outs[output].push({ node: to, type: kind, index: 0 });
 };
 
 const code = (name, position, fn, { helpers = true } = {}) =>
@@ -68,16 +72,132 @@ const cron = (name, position, expression) =>
     rule: { interval: [{ field: 'cronExpression', expression }] },
   });
 
-// Consulta a la API del simulador (o la futura) autenticada con X-N8N-Secret
+// Consulta a la API de la clínica autenticada con X-N8N-Secret
 const apiGet = (name, position, route) =>
   add(name, 'n8n-nodes-base.httpRequest', 4.2, position, {
-    url: `={{ $('Configuración').first().json.apiUrl }}${route}`,
+    url: `={{ ${CFG}.apiUrl }}${route}`,
     authentication: 'genericCredentialType',
     genericAuthType: 'httpHeaderAuth',
     options: {},
   });
 
-// ── Columna 1: disparadores ──
+// Switch v3.2: una salida por valor de `campo`
+const router = (name, position, campo, rutas, fallback) =>
+  add(name, 'n8n-nodes-base.switch', 3.2, position, {
+    rules: {
+      values: rutas.map(([valor, etiqueta]) => ({
+        conditions: {
+          options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 },
+          conditions: [{
+            id: uuidFrom(`${name}:${valor}`),
+            leftValue: `={{ $json.${campo} }}`,
+            rightValue: valor,
+            operator: { type: 'string', operation: 'equals' },
+          }],
+          combinator: 'and',
+        },
+        renameOutput: true,
+        outputKey: etiqueta,
+      })),
+    },
+    options: fallback ? { fallbackOutput: 'extra', renameFallbackOutput: fallback } : {},
+  });
+
+// ── Piezas de IA ──
+const MODELO_PRINCIPAL = { __rl: true, mode: 'list', value: 'claude-sonnet-5', cachedResultName: 'Claude Sonnet 5' };
+const MODELO_RAPIDO = { __rl: true, mode: 'id', value: 'claude-haiku-4-5-20251001' };
+
+const modelo = (name, position, model, target, temperature = 0.3) => {
+  add(name, '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, position, { model, options: { temperature } });
+  link(name, target, 0, 'ai_languageModel');
+};
+
+const memoria = (name, position, prefijo, target) => {
+  add(name, '@n8n/n8n-nodes-langchain.memoryBufferWindow', 1.3, position, {
+    sessionIdType: 'customKey',
+    sessionKey: `={{ '${prefijo}-' + ${CHAT}.from }}`,
+    contextWindowLength: 10,
+  });
+  link(name, target, 0, 'ai_memory');
+};
+
+const parser = (name, position, schema, target) => {
+  add(name, '@n8n/n8n-nodes-langchain.outputParserStructured', 1.3, position, {
+    schemaType: 'manual',
+    inputSchema: JSON.stringify(schema, null, 2),
+  });
+  link(name, target, 0, 'ai_outputParser');
+};
+
+// Herramienta HTTP para un agente (HTTP Request Tool). Solo los valores con ia(...) los decide la IA;
+// lo demás lo fija el flujo (por ejemplo, el teléfono sale del mensaje entrante, nunca de la IA).
+const herramienta = (name, position, target, { descripcion, method = 'GET', url, body, auth }) => {
+  add(name, 'n8n-nodes-base.httpRequestTool', 4.2, position, {
+    toolDescription: descripcion,
+    method,
+    url,
+    ...auth,
+    // El cuerpo se arma con JSON.stringify: comillas o saltos de línea de la IA no pueden romperlo
+    ...(body ? { sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${body}) }}` } : {}),
+    options: {},
+  });
+  link(name, target, 0, 'ai_tool');
+};
+// Valor que completa la IA al usar la herramienta (sin apóstrofos en la descripción)
+const ia = (nombre, descripcion) => `$fromAI('${nombre}', '${descripcion}', 'string')`;
+const AUTH_API = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+const AUTH_GOOGLE = (tipo) => ({ authentication: 'predefinedCredentialType', nodeCredentialType: tipo });
+
+// ── Prompts de los perfiles ──
+const PROMPT_ENFERMERA = `Eres la Enfermera Virtual de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp a pacientes que ya se hicieron un tratamiento.
+
+Tu misión: tranquilizar con calidez y claridad y, ante el menor riesgo médico, despertar a la doctora.
+
+Cómo trabajas:
+1. Antes de responder usa "ficha_paciente" para saber qué tratamiento tuvo, en qué día de recuperación está y qué cuidados tiene vigentes.
+2. Responde solo con información de "base_clinica" (aprobada por la doctora) y de la ficha. Si la respuesta no está ahí, dilo con honestidad y usa "despertar_doctora".
+3. No diagnosticas, no recomiendas medicamentos ni dosis y no cambias indicaciones de la doctora.
+4. Usa "despertar_doctora" si la paciente menciona: dolor fuerte o que aumenta, piel blanca, morada o con manchas en la zona tratada, ampollas, fiebre, secreción, cambios en la visión, hinchazón que empeora después de 72 horas, bultos que duelen, asimetría marcada, reacción alérgica, o si está muy angustiada. Ante la duda, avisa: es preferible una alerta de más.
+5. Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pide que llame al 911 de inmediato y usa "despertar_doctora".
+6. Si pregunta por citas, horarios o pagos, dile que la recepción la atiende y que escriba su consulta.
+
+Estilo: español cercano y sereno, tuteo, máximo 5 frases, sin tecnicismos. Nunca compartas datos de otras pacientes. Si te preguntan qué eres, di que eres la asistente virtual de la clínica, supervisada por la doctora.`;
+
+const PROMPT_RECEPCIONISTA = `Eres la Recepcionista VIP de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp solo temas administrativos: agendar, reprogramar o cancelar citas, horarios, ubicación y paquetes.
+
+Datos de la clínica: Escazú, San José. Atención de lunes a viernes de 9:00 a 18:00 (hora de Costa Rica, UTC-06:00). Cada cita dura 60 minutos. Hoy es {{ $now.setZone('America/Costa_Rica').toFormat("cccc d 'de' LLLL yyyy", { locale: 'es' }) }}.
+
+Cómo agendas:
+1. Usa "ficha_recepcion" para saludar por su nombre y ver su próxima cita y sus paquetes.
+2. Pregunta qué tratamiento le interesa y qué días le quedan mejor.
+3. Usa "disponibilidad_agenda" y ofrece como máximo 3 horarios libres dentro del horario de atención.
+4. Solo cuando la paciente confirme de forma explícita un horario: usa primero "bloquear_agenda" y después "registrar_cita". Si alguna falla, no confirmes y ofrece otro horario.
+5. Confirma la fecha y la hora en una frase clara.
+
+Reglas: no inventes precios (la doctora los define en la valoración), no das información clínica y no ves historiales médicos. Si la paciente habla de síntomas, dolor o cuidados, dile con amabilidad que la enfermera virtual la atiende y que escriba su duda. Estilo: español cálido y profesional, tuteo, máximo 4 frases.`;
+
+const PROMPT_ANALISTA = `Eres la Enfermera Virtual de la clínica de la Dra. Laura Jiménez en su rol de analista emocional. Lee el check-in que una paciente hizo en su portal después de un tratamiento estético y clasifica el nivel de atención que necesita.
+
+- "rojo": miedo intenso, angustia, dolor fuerte (7 o más), o cualquier señal de complicación (piel blanca o morada, ampollas, fiebre, secreción, visión, hinchazón que empeora, bultos dolorosos). La doctora debe escribirle ya.
+- "amarillo": preocupación moderada, molestia media o dudas que conviene atender hoy.
+- "verde": evolución tranquila.
+
+Ante la duda entre dos niveles, elige el más alto. En "motivo" escribe una sola frase para la doctora, sin datos personales.
+
+Check-in:
+{{ $json.contexto }}`;
+
+const PROMPT_RESUMEN = `Eres la Recepcionista VIP de la clínica de la Dra. Laura Jiménez. Antes de cada consulta preparas para la doctora un resumen ejecutivo de exactamente 3 puntos, breve y útil para decidir en la consulta:
+1. Qué viene a hacer hoy y qué dijo la paciente al agendar.
+2. Tratamientos y productos anteriores relevantes (con fechas).
+3. Cómo se ha sentido últimamente (check-ins) y cualquier alerta a considerar.
+
+Cada punto en una sola frase de máximo 30 palabras. No inventes información: si falta un dato, dilo.
+
+Datos de la consulta:
+{{ $json.contexto }}`;
+
+// ════════════════════ Columna 1 · Disparadores ════════════════════
 const WEBHOOK = add('Webhook clínica', 'n8n-nodes-base.webhook', 2, [0, 0], {
   httpMethod: 'POST',
   path: 'clinica/eventos',
@@ -86,39 +206,62 @@ const WEBHOOK = add('Webhook clínica', 'n8n-nodes-base.webhook', 2, [0, 0], {
   options: {},
 }, { webhookId: uuidFrom('webhook') });
 
-const CRON_RECORDATORIO = cron('Diario 8:00 · Recordatorios', [0, 260], '0 8 * * *');
-const CRON_SEGUIMIENTO = cron('Diario 10:00 · Seguimiento', [0, 420], '0 10 * * *');
-const CRON_PASOS = cron('Lunes 9:00 · Próximos pasos', [0, 580], '0 9 * * 1');
-const MANUAL = add('Probar ahora', 'n8n-nodes-base.manualTrigger', 1, [0, 740], {});
+const WHATSAPP_IN = add('WhatsApp entrante', 'n8n-nodes-base.whatsAppTrigger', 1, [0, 200], {
+  updates: ['messages'],
+  options: {},
+}, { webhookId: uuidFrom('whatsapp-trigger') });
 
-// ── Columna 2: cada disparador define su "accion" ──
-const RESPONDER = add('Responder OK', 'n8n-nodes-base.respondToWebhook', 1.1, [240, 0], {
+const CRON_PREPARACION = cron('Diario 7:00 · Preparar consultas', [0, 400], '0 7 * * *');
+const CRON_RECORDATORIO = cron('Diario 8:00 · Recordatorios', [0, 560], '0 8 * * *');
+const CRON_SEGUIMIENTO = cron('Diario 10:00 · Seguimiento', [0, 720], '0 10 * * *');
+const CRON_PASOS = cron('Lunes 9:00 · Próximos pasos', [0, 880], '0 9 * * 1');
+const MANUAL = add('Probar ahora', 'n8n-nodes-base.manualTrigger', 1, [0, 1040], {});
+
+// ════════════════════ Columna 2 · Cada disparador define su "accion" ════════════════════
+const RESPONDER = add('Responder OK', 'n8n-nodes-base.respondToWebhook', 1.1, [220, 0], {
   respondWith: 'json',
   responseBody: '{\n  "ok": true\n}',
   options: {},
 });
 
-const NORMALIZAR = code('Normalizar evento', [480, 0], () => {
+const NORMALIZAR = code('Normalizar evento', [440, 0], () => {
   // Traduce el evento que envía el servidor a una acción del cerebro
   const body = $('Webhook clínica').first().json.body || {};
   const ACCIONES = {
     'appointment.created': 'cita_recibida',
     'auth.magic_link': 'acceso_portal',
-    'checkin.alert': 'alerta',
-    'sos.triggered': 'alerta',
+    'checkin.created': 'checkin',
+    'checkin.alert': 'checkin',
+    'sos.triggered': 'sos',
   };
   return [{ json: { accion: ACCIONES[body.event] || 'desconocido', evento: body.event || '', payload: body } }];
 }, { helpers: false });
 
-const RUTINA_RECORDATORIO = setAccion('Rutina: recordatorio 24 h', [480, 260], 'recordatorio_cita');
-const RUTINA_SEGUIMIENTO = setAccion('Rutina: seguimiento', [480, 420], 'seguimiento');
-const RUTINA_PASOS = setAccion('Rutina: próximos pasos', [480, 580], 'proximos_pasos');
-const TODAS = code('Todas las rutinas', [480, 740], () => {
-  // Prueba manual: ejecuta las tres rutinas programadas de una vez
-  return ['recordatorio_cita', 'seguimiento', 'proximos_pasos'].map((accion) => ({ json: { accion } }));
+const NORMALIZAR_WA = code('Normalizar mensaje', [440, 200], () => {
+  // Solo mensajes de texto de pacientes (se ignoran estados de entrega, audios, etc.)
+  const raw = $input.first().json;
+  const value = raw.messages ? raw : (raw.entry?.[0]?.changes?.[0]?.value || {});
+  const mensaje = (value.messages || [])[0];
+  if (!mensaje || mensaje.type !== 'text' || !mensaje.text?.body) return [];
+  const contacto = (value.contacts || [])[0] || {};
+  return [{
+    json: {
+      accion: 'chat_whatsapp',
+      payload: { from: mensaje.from, nombre: contacto.profile?.name || '', texto: mensaje.text.body.slice(0, 1500), messageId: mensaje.id },
+    },
+  }];
 }, { helpers: false });
 
-// ── Configuración central (única para toda la clínica) ──
+const RUTINA_PREPARACION = setAccion('Rutina: preparar consultas', [440, 400], 'preparacion_consultas');
+const RUTINA_RECORDATORIO = setAccion('Rutina: recordatorio 24 h', [440, 560], 'recordatorio_cita');
+const RUTINA_SEGUIMIENTO = setAccion('Rutina: seguimiento', [440, 720], 'seguimiento');
+const RUTINA_PASOS = setAccion('Rutina: próximos pasos', [440, 880], 'proximos_pasos');
+const TODAS = code('Todas las rutinas', [440, 1040], () => {
+  // Prueba manual: ejecuta todas las rutinas programadas de una vez
+  return ['preparacion_consultas', 'recordatorio_cita', 'seguimiento', 'proximos_pasos'].map((accion) => ({ json: { accion } }));
+}, { helpers: false });
+
+// ════════════════════ Configuración central + Router ════════════════════
 const CONFIG_FIELDS = [
   ['whatsappPhoneNumberId', 'REEMPLAZAR_PHONE_NUMBER_ID'],
   ['graphApiVersion', 'v21.0'],
@@ -126,8 +269,11 @@ const CONFIG_FIELDS = [
   ['clinicWhatsapp', '50688888888'],
   ['portalUrl', 'http://localhost:5173'],
   ['apiUrl', 'http://localhost:3001'],
+  ['googleCalendarId', 'primary'],
+  ['baseClinicaSheetId', 'REEMPLAZAR_ID_DE_LA_HOJA'],
+  ['baseClinicaRango', 'BaseClinica!A:D'],
 ];
-const CONFIG = add('Configuración', 'n8n-nodes-base.set', 3.4, [720, 360], {
+const CONFIG = add('Configuración', 'n8n-nodes-base.set', 3.4, [680, 520], {
   assignments: {
     assignments: CONFIG_FIELDS.map(([name, value]) => ({ id: uuidFrom(`cfg:${name}`), name, value, type: 'string' })),
   },
@@ -135,37 +281,207 @@ const CONFIG = add('Configuración', 'n8n-nodes-base.set', 3.4, [720, 360], {
   options: {},
 });
 
-// ── Router ──
 const RUTAS = [
+  ['chat_whatsapp', 'Chat WhatsApp (agentes)'],
+  ['checkin', 'Check-in (analista emocional)'],
+  ['sos', 'SOS'],
   ['cita_recibida', 'Cita recibida'],
   ['acceso_portal', 'Acceso al portal'],
-  ['alerta', 'Alertas'],
+  ['preparacion_consultas', 'Preparar consultas'],
   ['recordatorio_cita', 'Recordatorio 24 h'],
   ['seguimiento', 'Seguimiento'],
   ['proximos_pasos', 'Próximos pasos'],
 ];
-const SWITCH = add('Router por acción', 'n8n-nodes-base.switch', 3.2, [960, 360], {
-  rules: {
-    values: RUTAS.map(([accion, etiqueta]) => ({
-      conditions: {
-        options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 },
-        conditions: [{
-          id: uuidFrom(`ruta:${accion}`),
-          leftValue: '={{ $json.accion }}',
-          rightValue: accion,
-          operator: { type: 'string', operation: 'equals' },
-        }],
-        combinator: 'and',
-      },
-      renameOutput: true,
-      outputKey: etiqueta,
-    })),
+const ROUTER = router('Router por acción', [900, 520], 'accion', RUTAS, 'Evento desconocido');
+
+// ════════════════════ Rama 1 · Chat WhatsApp (multi-agente) ════════════════════
+const Y_CHAT = -560;
+const SEGURIDAD = code('Red de seguridad clínica', [1140, Y_CHAT], () => {
+  // Regla fija, sin IA: una emergencia nunca depende de un modelo de lenguaje
+  const item = $input.first().json;
+  const texto = String(item.payload.texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const SENALES = [
+    'no puedo respirar', 'me ahogo', 'me falta el aire', 'dificultad para respirar',
+    'se me cierra la garganta', 'garganta hinchada', 'lengua hinchada', 'dolor en el pecho',
+    'no veo', 'perdi la vista', 'vision borrosa', 'veo borroso', 'veo doble',
+    'piel morada', 'se puso morad', 'piel blanca', 'se puso blanc', 'desmay', 'convuls',
+    'sangra mucho', 'sangrado abundante', 'fiebre alta',
+  ];
+  const senal = SENALES.find((s) => texto.includes(s));
+  return [{ json: { ...item, ruta: senal ? 'emergencia' : 'conversacion', senal: senal || '' } }];
+}, { helpers: false });
+
+const RUTA_CHAT = router('¿Emergencia?', [1360, Y_CHAT], 'ruta', [['emergencia', 'Emergencia'], ['conversacion', 'Conversación']]);
+
+const MSG_EMERGENCIA = code('Alerta de emergencia', [1600, Y_CHAT - 200], () => {
+  const p = $input.first().json.payload;
+  return [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['EMERGENCIA', p.nombre || 'Paciente', p.from, 'Escribió: ' + p.texto])];
+});
+const TXT_EMERGENCIA = code('Respuesta de emergencia', [1600, Y_CHAT - 60], () => {
+  const p = $input.first().json.payload;
+  return [{
+    json: {
+      to: p.from,
+      texto: 'Lo que describes necesita atención inmediata. Llama ya al 911. Ya avisamos a la Dra. Laura y te va a contactar en minutos.',
+    },
+  }];
+}, { helpers: false });
+
+const CLASIFICADOR = add('Clasificador de intención', '@n8n/n8n-nodes-langchain.textClassifier', 1.1, [1600, Y_CHAT + 160], {
+  inputText: '={{ $json.payload.texto }}',
+  categories: {
+    categories: [
+      { category: 'clinica', description: 'Dudas de salud, síntomas, dolor, inflamación, cuidados posteriores, emociones o miedo después de un tratamiento.' },
+      { category: 'administrativa', description: 'Agendar, cambiar o cancelar citas, horarios, ubicación, pagos, paquetes o información general de la clínica.' },
+    ],
   },
-  options: { fallbackOutput: 'extra', renameFallbackOutput: 'Evento desconocido' },
+  options: { fallback: 'other' },
+}, { onError: 'continueRegularOutput' });
+modelo('Modelo · Clasificador', [1600, Y_CHAT + 340], MODELO_RAPIDO, CLASIFICADOR, 0);
+
+// Agente IA 1 · Enfermera Virtual
+const ENFERMERA = add('Agente IA 1 · Enfermera Virtual', '@n8n/n8n-nodes-langchain.agent', 3.1, [1900, Y_CHAT + 60], {
+  promptType: 'define',
+  text: `={{ ${CHAT}.texto }}`,
+  options: { systemMessage: PROMPT_ENFERMERA, maxIterations: 8 },
+}, { onError: 'continueRegularOutput' });
+modelo('Modelo · Enfermera', [1780, Y_CHAT + 260], MODELO_PRINCIPAL, ENFERMERA, 0.2);
+memoria('Memoria · Enfermera', [1900, Y_CHAT + 260], 'enfermera', ENFERMERA);
+herramienta('ficha_paciente', [2020, Y_CHAT + 260], ENFERMERA, {
+  descripcion: 'Ficha clínica mínima de la paciente que escribe: nombre, último tratamiento, día de recuperación, cuidados vigentes y últimos check-ins.',
+  url: `={{ ${CFG}.apiUrl }}/n8n/paciente?perfil=clinico&telefono={{ encodeURIComponent(${CHAT}.from) }}`,
+  auth: AUTH_API,
+});
+herramienta('base_clinica', [2140, Y_CHAT + 260], ENFERMERA, {
+  descripcion: 'Base de conocimientos clínicos aprobada por la doctora: preguntas frecuentes post-tratamiento con su respuesta y nivel de riesgo.',
+  url: `=https://sheets.googleapis.com/v4/spreadsheets/{{ ${CFG}.baseClinicaSheetId }}/values/{{ encodeURIComponent(${CFG}.baseClinicaRango) }}`,
+  auth: AUTH_GOOGLE('googleSheetsOAuth2Api'),
+});
+herramienta('despertar_doctora', [2260, Y_CHAT + 260], ENFERMERA, {
+  descripcion: 'Alerta urgente por WhatsApp a la Dra. Laura con el motivo. Úsala ante cualquier riesgo médico o angustia fuerte.',
+  method: 'POST',
+  url: `=https://graph.facebook.com/{{ ${CFG}.graphApiVersion }}/{{ ${CFG}.whatsappPhoneNumberId }}/messages`,
+  auth: AUTH_API,
+  body: `{ messaging_product: 'whatsapp', to: ${CFG}.clinicWhatsapp, type: 'template', template: { name: 'alerta_clinica', language: { code: ${CFG}.templateLanguage }, components: [{ type: 'body', parameters: [{ type: 'text', text: 'Enfermera IA' }, { type: 'text', text: ${CHAT}.nombre || 'Paciente' }, { type: 'text', text: ${CHAT}.from }, { type: 'text', text: String(${ia('motivo', 'Motivo de la alerta en una sola frase')}).replace(/\\s+/g, ' ').slice(0, 900) }] }] } }`,
 });
 
-// ── Ramas ──
-const MSG_CITA = code('Mensajes: cita recibida', [1440, 0], () => {
+// Agente IA 2 · Recepcionista VIP
+const RECEPCIONISTA = add('Agente IA 2 · Recepcionista VIP', '@n8n/n8n-nodes-langchain.agent', 3.1, [1900, Y_CHAT + 500], {
+  promptType: 'define',
+  text: `={{ ${CHAT}.texto }}`,
+  options: { systemMessage: `=${PROMPT_RECEPCIONISTA}`, maxIterations: 10 },
+}, { onError: 'continueRegularOutput' });
+modelo('Modelo · Recepcionista', [1780, Y_CHAT + 700], MODELO_PRINCIPAL, RECEPCIONISTA, 0.4);
+memoria('Memoria · Recepcionista', [1900, Y_CHAT + 700], 'recepcion', RECEPCIONISTA);
+herramienta('ficha_recepcion', [2020, Y_CHAT + 700], RECEPCIONISTA, {
+  descripcion: 'Datos administrativos de la paciente que escribe: nombre, próxima cita y paquetes. No incluye información clínica.',
+  url: `={{ ${CFG}.apiUrl }}/n8n/paciente?perfil=recepcion&telefono={{ encodeURIComponent(${CHAT}.from) }}`,
+  auth: AUTH_API,
+});
+herramienta('disponibilidad_agenda', [2140, Y_CHAT + 700], RECEPCIONISTA, {
+  descripcion: 'Consulta los bloques ocupados de la agenda de la doctora entre dos fechas. Todo lo que no aparezca como ocupado dentro del horario de atención está libre.',
+  method: 'POST',
+  url: 'https://www.googleapis.com/calendar/v3/freeBusy',
+  auth: AUTH_GOOGLE('googleCalendarOAuth2Api'),
+  body: `{ timeMin: ${ia('desde', 'Inicio del rango en ISO 8601 con zona -06:00, por ejemplo 2026-10-05T09:00:00-06:00')}, timeMax: ${ia('hasta', 'Fin del rango en ISO 8601 con zona -06:00, por ejemplo 2026-10-09T18:00:00-06:00')}, timeZone: 'America/Costa_Rica', items: [{ id: ${CFG}.googleCalendarId }] }`,
+});
+herramienta('bloquear_agenda', [2260, Y_CHAT + 700], RECEPCIONISTA, {
+  descripcion: 'Crea la cita en la agenda de la doctora. Úsala solo después de que la paciente confirme el horario.',
+  method: 'POST',
+  url: `=https://www.googleapis.com/calendar/v3/calendars/{{ encodeURIComponent(${CFG}.googleCalendarId) }}/events`,
+  auth: AUTH_GOOGLE('googleCalendarOAuth2Api'),
+  // Sin teléfono en el evento: el calendario solo necesita nombre y motivo
+  body: `{ summary: 'Cita: ' + (${CHAT}.nombre || 'Paciente') + ' (' + ${ia('tratamiento', 'Tratamiento o motivo de la cita')} + ')', description: 'Reservada por la Recepcionista VIP por WhatsApp', start: { dateTime: ${ia('inicio', 'Inicio de la cita en ISO 8601 con zona -06:00')}, timeZone: 'America/Costa_Rica' }, end: { dateTime: ${ia('fin', 'Fin de la cita, 60 minutos despues del inicio, en ISO 8601 con zona -06:00')}, timeZone: 'America/Costa_Rica' } }`,
+});
+herramienta('registrar_cita', [2380, Y_CHAT + 700], RECEPCIONISTA, {
+  descripcion: 'Registra la cita confirmada en el sistema de la clínica (portal y recordatorios). Úsala después de bloquear_agenda.',
+  method: 'POST',
+  url: `={{ ${CFG}.apiUrl }}/n8n/citas`,
+  auth: AUTH_API,
+  body: `{ nombre: ${CHAT}.nombre || 'Paciente WhatsApp', telefono: ${CHAT}.from, fecha: ${ia('fecha', 'Fecha de la cita en formato AAAA-MM-DD')}, hora: ${ia('hora', 'Hora de la cita, por ejemplo 3:30 p. m.')}, tratamiento: ${ia('tratamiento', 'Tratamiento o motivo de la cita')} }`,
+});
+
+// Si el agente no pudo responder (IA caída), la paciente recibe contención y la doctora un aviso
+const RESPUESTA_ENFERMERA = code('Respuesta · Enfermera', [2240, Y_CHAT + 60], () => {
+  const p = $('Red de seguridad clínica').first().json.payload;
+  const salida = $input.first().json.output;
+  const texto = salida || 'Recibimos tu mensaje. La Dra. Laura lo está revisando y te escribe muy pronto. Si empeoras o es urgente, llama al 911.';
+  return [{ json: { to: p.from, texto, sinIA: !salida, agente: 'Enfermera' } }];
+}, { helpers: false });
+const RESPUESTA_RECEPCION = code('Respuesta · Recepcionista', [2240, Y_CHAT + 500], () => {
+  const p = $('Red de seguridad clínica').first().json.payload;
+  const salida = $input.first().json.output;
+  const texto = salida || 'Gracias por escribir. En un momento te respondemos por aquí para coordinar tu cita.';
+  return [{ json: { to: p.from, texto, sinIA: !salida, agente: 'Recepcionista' } }];
+}, { helpers: false });
+const AVISO_SIN_IA = code('Aviso: mensaje sin responder', [2400, Y_CHAT + 280], () => {
+  const r = $input.first().json;
+  if (!r.sinIA) return [];
+  const p = $('Red de seguridad clínica').first().json.payload;
+  return [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Mensaje sin responder (' + r.agente + ')', p.nombre || 'Paciente', p.from, 'La IA no pudo responder. Escribió: ' + p.texto])];
+});
+
+// ════════════════════ Rama 2 · Check-in (Enfermera como analista emocional) ════════════════════
+const Y_CHECKIN = 460;
+const CONTEXTO_CHECKIN = code('Contexto del check-in', [1140, Y_CHECKIN], () => {
+  // Minimización de datos: a la IA solo le llega el check-in, sin nombre ni teléfono
+  const evento = $input.first().json.payload;
+  const c = evento.checkin || {};
+  const ANIMOS = { 'muy-bien': 'Muy bien', bien: 'Bien', regular: 'Regular', molestias: 'Con molestias', preocupacion: 'Con preocupación' };
+  const contexto = [
+    'Ánimo elegido: ' + (ANIMOS[c.mood] || c.mood),
+    'Molestia en la zona tratada: ' + c.pain + ' de 10',
+    'Día de recuperación: ' + (evento.recoveryDay != null ? evento.recoveryDay + 1 : 'sin tratamiento reciente'),
+    'Nota de la paciente: ' + (c.note ? '"' + c.note + '"' : '(sin nota)'),
+  ].join('\n');
+  return [{ json: { contexto, evento } }];
+}, { helpers: false });
+
+const ANALISTA = add('Enfermera · Analista emocional', '@n8n/n8n-nodes-langchain.chainLlm', 1.9, [1400, Y_CHECKIN], {
+  promptType: 'define',
+  text: `=${PROMPT_ANALISTA}`,
+  hasOutputParser: true,
+}, { onError: 'continueRegularOutput' });
+modelo('Modelo · Analista', [1340, Y_CHECKIN + 200], MODELO_PRINCIPAL, ANALISTA, 0);
+parser('Formato del triaje', [1480, Y_CHECKIN + 200], {
+  type: 'object',
+  properties: {
+    nivel: { type: 'string', enum: ['rojo', 'amarillo', 'verde'] },
+    emociones: { type: 'array', items: { type: 'string' } },
+    motivo: { type: 'string' },
+  },
+  required: ['nivel', 'motivo'],
+}, ANALISTA);
+
+const DECIDIR = code('Decidir escalamiento', [1700, Y_CHECKIN], () => {
+  const { evento } = $('Contexto del check-in').first().json;
+  const paciente = evento.patient || {};
+  const c = evento.checkin || {};
+  const ia = $input.first().json.output || null;
+  // Regla fija de respaldo: si la IA falla o subestima, la regla del servidor manda
+  const nivel = ia?.nivel || (c.needsFollowUp ? 'rojo' : 'verde');
+  const escalar = nivel === 'rojo' || nivel === 'amarillo' || c.needsFollowUp;
+  if (!escalar) return [];
+  const etiqueta = nivel === 'rojo' || c.needsFollowUp ? 'Seguimiento urgente' : 'Atención hoy';
+  const detalle = 'Check-in: molestia ' + c.pain + '/10. ' + (ia?.motivo || 'Análisis de IA no disponible; escalado por regla.') + (c.note ? ' Nota: ' + c.note : '');
+  return [msg(cfg.clinicWhatsapp, 'alerta_clinica', [etiqueta, paciente.name, paciente.phone, detalle])];
+});
+
+// ════════════════════ Rama 3 · SOS (sin IA: respuesta inmediata) ════════════════════
+const MSG_SOS = code('Mensajes: SOS', [1140, 700], () => {
+  const evento = $input.first().json.payload;
+  const paciente = evento.patient || {};
+  const a = evento.alert || {};
+  const MOTIVOS = { dolor: 'Dolor fuerte', inflamacion: 'La inflamación aumentó', aspecto: 'Algo no se ve como esperaba', duda: 'Duda urgente' };
+  const detalle = 'SOS: ' + (MOTIVOS[a.reason] || a.reason) + (a.note ? '. Nota: ' + a.note : '');
+  return [
+    msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Urgente', paciente.name, paciente.phone, detalle]),
+    msg(paciente.phone, 'sos_recibido', [firstName(paciente.name)]),
+  ];
+});
+
+// ════════════════════ Ramas 4 y 5 · Citas y acceso ════════════════════
+const MSG_CITA = code('Mensajes: cita recibida', [1140, 860], () => {
   const cita = $input.first().json.payload.appointment || {};
   if (!cita.telefono) return [];
   const mensajes = [
@@ -178,34 +494,62 @@ const MSG_CITA = code('Mensajes: cita recibida', [1440, 0], () => {
   return mensajes;
 });
 
-const MSG_ACCESO = code('Mensajes: acceso al portal', [1440, 160], () => {
+const MSG_ACCESO = code('Mensajes: acceso al portal', [1140, 1020], () => {
   const evento = $input.first().json.payload;
   if (!evento.phone || !evento.link) return [];
   return [msg(evento.phone, 'acceso_portal', [firstName(evento.name), evento.link])];
 });
 
-const MSG_ALERTAS = code('Mensajes: alertas', [1440, 320], () => {
-  const evento = $input.first().json.payload;
-  const paciente = evento.patient || {};
-  const ANIMOS = { 'muy-bien': 'Muy bien', bien: 'Bien', regular: 'Regular', molestias: 'Con molestias', preocupacion: 'Con preocupación' };
-  const MOTIVOS = { dolor: 'Dolor fuerte', inflamacion: 'La inflamación aumentó', aspecto: 'Algo no se ve como esperaba', duda: 'Duda urgente' };
+// ════════════════════ Rama 6 · Preparar consultas (Recepcionista: resumen ejecutivo) ════════════════════
+const Y_PREP = 1180;
+const API_PREP = apiGet('API: consultas de hoy', [1140, Y_PREP],
+  "/n8n/preparacion?fecha={{ $now.setZone('America/Costa_Rica').toFormat('yyyy-MM-dd') }}");
+const SEPARAR = code('Separar consultas', [1360, Y_PREP], () => {
+  // Una consulta por item. A la IA no le llegan teléfonos ni nombres.
+  return ($input.first().json.items || []).map((c) => ({
+    json: {
+      paciente: c.paciente,
+      hora: c.hora,
+      contexto: [
+        'Motivo de la cita: ' + c.motivo,
+        'Mensaje al agendar: ' + (c.mensajeDeLaPaciente || '(ninguno)'),
+        'Tratamientos previos: ' + (c.tratamientosPrevios.join('; ') || '(primera vez)'),
+        'Productos aplicados: ' + (c.productosAplicados.join('; ') || '(ninguno registrado)'),
+        'Próximos pasos del plan: ' + (c.proximosPasosDelPlan.join('; ') || '(sin plan todavía)'),
+        'Últimos check-ins: ' + (c.ultimosCheckins.join('; ') || '(sin registros)'),
+      ].join('\n'),
+    },
+  }));
+}, { helpers: false });
 
-  if (evento.event === 'checkin.alert') {
-    const c = evento.checkin || {};
-    const detalle = 'Check-in: ' + (ANIMOS[c.mood] || c.mood) + ', molestia ' + c.pain + '/10' + (c.note ? '. Nota: ' + c.note : '');
-    return [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Seguimiento', paciente.name, paciente.phone, detalle])];
-  }
-  const a = evento.alert || {};
-  const detalle = 'SOS: ' + (MOTIVOS[a.reason] || a.reason) + (a.note ? '. Nota: ' + a.note : '');
-  return [
-    msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Urgente', paciente.name, paciente.phone, detalle]),
-    msg(paciente.phone, 'sos_recibido', [firstName(paciente.name)]),
-  ];
+const RESUMIDOR = add('Recepcionista · Resumen ejecutivo', '@n8n/n8n-nodes-langchain.chainLlm', 1.9, [1600, Y_PREP], {
+  promptType: 'define',
+  text: `=${PROMPT_RESUMEN}`,
+  hasOutputParser: true,
+}, { onError: 'continueRegularOutput' });
+modelo('Modelo · Resumen', [1540, Y_PREP + 200], MODELO_PRINCIPAL, RESUMIDOR, 0.2);
+parser('Formato del resumen', [1680, Y_PREP + 200], {
+  type: 'object',
+  properties: { punto_1: { type: 'string' }, punto_2: { type: 'string' }, punto_3: { type: 'string' } },
+  required: ['punto_1', 'punto_2', 'punto_3'],
+}, RESUMIDOR);
+
+const MSG_RESUMEN = code('Mensajes: resumen para la doctora', [1860, Y_PREP], () => {
+  const consultas = $('Separar consultas').all();
+  return $input.all().map((item, i) => {
+    const c = consultas[i].json;
+    const r = item.json.output;
+    // Sin IA disponible, la doctora igual recibe los datos crudos más importantes
+    const lineas = c.contexto.split('\n');
+    const puntos = r ? [r.punto_1, r.punto_2, r.punto_3] : [lineas[0], lineas[2], lineas[5]];
+    return msg(cfg.clinicWhatsapp, 'resumen_consulta', [c.paciente, c.hora || 'hoy', ...puntos]);
+  });
 });
 
-const API_CITAS = apiGet('API: citas confirmadas de mañana', [1200, 480],
+// ════════════════════ Ramas 7-9 · Rutinas de seguimiento ════════════════════
+const API_CITAS = apiGet('API: citas confirmadas de mañana', [1140, 1340],
   "/n8n/citas?estado=confirmada&fecha={{ $now.setZone('America/Costa_Rica').plus({ days: 1 }).toFormat('yyyy-MM-dd') }}");
-const MSG_RECORDATORIO = code('Mensajes: recordatorio 24 h', [1440, 480], () => {
+const MSG_RECORDATORIO = code('Mensajes: recordatorio 24 h', [1360, 1340], () => {
   // Textos de ejemplo: la doctora debe validarlos antes de activar el flujo
   const INSTRUCCIONES = {
     'Armonización Facial': 'Evita aspirina, ibuprofeno y alcohol 48 h antes y llega con el rostro limpio.',
@@ -227,8 +571,8 @@ const MSG_RECORDATORIO = code('Mensajes: recordatorio 24 h', [1440, 480], () => 
   );
 });
 
-const API_SEGUIMIENTO = apiGet('API: pacientes en recuperación', [1200, 640], '/n8n/seguimiento');
-const MSG_SEGUIMIENTO = code('Mensajes: seguimiento', [1440, 640], () => {
+const API_SEGUIMIENTO = apiGet('API: pacientes en recuperación', [1140, 1500], '/n8n/seguimiento');
+const MSG_SEGUIMIENTO = code('Mensajes: seguimiento', [1360, 1500], () => {
   // Días después del tratamiento en los que preguntamos cómo se siente
   const DIAS = [1, 3, 7, 14];
   const pacientes = $input.first().json.items || [];
@@ -238,8 +582,8 @@ const MSG_SEGUIMIENTO = code('Mensajes: seguimiento', [1440, 640], () => {
 });
 
 // Cada lunes: pasos de los próximos 7 días (hoy + 6), así cada paso se avisa una sola vez
-const API_PASOS = apiGet('API: pasos de esta semana', [1200, 800], '/n8n/retoques?dias=6');
-const MSG_PASOS = code('Mensajes: próximos pasos', [1440, 800], () => {
+const API_PASOS = apiGet('API: pasos de esta semana', [1140, 1660], '/n8n/retoques?dias=6');
+const MSG_PASOS = code('Mensajes: próximos pasos', [1360, 1660], () => {
   const pasos = $input.first().json.items || [];
   const mensajes = pasos.map((p) =>
     msg(p.phone, 'proximo_paso_mapa', [firstName(p.name), fechaLarga(p.fecha), cfg.portalUrl + '/portal/mapa'])
@@ -251,49 +595,92 @@ const MSG_PASOS = code('Mensajes: próximos pasos', [1440, 800], () => {
   return mensajes;
 });
 
-const IGNORAR = add('Ignorar evento', 'n8n-nodes-base.noOp', 1, [1200, 960], {});
+const IGNORAR = add('Ignorar evento', 'n8n-nodes-base.noOp', 1, [1140, 1820], {});
 
-// ── Salida única: WhatsApp Cloud API ──
-const ENVIAR = add('Enviar WhatsApp', 'n8n-nodes-base.httpRequest', 4.2, [1720, 400], {
+// ════════════════════ Salidas: WhatsApp Cloud API ════════════════════
+const RETRY = { retryOnFail: true, maxTries: 3, waitBetweenTries: 3000, onError: 'continueRegularOutput' };
+const GRAPH_URL = `=https://graph.facebook.com/{{ ${CFG}.graphApiVersion }}/{{ ${CFG}.whatsappPhoneNumberId }}/messages`;
+
+// Plantillas aprobadas (mensajes que inicia la clínica)
+const ENVIAR = add('Enviar WhatsApp (plantilla)', 'n8n-nodes-base.httpRequest', 4.2, [2560, 700], {
   method: 'POST',
-  url: "=https://graph.facebook.com/{{ $('Configuración').first().json.graphApiVersion }}/{{ $('Configuración').first().json.whatsappPhoneNumberId }}/messages",
-  authentication: 'genericCredentialType',
-  genericAuthType: 'httpHeaderAuth',
+  url: GRAPH_URL,
+  ...AUTH_API,
   sendBody: true,
   specifyBody: 'json',
   jsonBody:
-    "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.to, type: 'template', template: { name: $json.template, language: { code: $('Configuración').first().json.templateLanguage }, components: [{ type: 'body', parameters: $json.params.map(text => ({ type: 'text', text })) }] } }) }}",
+    `={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.to, type: 'template', template: { name: $json.template, language: { code: ${CFG}.templateLanguage }, components: [{ type: 'body', parameters: $json.params.map(text => ({ type: 'text', text })) }] } }) }}`,
   options: {},
-}, { retryOnFail: true, maxTries: 3, waitBetweenTries: 3000, onError: 'continueRegularOutput' });
+}, RETRY);
 
-// ── Conexiones ──
+// Texto libre: solo para responder dentro de la ventana de 24 h que abre la paciente al escribir
+const RESPONDER_WA = add('Responder por WhatsApp (texto)', 'n8n-nodes-base.httpRequest', 4.2, [2560, Y_CHAT + 200], {
+  method: 'POST',
+  url: GRAPH_URL,
+  ...AUTH_API,
+  sendBody: true,
+  specifyBody: 'json',
+  jsonBody: "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.to, type: 'text', text: { body: String($json.texto).slice(0, 4000) } }) }}",
+  options: {},
+}, RETRY);
+
+// ════════════════════ Conexiones ════════════════════
 link(WEBHOOK, RESPONDER);
 link(RESPONDER, NORMALIZAR);
+link(WHATSAPP_IN, NORMALIZAR_WA);
+link(CRON_PREPARACION, RUTINA_PREPARACION);
 link(CRON_RECORDATORIO, RUTINA_RECORDATORIO);
 link(CRON_SEGUIMIENTO, RUTINA_SEGUIMIENTO);
 link(CRON_PASOS, RUTINA_PASOS);
 link(MANUAL, TODAS);
-[NORMALIZAR, RUTINA_RECORDATORIO, RUTINA_SEGUIMIENTO, RUTINA_PASOS, TODAS].forEach((n) => link(n, CONFIG));
-link(CONFIG, SWITCH);
+[NORMALIZAR, NORMALIZAR_WA, RUTINA_PREPARACION, RUTINA_RECORDATORIO, RUTINA_SEGUIMIENTO, RUTINA_PASOS, TODAS]
+  .forEach((n) => link(n, CONFIG));
+link(CONFIG, ROUTER);
 
-const RAMAS = [MSG_CITA, MSG_ACCESO, MSG_ALERTAS, API_CITAS, API_SEGUIMIENTO, API_PASOS];
-RAMAS.forEach((n, i) => link(SWITCH, n, i));
-link(SWITCH, IGNORAR, RAMAS.length); // salida de respaldo: evento desconocido
+// Salidas del Router en el mismo orden que RUTAS (+ respaldo)
+[SEGURIDAD, CONTEXTO_CHECKIN, MSG_SOS, MSG_CITA, MSG_ACCESO, API_PREP, API_CITAS, API_SEGUIMIENTO, API_PASOS]
+  .forEach((n, i) => link(ROUTER, n, i));
+link(ROUTER, IGNORAR, RUTAS.length);
+
+// Chat: red de seguridad → emergencia o clasificador → agentes
+link(SEGURIDAD, RUTA_CHAT);
+link(RUTA_CHAT, MSG_EMERGENCIA, 0);
+link(RUTA_CHAT, TXT_EMERGENCIA, 0);
+link(RUTA_CHAT, CLASIFICADOR, 1);
+link(CLASIFICADOR, ENFERMERA, 0); // clinica
+link(CLASIFICADOR, RECEPCIONISTA, 1); // administrativa
+link(CLASIFICADOR, ENFERMERA, 2); // sin categoría clara → la opción clínica es la más segura
+link(ENFERMERA, RESPUESTA_ENFERMERA);
+link(RECEPCIONISTA, RESPUESTA_RECEPCION);
+[TXT_EMERGENCIA, RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION].forEach((n) => link(n, RESPONDER_WA));
+[RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION].forEach((n) => link(n, AVISO_SIN_IA));
+
+// Check-in y preparación de consultas
+link(CONTEXTO_CHECKIN, ANALISTA);
+link(ANALISTA, DECIDIR);
+link(API_PREP, SEPARAR);
+link(SEPARAR, RESUMIDOR);
+link(RESUMIDOR, MSG_RESUMEN);
 link(API_CITAS, MSG_RECORDATORIO);
 link(API_SEGUIMIENTO, MSG_SEGUIMIENTO);
 link(API_PASOS, MSG_PASOS);
-[MSG_CITA, MSG_ACCESO, MSG_ALERTAS, MSG_RECORDATORIO, MSG_SEGUIMIENTO, MSG_PASOS].forEach((n) => link(n, ENVIAR));
 
-// Notas visibles en el lienzo de n8n
-const nota = (name, position, width, height, content) =>
-  add(name, 'n8n-nodes-base.stickyNote', 1, position, { content, width, height });
-nota('Nota: disparadores', [-40, -200], 700, 160,
-  '## Cerebro maestro · Clínica Dra. Laura\nUn webhook recibe los eventos del sitio (citas, acceso, alertas). Los CRON lanzan las rutinas diarias. **Probar ahora** ejecuta las tres rutinas.');
-nota('Nota: configuración', [680, 120], 420, 200,
-  '### Configuración única\nEdita aquí el Phone Number ID de WhatsApp, el WhatsApp de la clínica, la URL del portal y la de la API. El **Router** decide la rama según `accion`.');
+[MSG_EMERGENCIA, AVISO_SIN_IA, DECIDIR, MSG_SOS, MSG_CITA, MSG_ACCESO, MSG_RESUMEN, MSG_RECORDATORIO, MSG_SEGUIMIENTO, MSG_PASOS]
+  .forEach((n) => link(n, ENVIAR));
 
+// ════════════════════ Notas en el lienzo ════════════════════
+const nota = (name, position, width, height, content, color) =>
+  add(name, 'n8n-nodes-base.stickyNote', 1, position, { content, width, height, ...(color ? { color } : {}) });
+nota('Nota: cerebro', [-40, -300], 820, 240,
+  '## 🧠 Cerebro maestro · Clínica Dra. Laura\n**Entradas:** Webhook del sitio (citas, acceso, check-in, SOS), WhatsApp entrante (chat con agentes) y CRON diarios.\nTodo pasa por **Configuración** (edítala una sola vez) y el **Router por acción**.\n**Probar ahora** ejecuta todas las rutinas programadas.');
+nota('Nota: multi-agente', [1100, Y_CHAT - 420], 1480, 180,
+  '## 🤖 Equipo de agentes\n**Red de seguridad (sin IA)** → emergencias directo a la doctora. **Clasificador** → **Agente IA 1 · Enfermera Virtual** (triaje clínico, puede despertar a la doctora) o **Agente IA 2 · Recepcionista VIP** (agenda y reservas). Cada agente tiene su propio modelo, memoria y herramientas: la recepcionista no ve datos clínicos y la enfermera no puede reservar.', 5);
+nota('Nota: IA con respaldo', [1100, Y_CHECKIN - 180], 820, 140,
+  '### Check-in y resumen con respaldo\nSi la IA falla, el check-in se escala con la regla fija del servidor y la doctora recibe el resumen con los datos crudos. A la IA nunca le llegan teléfonos.', 4);
+
+// ════════════════════ Flujo ════════════════════
 const workflow = {
-  name: 'Clínica · Cerebro maestro',
+  name: 'Clínica · Cerebro maestro multi-agente',
   nodes,
   connections,
   active: false,
@@ -310,4 +697,4 @@ const workflow = {
 };
 
 fs.writeFileSync(OUT_FILE, JSON.stringify(workflow, null, 2) + '\n');
-console.log(`✓ ${path.basename(OUT_FILE)}: ${nodes.length} nodos`);
+console.log(`✓ ${path.relative(process.cwd(), OUT_FILE)}: ${nodes.length} nodos`);

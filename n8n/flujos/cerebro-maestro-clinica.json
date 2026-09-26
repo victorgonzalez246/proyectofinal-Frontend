@@ -1,5 +1,5 @@
 {
-  "name": "Clínica · Cerebro maestro",
+  "name": "Clínica · Cerebro maestro multi-agente",
   "nodes": [
     {
       "parameters": {
@@ -21,6 +21,43 @@
     },
     {
       "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "id": "3d8b2739-3bfb-4acb-a9f8-054b98fd51c1",
+      "name": "WhatsApp entrante",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "c93c7145-1ad2-465f-a6a8-4451704cfe69"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "bbe3129a-e3bd-4874-aafd-4b961ce16595",
+      "name": "Diario 7:00 · Preparar consultas",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
         "rule": {
           "interval": [
             {
@@ -36,7 +73,7 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        260
+        560
       ]
     },
     {
@@ -56,7 +93,7 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        420
+        720
       ]
     },
     {
@@ -76,7 +113,7 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        580
+        880
       ]
     },
     {
@@ -87,7 +124,7 @@
       "typeVersion": 1,
       "position": [
         0,
-        740
+        1040
       ]
     },
     {
@@ -101,21 +138,57 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        240,
+        220,
         0
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Traduce el evento que envía el servidor a una acción del cerebro\nconst body = $('Webhook clínica').first().json.body || {};\nconst ACCIONES = {\n  'appointment.created': 'cita_recibida',\n  'auth.magic_link': 'acceso_portal',\n  'checkin.alert': 'alerta',\n  'sos.triggered': 'alerta',\n};\nreturn [{ json: { accion: ACCIONES[body.event] || 'desconocido', evento: body.event || '', payload: body } }];\n"
+        "jsCode": "// Traduce el evento que envía el servidor a una acción del cerebro\nconst body = $('Webhook clínica').first().json.body || {};\nconst ACCIONES = {\n  'appointment.created': 'cita_recibida',\n  'auth.magic_link': 'acceso_portal',\n  'checkin.created': 'checkin',\n  'checkin.alert': 'checkin',\n  'sos.triggered': 'sos',\n};\nreturn [{ json: { accion: ACCIONES[body.event] || 'desconocido', evento: body.event || '', payload: body } }];\n"
       },
       "id": "a2c01c44-0dc5-443e-aca2-fb2490cd69f8",
       "name": "Normalizar evento",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        480,
+        440,
         0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Solo mensajes de texto de pacientes (se ignoran estados de entrega, audios, etc.)\nconst raw = $input.first().json;\nconst value = raw.messages ? raw : (raw.entry?.[0]?.changes?.[0]?.value || {});\nconst mensaje = (value.messages || [])[0];\nif (!mensaje || mensaje.type !== 'text' || !mensaje.text?.body) return [];\nconst contacto = (value.contacts || [])[0] || {};\nreturn [{\n  json: {\n    accion: 'chat_whatsapp',\n    payload: { from: mensaje.from, nombre: contacto.profile?.name || '', texto: mensaje.text.body.slice(0, 1500), messageId: mensaje.id },\n  },\n}];\n"
+      },
+      "id": "526a3bb8-f08a-4008-ab70-6012052eb066",
+      "name": "Normalizar mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4c45bbaf-e559-4dd8-a04a-a79e63a2b630",
+              "name": "accion",
+              "value": "preparacion_consultas",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "25b9f41a-e386-4f57-aafd-e8dea1f033dd",
+      "name": "Rutina: preparar consultas",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        400
       ]
     },
     {
@@ -137,8 +210,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        480,
-        260
+        440,
+        560
       ]
     },
     {
@@ -160,8 +233,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        480,
-        420
+        440,
+        720
       ]
     },
     {
@@ -183,21 +256,21 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        480,
-        580
+        440,
+        880
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Prueba manual: ejecuta las tres rutinas programadas de una vez\nreturn ['recordatorio_cita', 'seguimiento', 'proximos_pasos'].map((accion) => ({ json: { accion } }));\n"
+        "jsCode": "// Prueba manual: ejecuta todas las rutinas programadas de una vez\nreturn ['preparacion_consultas', 'recordatorio_cita', 'seguimiento', 'proximos_pasos'].map((accion) => ({ json: { accion } }));\n"
       },
       "id": "2421e0ce-e286-4192-a462-00ef89d7dfd1",
       "name": "Todas las rutinas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        480,
-        740
+        440,
+        1040
       ]
     },
     {
@@ -239,6 +312,24 @@
               "name": "apiUrl",
               "value": "http://localhost:3001",
               "type": "string"
+            },
+            {
+              "id": "18e342be-965b-4281-aa0a-35dcf008b25b",
+              "name": "googleCalendarId",
+              "value": "primary",
+              "type": "string"
+            },
+            {
+              "id": "70d62831-efa2-47fe-a9a0-295d0631c3ff",
+              "name": "baseClinicaSheetId",
+              "value": "REEMPLAZAR_ID_DE_LA_HOJA",
+              "type": "string"
+            },
+            {
+              "id": "c27ac2ed-df42-4cfb-a3c2-ed7da9a3fc01",
+              "name": "baseClinicaRango",
+              "value": "BaseClinica!A:D",
+              "type": "string"
             }
           ]
         },
@@ -250,8 +341,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        720,
-        360
+        680,
+        520
       ]
     },
     {
@@ -268,7 +359,79 @@
                 },
                 "conditions": [
                   {
-                    "id": "e6ef9142-5340-4dc0-aaba-1e0b8aa3db40",
+                    "id": "b5202d81-7a42-43fb-ae53-3688bd8660c2",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "chat_whatsapp",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Chat WhatsApp (agentes)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d00df6c7-eaa2-4369-aecf-b57b5c25143f",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "checkin",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Check-in (analista emocional)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d6ea4363-aa68-4af6-a021-ff96b650d255",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "sos",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SOS"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "29f74a04-910e-490e-ae9b-e9809ee17d6f",
                     "leftValue": "={{ $json.accion }}",
                     "rightValue": "cita_recibida",
                     "operator": {
@@ -292,7 +455,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "3040448e-4a52-473c-aeb2-315aeccdba52",
+                    "id": "ca252bea-850d-4733-ab9e-d357c3700d7b",
                     "leftValue": "={{ $json.accion }}",
                     "rightValue": "acceso_portal",
                     "operator": {
@@ -316,9 +479,9 @@
                 },
                 "conditions": [
                   {
-                    "id": "baafb643-3d78-4f7b-ac7a-5cf788cd0a10",
+                    "id": "31bb4991-4e54-4cd9-a367-08443dd57b1f",
                     "leftValue": "={{ $json.accion }}",
-                    "rightValue": "alerta",
+                    "rightValue": "preparacion_consultas",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -328,7 +491,7 @@
                 "combinator": "and"
               },
               "renameOutput": true,
-              "outputKey": "Alertas"
+              "outputKey": "Preparar consultas"
             },
             {
               "conditions": {
@@ -340,7 +503,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "48f640af-4114-45e5-ae60-66fc8f722ad5",
+                    "id": "0d0b852e-5071-46b8-ad79-0c876b486e4e",
                     "leftValue": "={{ $json.accion }}",
                     "rightValue": "recordatorio_cita",
                     "operator": {
@@ -364,7 +527,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "043c8e41-77d1-424c-a8b1-799130156be6",
+                    "id": "4b2c72c4-546e-4395-a5d7-ea17dc700834",
                     "leftValue": "={{ $json.accion }}",
                     "rightValue": "seguimiento",
                     "operator": {
@@ -388,7 +551,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "9cd82e31-1cb8-4214-ade0-0dc57e2f0de4",
+                    "id": "da5dc1a2-32c2-438e-afee-8b90518c0453",
                     "leftValue": "={{ $json.accion }}",
                     "rightValue": "proximos_pasos",
                     "operator": {
@@ -414,8 +577,538 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        960,
-        360
+        900,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Regla fija, sin IA: una emergencia nunca depende de un modelo de lenguaje\nconst item = $input.first().json;\nconst texto = String(item.payload.texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');\nconst SENALES = [\n  'no puedo respirar', 'me ahogo', 'me falta el aire', 'dificultad para respirar',\n  'se me cierra la garganta', 'garganta hinchada', 'lengua hinchada', 'dolor en el pecho',\n  'no veo', 'perdi la vista', 'vision borrosa', 'veo borroso', 'veo doble',\n  'piel morada', 'se puso morad', 'piel blanca', 'se puso blanc', 'desmay', 'convuls',\n  'sangra mucho', 'sangrado abundante', 'fiebre alta',\n];\nconst senal = SENALES.find((s) => texto.includes(s));\nreturn [{ json: { ...item, ruta: senal ? 'emergencia' : 'conversacion', senal: senal || '' } }];\n"
+      },
+      "id": "8b97a7b1-fe4c-4a14-a956-2f4b2c983981",
+      "name": "Red de seguridad clínica",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "19dff90a-b101-4764-a617-659725f2e50e",
+                    "leftValue": "={{ $json.ruta }}",
+                    "rightValue": "emergencia",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Emergencia"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cdd96e9e-f85d-47e9-a951-ed8ab7017ecb",
+                    "leftValue": "={{ $json.ruta }}",
+                    "rightValue": "conversacion",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Conversación"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ec207773-dbb4-48f9-aa75-fd282065ad79",
+      "name": "¿Emergencia?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1360,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst p = $input.first().json.payload;\nreturn [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['EMERGENCIA', p.nombre || 'Paciente', p.from, 'Escribió: ' + p.texto])];\n"
+      },
+      "id": "0d26f148-41fc-45f6-a848-e879296b2466",
+      "name": "Alerta de emergencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        -760
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json.payload;\nreturn [{\n  json: {\n    to: p.from,\n    texto: 'Lo que describes necesita atención inmediata. Llama ya al 911. Ya avisamos a la Dra. Laura y te va a contactar en minutos.',\n  },\n}];\n"
+      },
+      "id": "7c7db487-b5e0-4793-ae5e-569d0b81092a",
+      "name": "Respuesta de emergencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        -620
+      ]
+    },
+    {
+      "parameters": {
+        "inputText": "={{ $json.payload.texto }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "clinica",
+              "description": "Dudas de salud, síntomas, dolor, inflamación, cuidados posteriores, emociones o miedo después de un tratamiento."
+            },
+            {
+              "category": "administrativa",
+              "description": "Agendar, cambiar o cancelar citas, horarios, ubicación, pagos, paquetes o información general de la clínica."
+            }
+          ]
+        },
+        "options": {
+          "fallback": "other"
+        }
+      },
+      "id": "db7489c1-ab56-4881-a4e3-8452b2e23e86",
+      "name": "Clasificador de intención",
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1.1,
+      "position": [
+        1600,
+        -400
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-haiku-4-5-20251001"
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "c902f3ec-5f93-4f08-ac23-31cd9d4ee8d3",
+      "name": "Modelo · Clasificador",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        1600,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Red de seguridad clínica').first().json.payload.texto }}",
+        "options": {
+          "systemMessage": "Eres la Enfermera Virtual de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp a pacientes que ya se hicieron un tratamiento.\n\nTu misión: tranquilizar con calidez y claridad y, ante el menor riesgo médico, despertar a la doctora.\n\nCómo trabajas:\n1. Antes de responder usa \"ficha_paciente\" para saber qué tratamiento tuvo, en qué día de recuperación está y qué cuidados tiene vigentes.\n2. Responde solo con información de \"base_clinica\" (aprobada por la doctora) y de la ficha. Si la respuesta no está ahí, dilo con honestidad y usa \"despertar_doctora\".\n3. No diagnosticas, no recomiendas medicamentos ni dosis y no cambias indicaciones de la doctora.\n4. Usa \"despertar_doctora\" si la paciente menciona: dolor fuerte o que aumenta, piel blanca, morada o con manchas en la zona tratada, ampollas, fiebre, secreción, cambios en la visión, hinchazón que empeora después de 72 horas, bultos que duelen, asimetría marcada, reacción alérgica, o si está muy angustiada. Ante la duda, avisa: es preferible una alerta de más.\n5. Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pide que llame al 911 de inmediato y usa \"despertar_doctora\".\n6. Si pregunta por citas, horarios o pagos, dile que la recepción la atiende y que escriba su consulta.\n\nEstilo: español cercano y sereno, tuteo, máximo 5 frases, sin tecnicismos. Nunca compartas datos de otras pacientes. Si te preguntan qué eres, di que eres la asistente virtual de la clínica, supervisada por la doctora.",
+          "maxIterations": 8
+        }
+      },
+      "id": "868dc6ad-d86c-4598-a92a-2f6f76c41133",
+      "name": "Agente IA 1 · Enfermera Virtual",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1900,
+        -500
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5",
+          "cachedResultName": "Claude Sonnet 5"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "c03680bb-bd1a-4152-a327-ecc9ceda08eb",
+      "name": "Modelo · Enfermera",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        1780,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ 'enfermera-' + $('Red de seguridad clínica').first().json.payload.from }}",
+        "contextWindowLength": 10
+      },
+      "id": "e1fae087-76b0-4bb6-a061-9c560e711aeb",
+      "name": "Memoria · Enfermera",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1900,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Ficha clínica mínima de la paciente que escribe: nombre, último tratamiento, día de recuperación, cuidados vigentes y últimos check-ins.",
+        "method": "GET",
+        "url": "={{ $('Configuración').first().json.apiUrl }}/n8n/paciente?perfil=clinico&telefono={{ encodeURIComponent($('Red de seguridad clínica').first().json.payload.from) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "99fd3880-c697-4224-a163-5de596da3a06",
+      "name": "ficha_paciente",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Base de conocimientos clínicos aprobada por la doctora: preguntas frecuentes post-tratamiento con su respuesta y nivel de riesgo.",
+        "method": "GET",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Configuración').first().json.baseClinicaSheetId }}/values/{{ encodeURIComponent($('Configuración').first().json.baseClinicaRango) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "id": "b298d94e-6237-49fa-a926-6d554e5a7757",
+      "name": "base_clinica",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2140,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Alerta urgente por WhatsApp a la Dra. Laura con el motivo. Úsala ante cualquier riesgo médico o angustia fuerte.",
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Configuración').first().json.graphApiVersion }}/{{ $('Configuración').first().json.whatsappPhoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Configuración').first().json.clinicWhatsapp, type: 'template', template: { name: 'alerta_clinica', language: { code: $('Configuración').first().json.templateLanguage }, components: [{ type: 'body', parameters: [{ type: 'text', text: 'Enfermera IA' }, { type: 'text', text: $('Red de seguridad clínica').first().json.payload.nombre || 'Paciente' }, { type: 'text', text: $('Red de seguridad clínica').first().json.payload.from }, { type: 'text', text: String($fromAI('motivo', 'Motivo de la alerta en una sola frase', 'string')).replace(/\\s+/g, ' ').slice(0, 900) }] }] } }) }}",
+        "options": {}
+      },
+      "id": "31201d97-6a31-4b04-a33c-244035c4ffc3",
+      "name": "despertar_doctora",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2260,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Red de seguridad clínica').first().json.payload.texto }}",
+        "options": {
+          "systemMessage": "=Eres la Recepcionista VIP de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp solo temas administrativos: agendar, reprogramar o cancelar citas, horarios, ubicación y paquetes.\n\nDatos de la clínica: Escazú, San José. Atención de lunes a viernes de 9:00 a 18:00 (hora de Costa Rica, UTC-06:00). Cada cita dura 60 minutos. Hoy es {{ $now.setZone('America/Costa_Rica').toFormat(\"cccc d 'de' LLLL yyyy\", { locale: 'es' }) }}.\n\nCómo agendas:\n1. Usa \"ficha_recepcion\" para saludar por su nombre y ver su próxima cita y sus paquetes.\n2. Pregunta qué tratamiento le interesa y qué días le quedan mejor.\n3. Usa \"disponibilidad_agenda\" y ofrece como máximo 3 horarios libres dentro del horario de atención.\n4. Solo cuando la paciente confirme de forma explícita un horario: usa primero \"bloquear_agenda\" y después \"registrar_cita\". Si alguna falla, no confirmes y ofrece otro horario.\n5. Confirma la fecha y la hora en una frase clara.\n\nReglas: no inventes precios (la doctora los define en la valoración), no das información clínica y no ves historiales médicos. Si la paciente habla de síntomas, dolor o cuidados, dile con amabilidad que la enfermera virtual la atiende y que escriba su duda. Estilo: español cálido y profesional, tuteo, máximo 4 frases.",
+          "maxIterations": 10
+        }
+      },
+      "id": "5fe82adf-9615-429e-a9dd-c2dde7a9987c",
+      "name": "Agente IA 2 · Recepcionista VIP",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1900,
+        -60
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5",
+          "cachedResultName": "Claude Sonnet 5"
+        },
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "8be6c467-6b34-4b3a-af39-ccb494c5186d",
+      "name": "Modelo · Recepcionista",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        1780,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ 'recepcion-' + $('Red de seguridad clínica').first().json.payload.from }}",
+        "contextWindowLength": 10
+      },
+      "id": "fa231930-40bb-403a-a9b4-672b0cf6c89c",
+      "name": "Memoria · Recepcionista",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1900,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Datos administrativos de la paciente que escribe: nombre, próxima cita y paquetes. No incluye información clínica.",
+        "method": "GET",
+        "url": "={{ $('Configuración').first().json.apiUrl }}/n8n/paciente?perfil=recepcion&telefono={{ encodeURIComponent($('Red de seguridad clínica').first().json.payload.from) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "365bf369-bfd5-4fc3-a666-a69d42f19d54",
+      "name": "ficha_recepcion",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Consulta los bloques ocupados de la agenda de la doctora entre dos fechas. Todo lo que no aparezca como ocupado dentro del horario de atención está libre.",
+        "method": "POST",
+        "url": "https://www.googleapis.com/calendar/v3/freeBusy",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ timeMin: $fromAI('desde', 'Inicio del rango en ISO 8601 con zona -06:00, por ejemplo 2026-10-05T09:00:00-06:00', 'string'), timeMax: $fromAI('hasta', 'Fin del rango en ISO 8601 con zona -06:00, por ejemplo 2026-10-09T18:00:00-06:00', 'string'), timeZone: 'America/Costa_Rica', items: [{ id: $('Configuración').first().json.googleCalendarId }] }) }}",
+        "options": {}
+      },
+      "id": "6104bf01-f741-4cd1-a5c3-9278e38962f5",
+      "name": "disponibilidad_agenda",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2140,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Crea la cita en la agenda de la doctora. Úsala solo después de que la paciente confirme el horario.",
+        "method": "POST",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/{{ encodeURIComponent($('Configuración').first().json.googleCalendarId) }}/events",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ summary: 'Cita: ' + ($('Red de seguridad clínica').first().json.payload.nombre || 'Paciente') + ' (' + $fromAI('tratamiento', 'Tratamiento o motivo de la cita', 'string') + ')', description: 'Reservada por la Recepcionista VIP por WhatsApp', start: { dateTime: $fromAI('inicio', 'Inicio de la cita en ISO 8601 con zona -06:00', 'string'), timeZone: 'America/Costa_Rica' }, end: { dateTime: $fromAI('fin', 'Fin de la cita, 60 minutos despues del inicio, en ISO 8601 con zona -06:00', 'string'), timeZone: 'America/Costa_Rica' } }) }}",
+        "options": {}
+      },
+      "id": "a7ea7f88-8dd7-44f3-af5c-f4c7a87a8492",
+      "name": "bloquear_agenda",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2260,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Registra la cita confirmada en el sistema de la clínica (portal y recordatorios). Úsala después de bloquear_agenda.",
+        "method": "POST",
+        "url": "={{ $('Configuración').first().json.apiUrl }}/n8n/citas",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ nombre: $('Red de seguridad clínica').first().json.payload.nombre || 'Paciente WhatsApp', telefono: $('Red de seguridad clínica').first().json.payload.from, fecha: $fromAI('fecha', 'Fecha de la cita en formato AAAA-MM-DD', 'string'), hora: $fromAI('hora', 'Hora de la cita, por ejemplo 3:30 p. m.', 'string'), tratamiento: $fromAI('tratamiento', 'Tratamiento o motivo de la cita', 'string') }) }}",
+        "options": {}
+      },
+      "id": "2e261de2-0140-45c2-a3df-c36333556861",
+      "name": "registrar_cita",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2380,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Red de seguridad clínica').first().json.payload;\nconst salida = $input.first().json.output;\nconst texto = salida || 'Recibimos tu mensaje. La Dra. Laura lo está revisando y te escribe muy pronto. Si empeoras o es urgente, llama al 911.';\nreturn [{ json: { to: p.from, texto, sinIA: !salida, agente: 'Enfermera' } }];\n"
+      },
+      "id": "94fe7bec-efcd-4c48-ace9-2f2fd3b09d2a",
+      "name": "Respuesta · Enfermera",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        -500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Red de seguridad clínica').first().json.payload;\nconst salida = $input.first().json.output;\nconst texto = salida || 'Gracias por escribir. En un momento te respondemos por aquí para coordinar tu cita.';\nreturn [{ json: { to: p.from, texto, sinIA: !salida, agente: 'Recepcionista' } }];\n"
+      },
+      "id": "e8b65729-09fd-4b13-aa28-e24434748c76",
+      "name": "Respuesta · Recepcionista",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst r = $input.first().json;\nif (!r.sinIA) return [];\nconst p = $('Red de seguridad clínica').first().json.payload;\nreturn [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Mensaje sin responder (' + r.agente + ')', p.nombre || 'Paciente', p.from, 'La IA no pudo responder. Escribió: ' + p.texto])];\n"
+      },
+      "id": "68de79c0-ea03-4a9b-a6a7-f4300e55d7e0",
+      "name": "Aviso: mensaje sin responder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        -280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Minimización de datos: a la IA solo le llega el check-in, sin nombre ni teléfono\nconst evento = $input.first().json.payload;\nconst c = evento.checkin || {};\nconst ANIMOS = { 'muy-bien': 'Muy bien', bien: 'Bien', regular: 'Regular', molestias: 'Con molestias', preocupacion: 'Con preocupación' };\nconst contexto = [\n  'Ánimo elegido: ' + (ANIMOS[c.mood] || c.mood),\n  'Molestia en la zona tratada: ' + c.pain + ' de 10',\n  'Día de recuperación: ' + (evento.recoveryDay != null ? evento.recoveryDay + 1 : 'sin tratamiento reciente'),\n  'Nota de la paciente: ' + (c.note ? '\"' + c.note + '\"' : '(sin nota)'),\n].join('\\n');\nreturn [{ json: { contexto, evento } }];\n"
+      },
+      "id": "b1a9a9df-3d33-457f-ad0e-7d685b3947e2",
+      "name": "Contexto del check-in",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Eres la Enfermera Virtual de la clínica de la Dra. Laura Jiménez en su rol de analista emocional. Lee el check-in que una paciente hizo en su portal después de un tratamiento estético y clasifica el nivel de atención que necesita.\n\n- \"rojo\": miedo intenso, angustia, dolor fuerte (7 o más), o cualquier señal de complicación (piel blanca o morada, ampollas, fiebre, secreción, visión, hinchazón que empeora, bultos dolorosos). La doctora debe escribirle ya.\n- \"amarillo\": preocupación moderada, molestia media o dudas que conviene atender hoy.\n- \"verde\": evolución tranquila.\n\nAnte la duda entre dos niveles, elige el más alto. En \"motivo\" escribe una sola frase para la doctora, sin datos personales.\n\nCheck-in:\n{{ $json.contexto }}",
+        "hasOutputParser": true
+      },
+      "id": "721bf4b1-9b64-478b-aa54-17552b56a2f8",
+      "name": "Enfermera · Analista emocional",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1400,
+        460
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5",
+          "cachedResultName": "Claude Sonnet 5"
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "d3f0bc3c-e8e9-4285-a321-29a2c599db3b",
+      "name": "Modelo · Analista",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        1340,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"nivel\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"rojo\",\n        \"amarillo\",\n        \"verde\"\n      ]\n    },\n    \"emociones\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"motivo\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"nivel\",\n    \"motivo\"\n  ]\n}"
+      },
+      "id": "ea568af7-d19c-49ff-a2ac-2be71fcd33e7",
+      "name": "Formato del triaje",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1480,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst { evento } = $('Contexto del check-in').first().json;\nconst paciente = evento.patient || {};\nconst c = evento.checkin || {};\nconst ia = $input.first().json.output || null;\n// Regla fija de respaldo: si la IA falla o subestima, la regla del servidor manda\nconst nivel = ia?.nivel || (c.needsFollowUp ? 'rojo' : 'verde');\nconst escalar = nivel === 'rojo' || nivel === 'amarillo' || c.needsFollowUp;\nif (!escalar) return [];\nconst etiqueta = nivel === 'rojo' || c.needsFollowUp ? 'Seguimiento urgente' : 'Atención hoy';\nconst detalle = 'Check-in: molestia ' + c.pain + '/10. ' + (ia?.motivo || 'Análisis de IA no disponible; escalado por regla.') + (c.note ? ' Nota: ' + c.note : '');\nreturn [msg(cfg.clinicWhatsapp, 'alerta_clinica', [etiqueta, paciente.name, paciente.phone, detalle])];\n"
+      },
+      "id": "6263409b-3e28-4aa2-abfd-4ef49aeca66e",
+      "name": "Decidir escalamiento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst evento = $input.first().json.payload;\nconst paciente = evento.patient || {};\nconst a = evento.alert || {};\nconst MOTIVOS = { dolor: 'Dolor fuerte', inflamacion: 'La inflamación aumentó', aspecto: 'Algo no se ve como esperaba', duda: 'Duda urgente' };\nconst detalle = 'SOS: ' + (MOTIVOS[a.reason] || a.reason) + (a.note ? '. Nota: ' + a.note : '');\nreturn [\n  msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Urgente', paciente.name, paciente.phone, detalle]),\n  msg(paciente.phone, 'sos_recibido', [firstName(paciente.name)]),\n];\n"
+      },
+      "id": "7690878b-6aca-4eb5-aea9-b381734026e3",
+      "name": "Mensajes: SOS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        700
       ]
     },
     {
@@ -427,8 +1120,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1440,
-        0
+        1140,
+        860
       ]
     },
     {
@@ -440,21 +1133,101 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1440,
-        160
+        1140,
+        1020
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst evento = $input.first().json.payload;\nconst paciente = evento.patient || {};\nconst ANIMOS = { 'muy-bien': 'Muy bien', bien: 'Bien', regular: 'Regular', molestias: 'Con molestias', preocupacion: 'Con preocupación' };\nconst MOTIVOS = { dolor: 'Dolor fuerte', inflamacion: 'La inflamación aumentó', aspecto: 'Algo no se ve como esperaba', duda: 'Duda urgente' };\n\nif (evento.event === 'checkin.alert') {\n  const c = evento.checkin || {};\n  const detalle = 'Check-in: ' + (ANIMOS[c.mood] || c.mood) + ', molestia ' + c.pain + '/10' + (c.note ? '. Nota: ' + c.note : '');\n  return [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Seguimiento', paciente.name, paciente.phone, detalle])];\n}\nconst a = evento.alert || {};\nconst detalle = 'SOS: ' + (MOTIVOS[a.reason] || a.reason) + (a.note ? '. Nota: ' + a.note : '');\nreturn [\n  msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Urgente', paciente.name, paciente.phone, detalle]),\n  msg(paciente.phone, 'sos_recibido', [firstName(paciente.name)]),\n];\n"
+        "url": "={{ $('Configuración').first().json.apiUrl }}/n8n/preparacion?fecha={{ $now.setZone('America/Costa_Rica').toFormat('yyyy-MM-dd') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
       },
-      "id": "70e86e7a-f319-490d-a37a-42226bdb1e1d",
-      "name": "Mensajes: alertas",
+      "id": "9f60d80f-9647-48fa-a7f7-23ce89ae4895",
+      "name": "API: consultas de hoy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        1180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Una consulta por item. A la IA no le llegan teléfonos ni nombres.\nreturn ($input.first().json.items || []).map((c) => ({\n  json: {\n    paciente: c.paciente,\n    hora: c.hora,\n    contexto: [\n      'Motivo de la cita: ' + c.motivo,\n      'Mensaje al agendar: ' + (c.mensajeDeLaPaciente || '(ninguno)'),\n      'Tratamientos previos: ' + (c.tratamientosPrevios.join('; ') || '(primera vez)'),\n      'Productos aplicados: ' + (c.productosAplicados.join('; ') || '(ninguno registrado)'),\n      'Próximos pasos del plan: ' + (c.proximosPasosDelPlan.join('; ') || '(sin plan todavía)'),\n      'Últimos check-ins: ' + (c.ultimosCheckins.join('; ') || '(sin registros)'),\n    ].join('\\n'),\n  },\n}));\n"
+      },
+      "id": "7470d970-7f6e-4134-a6bf-50204bcfce5d",
+      "name": "Separar consultas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1440,
-        320
+        1360,
+        1180
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Eres la Recepcionista VIP de la clínica de la Dra. Laura Jiménez. Antes de cada consulta preparas para la doctora un resumen ejecutivo de exactamente 3 puntos, breve y útil para decidir en la consulta:\n1. Qué viene a hacer hoy y qué dijo la paciente al agendar.\n2. Tratamientos y productos anteriores relevantes (con fechas).\n3. Cómo se ha sentido últimamente (check-ins) y cualquier alerta a considerar.\n\nCada punto en una sola frase de máximo 30 palabras. No inventes información: si falta un dato, dilo.\n\nDatos de la consulta:\n{{ $json.contexto }}",
+        "hasOutputParser": true
+      },
+      "id": "a3f649b1-e37a-4346-a7b1-f5eb23da4ea1",
+      "name": "Recepcionista · Resumen ejecutivo",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1600,
+        1180
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5",
+          "cachedResultName": "Claude Sonnet 5"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "e0caea2a-25a1-4673-a5fb-d398bb8b58bb",
+      "name": "Modelo · Resumen",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        1540,
+        1380
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"punto_1\": {\n      \"type\": \"string\"\n    },\n    \"punto_2\": {\n      \"type\": \"string\"\n    },\n    \"punto_3\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"punto_1\",\n    \"punto_2\",\n    \"punto_3\"\n  ]\n}"
+      },
+      "id": "d8050e0e-dc1a-432c-a439-fa445cefdd72",
+      "name": "Formato del resumen",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1680,
+        1380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst consultas = $('Separar consultas').all();\nreturn $input.all().map((item, i) => {\n  const c = consultas[i].json;\n  const r = item.json.output;\n  // Sin IA disponible, la doctora igual recibe los datos crudos más importantes\n  const lineas = c.contexto.split('\\n');\n  const puntos = r ? [r.punto_1, r.punto_2, r.punto_3] : [lineas[0], lineas[2], lineas[5]];\n  return msg(cfg.clinicWhatsapp, 'resumen_consulta', [c.paciente, c.hora || 'hoy', ...puntos]);\n});\n"
+      },
+      "id": "2ca9464d-89df-43ba-a496-ce94f05d8b3a",
+      "name": "Mensajes: resumen para la doctora",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1860,
+        1180
       ]
     },
     {
@@ -469,8 +1242,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1200,
-        480
+        1140,
+        1340
       ]
     },
     {
@@ -482,8 +1255,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1440,
-        480
+        1360,
+        1340
       ]
     },
     {
@@ -498,8 +1271,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1200,
-        640
+        1140,
+        1500
       ]
     },
     {
@@ -511,8 +1284,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1440,
-        640
+        1360,
+        1500
       ]
     },
     {
@@ -527,8 +1300,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1200,
-        800
+        1140,
+        1660
       ]
     },
     {
@@ -540,8 +1313,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1440,
-        800
+        1360,
+        1660
       ]
     },
     {
@@ -551,8 +1324,8 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        1200,
-        960
+        1140,
+        1820
       ]
     },
     {
@@ -566,13 +1339,13 @@
         "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.to, type: 'template', template: { name: $json.template, language: { code: $('Configuración').first().json.templateLanguage }, components: [{ type: 'body', parameters: $json.params.map(text => ({ type: 'text', text })) }] } }) }}",
         "options": {}
       },
-      "id": "d73f40a2-2fb9-4af9-ac77-f5b691e234bf",
-      "name": "Enviar WhatsApp",
+      "id": "9cb3a613-a01f-4e23-aee6-fc337a1ec28b",
+      "name": "Enviar WhatsApp (plantilla)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1720,
-        400
+        2560,
+        700
       ],
       "retryOnFail": true,
       "maxTries": 3,
@@ -581,36 +1354,253 @@
     },
     {
       "parameters": {
-        "content": "## Cerebro maestro · Clínica Dra. Laura\nUn webhook recibe los eventos del sitio (citas, acceso, alertas). Los CRON lanzan las rutinas diarias. **Probar ahora** ejecuta las tres rutinas.",
-        "width": 700,
-        "height": 160
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Configuración').first().json.graphApiVersion }}/{{ $('Configuración').first().json.whatsappPhoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.to, type: 'text', text: { body: String($json.texto).slice(0, 4000) } }) }}",
+        "options": {}
       },
-      "id": "495cd7f6-5e59-4685-a5e9-c3f26ddd0cfe",
-      "name": "Nota: disparadores",
+      "id": "90084228-7f31-43ed-a3d7-dddd50a8d98c",
+      "name": "Responder por WhatsApp (texto)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2560,
+        -360
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## 🧠 Cerebro maestro · Clínica Dra. Laura\n**Entradas:** Webhook del sitio (citas, acceso, check-in, SOS), WhatsApp entrante (chat con agentes) y CRON diarios.\nTodo pasa por **Configuración** (edítala una sola vez) y el **Router por acción**.\n**Probar ahora** ejecuta todas las rutinas programadas.",
+        "width": 820,
+        "height": 240
+      },
+      "id": "44b5713d-ab7e-471e-a04c-66920f3a0eff",
+      "name": "Nota: cerebro",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -40,
-        -200
+        -300
       ]
     },
     {
       "parameters": {
-        "content": "### Configuración única\nEdita aquí el Phone Number ID de WhatsApp, el WhatsApp de la clínica, la URL del portal y la de la API. El **Router** decide la rama según `accion`.",
-        "width": 420,
-        "height": 200
+        "content": "## 🤖 Equipo de agentes\n**Red de seguridad (sin IA)** → emergencias directo a la doctora. **Clasificador** → **Agente IA 1 · Enfermera Virtual** (triaje clínico, puede despertar a la doctora) o **Agente IA 2 · Recepcionista VIP** (agenda y reservas). Cada agente tiene su propio modelo, memoria y herramientas: la recepcionista no ve datos clínicos y la enfermera no puede reservar.",
+        "width": 1480,
+        "height": 180,
+        "color": 5
       },
-      "id": "2404a951-f593-45e6-ad27-a7334b2ed3d3",
-      "name": "Nota: configuración",
+      "id": "823b33df-65c2-4c97-adcf-24701666de9f",
+      "name": "Nota: multi-agente",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        680,
-        120
+        1100,
+        -980
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Check-in y resumen con respaldo\nSi la IA falla, el check-in se escala con la regla fija del servidor y la doctora recibe el resumen con los datos crudos. A la IA nunca le llegan teléfonos.",
+        "width": 820,
+        "height": 140,
+        "color": 4
+      },
+      "id": "c96cf172-787a-494a-a5f2-ea6673778369",
+      "name": "Nota: IA con respaldo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        280
       ]
     }
   ],
   "connections": {
+    "Modelo · Clasificador": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Clasificador de intención",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo · Enfermera": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente IA 1 · Enfermera Virtual",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memoria · Enfermera": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente IA 1 · Enfermera Virtual",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ficha_paciente": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente IA 1 · Enfermera Virtual",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "base_clinica": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente IA 1 · Enfermera Virtual",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "despertar_doctora": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente IA 1 · Enfermera Virtual",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo · Recepcionista": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente IA 2 · Recepcionista VIP",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memoria · Recepcionista": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente IA 2 · Recepcionista VIP",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ficha_recepcion": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente IA 2 · Recepcionista VIP",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "disponibilidad_agenda": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente IA 2 · Recepcionista VIP",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "bloquear_agenda": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente IA 2 · Recepcionista VIP",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "registrar_cita": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente IA 2 · Recepcionista VIP",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo · Analista": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Enfermera · Analista emocional",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formato del triaje": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Enfermera · Analista emocional",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo · Resumen": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Recepcionista · Resumen ejecutivo",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formato del resumen": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Recepcionista · Resumen ejecutivo",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Webhook clínica": {
       "main": [
         [
@@ -627,6 +1617,28 @@
         [
           {
             "node": "Normalizar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp entrante": {
+      "main": [
+        [
+          {
+            "node": "Normalizar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diario 7:00 · Preparar consultas": {
+      "main": [
+        [
+          {
+            "node": "Rutina: preparar consultas",
             "type": "main",
             "index": 0
           }
@@ -678,6 +1690,28 @@
       ]
     },
     "Normalizar evento": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar mensaje": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rutina: preparar consultas": {
       "main": [
         [
           {
@@ -747,6 +1781,27 @@
       "main": [
         [
           {
+            "node": "Red de seguridad clínica",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Contexto del check-in",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mensajes: SOS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Mensajes: cita recibida",
             "type": "main",
             "index": 0
@@ -761,7 +1816,7 @@
         ],
         [
           {
-            "node": "Mensajes: alertas",
+            "node": "API: consultas de hoy",
             "type": "main",
             "index": 0
           }
@@ -790,6 +1845,185 @@
         [
           {
             "node": "Ignorar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Red de seguridad clínica": {
+      "main": [
+        [
+          {
+            "node": "¿Emergencia?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Emergencia?": {
+      "main": [
+        [
+          {
+            "node": "Alerta de emergencia",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respuesta de emergencia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clasificador de intención",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificador de intención": {
+      "main": [
+        [
+          {
+            "node": "Agente IA 1 · Enfermera Virtual",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agente IA 2 · Recepcionista VIP",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agente IA 1 · Enfermera Virtual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente IA 1 · Enfermera Virtual": {
+      "main": [
+        [
+          {
+            "node": "Respuesta · Enfermera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente IA 2 · Recepcionista VIP": {
+      "main": [
+        [
+          {
+            "node": "Respuesta · Recepcionista",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta de emergencia": {
+      "main": [
+        [
+          {
+            "node": "Responder por WhatsApp (texto)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta · Enfermera": {
+      "main": [
+        [
+          {
+            "node": "Responder por WhatsApp (texto)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Aviso: mensaje sin responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta · Recepcionista": {
+      "main": [
+        [
+          {
+            "node": "Responder por WhatsApp (texto)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Aviso: mensaje sin responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contexto del check-in": {
+      "main": [
+        [
+          {
+            "node": "Enfermera · Analista emocional",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enfermera · Analista emocional": {
+      "main": [
+        [
+          {
+            "node": "Decidir escalamiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: consultas de hoy": {
+      "main": [
+        [
+          {
+            "node": "Separar consultas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separar consultas": {
+      "main": [
+        [
+          {
+            "node": "Recepcionista · Resumen ejecutivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recepcionista · Resumen ejecutivo": {
+      "main": [
+        [
+          {
+            "node": "Mensajes: resumen para la doctora",
             "type": "main",
             "index": 0
           }
@@ -829,11 +2063,55 @@
         ]
       ]
     },
+    "Alerta de emergencia": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (plantilla)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aviso: mensaje sin responder": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (plantilla)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decidir escalamiento": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (plantilla)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensajes: SOS": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (plantilla)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Mensajes: cita recibida": {
       "main": [
         [
           {
-            "node": "Enviar WhatsApp",
+            "node": "Enviar WhatsApp (plantilla)",
             "type": "main",
             "index": 0
           }
@@ -844,18 +2122,18 @@
       "main": [
         [
           {
-            "node": "Enviar WhatsApp",
+            "node": "Enviar WhatsApp (plantilla)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mensajes: alertas": {
+    "Mensajes: resumen para la doctora": {
       "main": [
         [
           {
-            "node": "Enviar WhatsApp",
+            "node": "Enviar WhatsApp (plantilla)",
             "type": "main",
             "index": 0
           }
@@ -866,7 +2144,7 @@
       "main": [
         [
           {
-            "node": "Enviar WhatsApp",
+            "node": "Enviar WhatsApp (plantilla)",
             "type": "main",
             "index": 0
           }
@@ -877,7 +2155,7 @@
       "main": [
         [
           {
-            "node": "Enviar WhatsApp",
+            "node": "Enviar WhatsApp (plantilla)",
             "type": "main",
             "index": 0
           }
@@ -888,7 +2166,7 @@
       "main": [
         [
           {
-            "node": "Enviar WhatsApp",
+            "node": "Enviar WhatsApp (plantilla)",
             "type": "main",
             "index": 0
           }
