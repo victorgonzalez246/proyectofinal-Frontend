@@ -44,6 +44,8 @@ El frontend nunca habla con WhatsApp ni con la base de datos directamente: todo 
 
 ### Workflows de n8n (automatización operativa)
 
+Los flujos ya están listos para importar en `n8n/flujos/` (guía en `n8n/README.md`). Las rutas `/n8n/*` del simulador (`citas`, `seguimiento`, `retoques`) alimentan los flujos programados y se protegen con `X-N8N-Secret`.
+
 1. **Acceso por WhatsApp**: Webhook → Supabase (buscar por teléfono) → Crypto (hash) → Supabase (insert `magic_links`) → WhatsApp (plantilla `acceso_portal`).
 2. **Cita agendada**: Webhook `appointment.created` → WhatsApp confirmación → Google Calendar → Wait (fecha − 24 h) → WhatsApp recordatorio + instrucciones previas.
 3. **Post-tratamiento** (cron diario): pacientes en ventana de recuperación → WhatsApp "¿cómo te sientes?" con enlace al check-in.
