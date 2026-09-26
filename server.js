@@ -4,6 +4,7 @@
 //   POST /register, POST /login, POST /logout, GET /me, POST /appointments
 //   Portal de pacientes: POST /auth/magic-link, POST /auth/verify,
 //   GET /me/portal, GET|POST /me/checkins, PUT /me/care, POST /me/sos
+//   Para n8n (con X-N8N-Secret): GET /n8n/citas, GET /n8n/seguimiento, GET /n8n/retoques
 // ============================================================
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -21,6 +22,8 @@ const N8N_APPOINTMENT_WEBHOOK = process.env.N8N_APPOINTMENT_WEBHOOK || '';
 const N8N_AUTH_WEBHOOK = process.env.N8N_AUTH_WEBHOOK || '';
 // Alertas a la clínica: check-in preocupante y botón SOS (eventos checkin.alert, sos.triggered)
 const N8N_ALERTS_WEBHOOK = process.env.N8N_ALERTS_WEBHOOK || '';
+// Secreto compartido con n8n: viaja en X-N8N-Secret en ambos sentidos
+const N8N_SHARED_SECRET = process.env.N8N_SHARED_SECRET || '';
 const PORTAL_URL = process.env.PORTAL_URL || 'http://localhost:5173';
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutos, un solo uso
 
@@ -82,7 +85,7 @@ const notifyN8n = (url, event, payload) => {
   if (!url) return;
   fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-N8N-Secret': N8N_SHARED_SECRET },
     body: JSON.stringify({ event, sentAt: new Date().toISOString(), ...payload }),
   }).catch((err) => console.error(`⚠️  No se pudo notificar a n8n (${event}):`, err.message));
 };
@@ -232,6 +235,57 @@ server.post('/auth/verify', rateLimit(10, 15 * 60 * 1000), (req, res) => {
     return res.status(401).json({ error: 'El enlace expiró o ya fue usado. Pide uno nuevo.' });
   }
   res.json({ token: issueSession(user), user: withoutPassword(user) });
+});
+
+// ── Rutas para los flujos programados de n8n (servidor a servidor) ──
+const requireN8n = (req, res, next) => {
+  if (!N8N_SHARED_SECRET) return res.status(503).json({ error: 'Integración con n8n no configurada (N8N_SHARED_SECRET).' });
+  const given = Buffer.from(req.header('X-N8N-Secret') || '');
+  const expected = Buffer.from(N8N_SHARED_SECRET);
+  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
+    return res.status(401).json({ error: 'Secreto de n8n inválido.' });
+  }
+  next();
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Fecha de hoy en Costa Rica (YYYY-MM-DD), sin depender de la zona horaria del servidor
+const todayCR = () => new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const daysFromToday = (isoDate) => Math.round((Date.parse(isoDate.slice(0, 10)) - Date.parse(todayCR())) / DAY_MS);
+const contactOf = (userId) => {
+  const user = db.get('users').find({ id: userId }).value();
+  return user ? { patientId: user.id, name: user.name, phone: user.phone } : null;
+};
+
+// Citas de un día (p. ej. mañana y confirmadas) para el recordatorio de 24 h
+server.get('/n8n/citas', requireN8n, (req, res) => {
+  const fecha = str(req.query.fecha, 10);
+  const estado = str(req.query.estado, 20);
+  const items = db.get('appointments')
+    .filter((a) => (!fecha || a.fecha === fecha) && (!estado || a.estado === estado))
+    .map((a) => ({ id: a.id, nombre: a.nombre, telefono: a.telefono, tratamiento: a.tratamiento, fecha: a.fecha, hora: a.hora || '', estado: a.estado }))
+    .value();
+  res.json({ items });
+});
+
+// Pacientes en ventana de recuperación (14 días) para el seguimiento diario
+server.get('/n8n/seguimiento', requireN8n, (req, res) => {
+  const items = db.get('portal').value()
+    .filter((p) => p.lastTreatment?.date)
+    .map((p) => ({ ...contactOf(p.userId), diasDesdeTratamiento: -daysFromToday(p.lastTreatment.date) }))
+    .filter((p) => p.patientId && p.diasDesdeTratamiento >= 0 && p.diasDesdeTratamiento <= 14);
+  res.json({ items });
+});
+
+// Pasos del mapa de belleza con fecha ideal en los próximos N días (retoques y controles)
+server.get('/n8n/retoques', requireN8n, (req, res) => {
+  const dias = Math.min(Math.max(Number(req.query.dias) || 14, 1), 60);
+  const items = db.get('portal').value().flatMap((p) =>
+    (p.roadmap || [])
+      .filter((step) => (step.status === 'next' || step.status === 'future') && daysFromToday(step.date) >= 0 && daysFromToday(step.date) <= dias)
+      .map((step) => ({ ...contactOf(p.userId), stepId: step.id, tipo: step.kind, titulo: step.title, fecha: step.date }))
+  ).filter((i) => i.patientId);
+  res.json({ items });
 });
 
 // ── 🔒 CANDADO: todo lo demás requiere sesión válida ────────
