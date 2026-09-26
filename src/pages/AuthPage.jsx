@@ -319,6 +319,11 @@ export default function AuthPage() {
                     <button type="submit" disabled={loading} className="btn-primary w-full tracking-[0.2em] uppercase text-[13px] py-4 rounded-full">
                       {loading ? 'Procesando...' : 'Registrarme'}
                     </button>
+                    <p className="text-[12px] text-center text-[var(--stone-muted)] mt-4 leading-relaxed">
+                      Al registrarte aceptas el{' '}
+                      <Link to="/privacidad" className="underline underline-offset-4">aviso de privacidad</Link>{' '}
+                      y recibir beneficios del club por correo.
+                    </p>
                   </motion.form>
                 )}
 

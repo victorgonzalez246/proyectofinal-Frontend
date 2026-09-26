@@ -49,7 +49,7 @@ export default function EmotionalCheckin({ onSaved }) {
         <p className="p-lead">
           {result.needsFollowUp
             ? 'Te escribiremos por WhatsApp muy pronto para acompañarte. Si empeora, usa la línea de tranquilidad.'
-            : 'Tu registro quedó en tu diario de evolución. Mañana te volvemos a preguntar.'}
+            : 'Tu registro quedó en tu diario de evolución. La enfermera virtual lo revisa y, si algo necesita atención, la doctora te escribe por WhatsApp.'}
         </p>
         <button type="button" className="p-link" style={{ marginTop: '1rem' }} onClick={reset}>
           Registrar otra vez
@@ -61,7 +61,7 @@ export default function EmotionalCheckin({ onSaved }) {
   return (
     <form className="p-panel" onSubmit={submit}>
       <h2 className="p-title" id="checkin-title">¿Cómo te sientes hoy?</h2>
-      <p className="p-small" style={{ marginTop: '0.35rem' }}>Solo la doctora y su equipo ven tus respuestas.</p>
+      <p className="p-small" style={{ marginTop: '0.35rem' }}>Solo la doctora, su equipo y la enfermera virtual de la clínica ven tus respuestas.</p>
 
       <div className="p-moods" role="radiogroup" aria-labelledby="checkin-title">
         {MOODS.map(({ id, Icon, label }) => (

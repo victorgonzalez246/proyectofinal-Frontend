@@ -1,12 +1,9 @@
 import { ArrowRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import draLauraEditorial from '../../assets/doctor/dra-laura-editorial-1.jpg'
+import { METRICAS_HERO } from '../../config/clinica.js'
 
-const metrics = [
-  { value: '+12 Años', label: 'Criterio Médico Avanzado' },
-  { value: '99.4%', label: 'Satisfacción Natural', highlight: true },
-  { value: 'No Quirúrgico', label: 'Recuperación Inmediata' },
-]
+const metrics = METRICAS_HERO
 
 export default function HeroSection() {
   return (

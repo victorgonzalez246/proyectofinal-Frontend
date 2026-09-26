@@ -17,14 +17,15 @@ const InstagramIcon = ({ size = 22, color = 'currentColor' }) => (
   </svg>
 )
 import { Link } from 'react-router-dom'
+import { CLINICA } from '../../config/clinica.js'
 // logo-isotipo.png es el logo blanco con transparencia (los nombres de los archivos de marca están cruzados)
 import logoWhite from '../../assets/brand/logo-isotipo.png'
 
 const contactInfo = [
-  { icon: MapPin, text: 'Escazú, San José, Costa Rica' },
-  { icon: Phone, text: '+506 8888-8888' },
-  { icon: Mail, text: 'contacto@dralaujimenez.com' },
-  { icon: Clock, text: 'Lun–Vie: 9:00 AM – 6:00 PM' },
+  { icon: MapPin, text: CLINICA.direccion },
+  { icon: Phone, text: CLINICA.telefonoVisible },
+  { icon: Mail, text: CLINICA.email },
+  { icon: Clock, text: CLINICA.horario },
 ]
 
 const quickLinks = [
@@ -35,6 +36,7 @@ const quickLinks = [
   { label: 'Agendar Cita', href: '#agendar' },
   { label: 'Portal de pacientes', href: '/portal/acceso' },
   { label: 'Club de beneficios', href: '/auth' },
+  { label: 'Aviso de privacidad', href: '/privacidad' },
 ]
 
 export default function Footer() {
@@ -75,7 +77,7 @@ export default function Footer() {
             {/* Social */}
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
               <a
-                href="https://www.instagram.com/dralau.armonizacion?stkn=MTBqNXhnZ2QyODJqcw%3D%3D&utm_source=qr"
+                href={CLINICA.instagram}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{

@@ -8,6 +8,7 @@ import { Calendar, Send, CheckCircle, UserRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { sanitizeInput } from '../../utils/security.js'
 import api from '../../services/api.js'
+import { CLINICA, AVISO_VERSION } from '../../config/clinica.js'
 
 const appointmentSchema = z.object({
   nombre: z.string().min(3, 'El nombre debe tener al menos 3 caracteres').max(80),
@@ -19,6 +20,7 @@ const appointmentSchema = z.object({
     .min(1, 'Selecciona una fecha deseada')
     .refine((value) => value >= todayISO(), 'Selecciona una fecha a partir de hoy'),
   mensaje: z.string().max(500).optional().or(z.literal('')),
+  consentimiento: z.boolean().refine((v) => v === true, 'Necesitamos tu aceptación para registrar la cita'),
 })
 
 // Fecha local de hoy en formato YYYY-MM-DD (el mismo que usa <input type="date">)
@@ -38,7 +40,6 @@ const treatmentOptions = [
   'Valoración General',
 ]
 
-const WHATSAPP_NUMBER = '50688888888' // Placeholder - editable
 
 export default function AppointmentSection() {
   const [submitted, setSubmitted] = useState(false)
@@ -57,6 +58,7 @@ export default function AppointmentSection() {
       tratamiento: '',
       fecha: '',
       mensaje: '',
+      consentimiento: false,
     },
   })
 
@@ -70,6 +72,8 @@ export default function AppointmentSection() {
         tratamiento: data.tratamiento,
         fecha: data.fecha,
         mensaje: sanitizeInput(data.mensaje || ''),
+        consentimiento: true,
+        avisoVersion: AVISO_VERSION,
         estado: 'pendiente',
         createdAt: new Date().toISOString(),
       }
@@ -90,7 +94,7 @@ export default function AppointmentSection() {
       )
 
       // Open WhatsApp
-      window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${whatsappMsg}`, '_blank')
+      window.open(`https://wa.me/${CLINICA.whatsapp}?text=${whatsappMsg}`, '_blank')
 
       toast.success('¡Solicitud enviada con éxito!', {
         description: 'Te redirigimos a WhatsApp para confirmar tu cita.',
@@ -287,6 +291,26 @@ export default function AppointmentSection() {
                   />
                   {errors.mensaje && <p className="form-error">{errors.mensaje.message}</p>}
                 </div>
+              </div>
+
+              {/* Consentimiento (Ley 8968): obligatorio para registrar datos de salud */}
+              <div style={{ marginTop: '1.5rem' }}>
+                <label
+                  htmlFor="consentimiento"
+                  style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--stone-muted)', fontWeight: 300, lineHeight: 1.6 }}
+                >
+                  <input
+                    id="consentimiento"
+                    type="checkbox"
+                    style={{ marginTop: '0.3rem', width: '1rem', height: '1rem', accentColor: 'var(--olive-maison)', flexShrink: 0 }}
+                    {...register('consentimiento')}
+                  />
+                  <span>
+                    Acepto el <Link to="/privacidad" style={{ textDecoration: 'underline', color: 'var(--charcoal)' }}>aviso de privacidad</Link> y
+                    que la clínica use mis datos para gestionar mi cita y contactarme por WhatsApp.
+                  </span>
+                </label>
+                {errors.consentimiento && <p className="form-error">{errors.consentimiento.message}</p>}
               </div>
 
               {/* Submit */}

@@ -1,4 +1,5 @@
 import { Laugh, Smile, Meh, Annoyed, Frown } from 'lucide-react';
+import { CLINICA } from '../config/clinica.js';
 import resultadoLabios from '../assets/resultados/resultado-labios.jpeg';
 import resultadoBotox from '../assets/resultados/resultado-botox.jpg';
 import resultadoPatas from '../assets/resultados/resultado-patas-de-gallo.jpg';
@@ -6,9 +7,9 @@ import posterScrubs from '../assets/doctor/dra-laura-scrubs.jpg';
 import posterEditorial from '../assets/doctor/dra-laura-editorial-2.jpg';
 import posterClinica from '../assets/doctor/dra-laura-clinica-caso.jpg';
 
-// Teléfono directo de la clínica (placeholder, el mismo de la landing: reemplazar por el real)
-export const CLINIC_PHONE = '+50688888888';
-export const CLINIC_PHONE_LABEL = '+506 8888-8888';
+// Teléfono directo de la clínica: se edita en src/config/clinica.js
+export const CLINIC_PHONE = CLINICA.telefonoLlamada;
+export const CLINIC_PHONE_LABEL = CLINICA.telefonoVisible;
 
 // Días tras un tratamiento en los que la línea de tranquilidad se destaca
 export const RECOVERY_WINDOW_DAYS = 14;

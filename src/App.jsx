@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import AuthPage from './pages/AuthPage.jsx';
+import PrivacyPage from './pages/PrivacyPage.jsx';
 import DoctorDashboardPage from './pages/DoctorDashboardPage.jsx';
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx';
 
@@ -25,6 +26,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/login" element={<AuthPage />} />
+          <Route path="/privacidad" element={<PrivacyPage />} />
           <Route path="/portal/acceso" element={<PortalAccess />} />
           <Route path="/portal/verificar" element={<PortalVerify />} />
 
