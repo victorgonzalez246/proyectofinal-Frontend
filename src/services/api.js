@@ -1,27 +1,24 @@
 import axios from 'axios';
+import { TOKEN_KEY, USER_KEY } from './session.js';
 
 // Instancia base de Axios
 const api = axios.create({
-  baseURL: 'http://localhost:3001', // Apunta al json-server
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001', // Apunta al servidor simulado
   headers: {
     'Content-Type': 'application/json',
-    // Simulamos headers de seguridad
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY'
   }
 });
 
 // Interceptor de peticiones (Request Interceptor)
 api.interceptors.request.use(
   (config) => {
-    // Aquí interceptamos la petición antes de enviarla
     // Obtenemos el token de sessionStorage (más seguro que localStorage para XSS)
-    const token = sessionStorage.getItem('token');
-    
+    const token = sessionStorage.getItem(TOKEN_KEY);
+
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
-    
+
     return config;
   },
   (error) => {
@@ -36,11 +33,12 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Manejo global de errores de red o autenticación
-    if (error.response && error.response.status === 401) {
-      console.warn("Acceso denegado o token expirado. Cerrando sesión...");
-      sessionStorage.removeItem('token');
-      // Redirigir al login si es necesario
+    // Solo cerramos sesión si había una sesión activa (token expirado o inválido).
+    // Un visitante público que recibe 401 no debe ser redirigido al login.
+    if (error.response?.status === 401 && sessionStorage.getItem(TOKEN_KEY)) {
+      console.warn("Sesión expirada o inválida. Cerrando sesión...");
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(USER_KEY);
       window.location.href = '/login';
     }
     return Promise.reject(error);

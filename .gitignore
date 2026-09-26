@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Datos de pacientes (simulador): nunca se versionan. Plantilla en db.example.json
+db.json
+
+# Variables de entorno (webhooks n8n, etc.)
+.env

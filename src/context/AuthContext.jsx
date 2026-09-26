@@ -28,6 +28,12 @@ export const AuthProvider = ({ children }) => {
     return { user: registeredUser, token, welcomeCoupons };
   };
 
+  const loginWithMagicLink = async (magicToken) => {
+    const { user: verifiedUser, token } = await authService.verifyMagicLink(magicToken);
+    setUser(verifiedUser);
+    return { user: verifiedUser, token };
+  };
+
   const logout = () => {
     authService.logout();
     setUser(null);
@@ -42,6 +48,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     register,
+    loginWithMagicLink,
     logout
   };
 

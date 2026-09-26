@@ -13,9 +13,19 @@ const appointmentSchema = z.object({
   telefono: z.string().min(8, 'Ingresa un número de teléfono válido').max(20),
   email: z.string().email('Ingresa un correo electrónico válido').optional().or(z.literal('')),
   tratamiento: z.string().min(1, 'Selecciona un tratamiento'),
-  fecha: z.string().min(1, 'Selecciona una fecha deseada'),
+  fecha: z
+    .string()
+    .min(1, 'Selecciona una fecha deseada')
+    .refine((value) => value >= todayISO(), 'Selecciona una fecha a partir de hoy'),
   mensaje: z.string().max(500).optional().or(z.literal('')),
 })
+
+// Fecha local de hoy en formato YYYY-MM-DD (el mismo que usa <input type="date">)
+function todayISO() {
+  const now = new Date()
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
+  return now.toISOString().slice(0, 10)
+}
 
 const treatmentOptions = [
   'Armonización Facial',
@@ -93,7 +103,9 @@ export default function AppointmentSection() {
     } catch (error) {
       console.error('Error al agendar cita:', error)
       toast.error('Error al enviar la solicitud', {
-        description: 'Verifica que el servidor esté activo (npm run server) e intenta de nuevo.',
+        description:
+          error.response?.data?.error ||
+          'No pudimos registrar tu solicitud. Intenta de nuevo o escríbenos por WhatsApp.',
       })
     }
   }
@@ -246,6 +258,7 @@ export default function AppointmentSection() {
                   <input
                     id="fecha"
                     type="date"
+                    min={todayISO()}
                     className="form-input"
                     {...register('fecha')}
                   />

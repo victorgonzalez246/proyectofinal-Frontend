@@ -65,7 +65,7 @@ export default function AuthPage() {
       if (user.role === 'doctor') {
         navigate('/admin');
       } else {
-        navigate('/mi-cuenta');
+        navigate('/portal');
       }
     } catch (err) {
       setErrorMsg(err.message || 'Error al iniciar sesión.');
@@ -77,7 +77,8 @@ export default function AuthPage() {
   const fillDoctorCredentials = () => {
     setTab('login');
     setLoginEmail('doctora@laurajimenez.com');
-    setLoginPassword('Admin123!');
+    // La contraseña de prueba solo se rellena en desarrollo; nunca viaja en el build de producción
+    setLoginPassword(import.meta.env.DEV ? 'Admin123!' : '');
     setErrorMsg('');
   };
 
@@ -364,7 +365,7 @@ export default function AuthPage() {
               <p className="text-sm text-[var(--stone-muted)] mb-10 leading-relaxed tracking-wide">
                 Tu cuenta ha sido creada. Hemos enviado los detalles a <strong className="text-[var(--charcoal)]">{welcomeModal.user.email}</strong>.
               </p>
-              <button onClick={() => navigate('/mi-cuenta')} className="btn-primary w-full tracking-widest uppercase text-xs py-4 rounded-full">
+              <button onClick={() => navigate('/portal')} className="btn-primary w-full tracking-widest uppercase text-xs py-4 rounded-full">
                 Entrar a mi Panel
               </button>
             </motion.div>
