@@ -4,7 +4,8 @@
 //   POST /register, POST /login, POST /logout, GET /me, POST /appointments
 //   Portal de pacientes: POST /auth/magic-link, POST /auth/verify,
 //   GET /me/portal, GET|POST /me/checkins, PUT /me/care, POST /me/sos
-//   Para n8n (con X-N8N-Secret): GET /n8n/citas, GET /n8n/seguimiento, GET /n8n/retoques
+//   Para n8n (con X-N8N-Secret): GET /n8n/citas, GET /n8n/seguimiento, GET /n8n/retoques,
+//   agentes de IA: GET /n8n/paciente, POST /n8n/citas, GET /n8n/preparacion
 // ============================================================
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -150,6 +151,28 @@ server.post('/login', rateLimit(10, 15 * 60 * 1000), (req, res) => {
   res.json({ token: issueSession(user), user: withoutPassword(user) });
 });
 
+// Conecta las citas con el portal: quien agenda queda registrado como paciente
+// (sin contraseña) y puede entrar a su portal con este mismo número de WhatsApp.
+const findOrCreatePatient = ({ nombre, telefono, email = '' }, source) => {
+  const existing = db.get('users').find((u) => u.role === 'member' && phoneKey(u.phone) === phoneKey(telefono)).value();
+  if (existing) return existing;
+  const emailTaken = email && db.get('users').find({ email: email.toLowerCase() }).value();
+  const patient = {
+    id: `usr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+    name: nombre,
+    email: isEmail(email) && !emailTaken ? email.toLowerCase() : '',
+    phone: telefono,
+    password: null,
+    role: 'member',
+    source,
+    dateJoined: new Date().toISOString(),
+    subscribedToOffers: false,
+    coupons: [],
+  };
+  db.get('users').push(patient).write();
+  return patient;
+};
+
 // Solicitud de cita desde la landing (visitantes sin sesión)
 server.post('/appointments', rateLimit(5, 10 * 60 * 1000), (req, res) => {
   const appointment = {
@@ -168,26 +191,7 @@ server.post('/appointments', rateLimit(5, 10 * 60 * 1000), (req, res) => {
     return res.status(400).json({ error: 'Datos de la cita inválidos.' });
   }
 
-  // Conecta la landing con el portal: quien agenda queda registrado como paciente
-  // (sin contraseña) y puede entrar a su portal con este mismo número de WhatsApp.
-  let patient = db.get('users').find((u) => u.role === 'member' && phoneKey(u.phone) === phoneKey(appointment.telefono)).value();
-  if (!patient) {
-    const emailTaken = appointment.email && db.get('users').find({ email: appointment.email.toLowerCase() }).value();
-    patient = {
-      id: `usr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-      name: appointment.nombre,
-      email: isEmail(appointment.email) && !emailTaken ? appointment.email.toLowerCase() : '',
-      phone: appointment.telefono,
-      password: null,
-      role: 'member',
-      source: 'landing-cita',
-      dateJoined: appointment.createdAt,
-      subscribedToOffers: false,
-      coupons: [],
-    };
-    db.get('users').push(patient).write();
-  }
-  appointment.userId = patient.id;
+  appointment.userId = findOrCreatePatient(appointment, 'landing-cita').id;
   db.get('appointments').push(appointment).write();
 
   // Automatización n8n (opcional): confirmar por WhatsApp, recordatorio 24 h, instrucciones previas
@@ -286,6 +290,93 @@ server.get('/n8n/retoques', requireN8n, (req, res) => {
   res.json({ items });
 });
 
+// ── Herramientas de los agentes de IA (mínimo privilegio por perfil) ──
+const findPatientByPhone = (telefono) =>
+  db.get('users').find((u) => u.role === 'member' && phoneKey(u.phone) === phoneKey(telefono)).value();
+
+// Ficha según quién pregunta: la Enfermera ve lo clínico, la Recepcionista solo lo administrativo.
+// Ninguna recibe teléfono, correo ni apellidos: solo lo necesario para su tarea.
+server.get('/n8n/paciente', requireN8n, (req, res) => {
+  const user = findPatientByPhone(str(req.query.telefono, 20));
+  if (!user) return res.json({ encontrada: false });
+  const portal = db.get('portal').find({ userId: user.id }).value() || {};
+  const nombre = user.name.split(/\s+/)[0];
+  const proximaCita = db.get('appointments')
+    .filter((a) => a.userId === user.id && a.estado !== 'cancelada' && daysFromToday(a.fecha) >= 0)
+    .sortBy('fecha').map((a) => ({ fecha: a.fecha, hora: a.hora || '', estado: a.estado, tratamiento: a.tratamiento }))
+    .head().value() || null;
+
+  if (req.query.perfil === 'clinico') {
+    const since = portal.care?.since ? Date.parse(portal.care.since) : null;
+    return res.json({
+      encontrada: true,
+      nombre,
+      ultimoTratamiento: portal.lastTreatment ? { nombre: portal.lastTreatment.name, fecha: portal.lastTreatment.date.slice(0, 10) } : null,
+      diaDeRecuperacion: portal.lastTreatment ? -daysFromToday(portal.lastTreatment.date) + 1 : null,
+      cuidadosVigentes: since
+        ? (portal.care.items || []).filter((i) => since + i.hours * 3600000 > Date.now()).map((i) => (i.type === 'dont' ? 'NO: ' : 'Hacer: ') + i.text)
+        : [],
+      ultimosCheckins: db.get('checkins').filter({ userId: user.id }).orderBy('createdAt', 'desc').take(3)
+        .map((c) => ({ fecha: c.createdAt.slice(0, 10), animo: c.mood, molestia: c.pain, nota: c.note })).value(),
+    });
+  }
+  res.json({
+    encontrada: true,
+    nombre,
+    proximaCita,
+    paquetes: (portal.packages || []).map((p) => ({ nombre: p.name, sesionesUsadas: p.used, sesionesTotales: p.total })),
+  });
+});
+
+// La Recepcionista VIP registra la cita que reservó en la agenda (queda confirmada)
+server.post('/n8n/citas', requireN8n, (req, res) => {
+  const cita = {
+    id: `apt_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+    nombre: str(req.body.nombre, 80),
+    telefono: str(req.body.telefono, 20),
+    email: '',
+    tratamiento: str(req.body.tratamiento, 80) || 'Valoración General',
+    fecha: str(req.body.fecha, 10),
+    hora: str(req.body.hora, 20),
+    mensaje: str(req.body.nota, 300),
+    estado: 'confirmada',
+    origen: 'recepcionista-ia',
+    createdAt: new Date().toISOString(),
+  };
+  if (cita.nombre.length < 2 || phoneKey(cita.telefono).length < 8 || !/^\d{4}-\d{2}-\d{2}$/.test(cita.fecha) || !cita.hora) {
+    return res.status(400).json({ error: 'Faltan datos: nombre, teléfono, fecha (AAAA-MM-DD) y hora.' });
+  }
+  cita.userId = findOrCreatePatient(cita, 'recepcionista-ia').id;
+  db.get('appointments').push(cita).write();
+  res.status(201).json({ ok: true, id: cita.id, fecha: cita.fecha, hora: cita.hora });
+});
+
+// Citas confirmadas del día con el historial necesario para el resumen ejecutivo de la doctora
+server.get('/n8n/preparacion', requireN8n, (req, res) => {
+  const fecha = str(req.query.fecha, 10) || todayCR();
+  const items = db.get('appointments').filter({ fecha, estado: 'confirmada' }).value().map((cita) => {
+    const user = db.get('users').find({ id: cita.userId }).value() || findPatientByPhone(cita.telefono);
+    const portal = (user && db.get('portal').find({ userId: user.id }).value()) || {};
+    return {
+      citaId: cita.id,
+      paciente: cita.nombre,
+      hora: cita.hora || '',
+      motivo: cita.tratamiento,
+      mensajeDeLaPaciente: cita.mensaje || '',
+      tratamientosPrevios: (portal.roadmap || []).filter((s) => s.status === 'done' || s.status === 'current')
+        .map((s) => `${s.date}: ${s.title}`),
+      proximosPasosDelPlan: (portal.roadmap || []).filter((s) => s.status === 'next' || s.status === 'future')
+        .slice(0, 2).map((s) => `${s.date}: ${s.title}`),
+      productosAplicados: (portal.certificates || []).map((c) => `${c.appliedOn}: ${c.product} (${c.zone}, ${c.amount})`),
+      ultimosCheckins: user
+        ? db.get('checkins').filter({ userId: user.id }).orderBy('createdAt', 'desc').take(3)
+          .map((c) => `${c.createdAt.slice(0, 10)}: ánimo ${c.mood}, molestia ${c.pain}/10${c.note ? `, "${c.note}"` : ''}`).value()
+        : [],
+    };
+  });
+  res.json({ fecha, items });
+});
+
 // ── 🔒 CANDADO: todo lo demás requiere sesión válida ────────
 server.use((req, res, next) => {
   const session = getSession(req);
@@ -354,9 +445,11 @@ server.post('/me/checkins', rateLimit(10, 60 * 60 * 1000), (req, res) => {
   };
   db.get('checkins').push(checkin).write();
 
-  if (needsFollowUp) {
-    notifyN8n('checkin.alert', { patient: patientContact(req.session.userId), checkin });
-  }
+  // Todos los check-in pasan por la Enfermera Virtual (analista emocional) en n8n.
+  // needsFollowUp es la regla fija: si la IA falla, n8n igual escala con ella.
+  const portal = db.get('portal').find({ userId: req.session.userId }).value();
+  const recoveryDay = portal?.lastTreatment?.date ? -daysFromToday(portal.lastTreatment.date) : null;
+  notifyN8n('checkin.created', { patient: patientContact(req.session.userId), checkin, recoveryDay });
   res.status(201).json(checkin);
 });
 
