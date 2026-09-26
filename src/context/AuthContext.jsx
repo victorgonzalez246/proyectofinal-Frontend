@@ -1,20 +1,11 @@
-import { createContext, useState, useEffect } from 'react';
+import { useState } from 'react';
 import { authService } from '../services/authService.js';
-
-export const AuthContext = createContext(null);
+import { AuthContext } from './auth-context.js';
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Al cargar la app, comprobar si ya hay una sesión activa
-    const storedUser = authService.getCurrentUser();
-    if (storedUser) {
-      setUser(storedUser);
-    }
-    setLoading(false);
-  }, []);
+  // La sesión guardada se lee al iniciar, sin un render extra
+  const [user, setUser] = useState(() => authService.getCurrentUser());
+  const loading = false;
 
   const login = async (credentials) => {
     const { user: loggedInUser, token } = await authService.login(credentials);

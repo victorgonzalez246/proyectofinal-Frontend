@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export default function DoctorDashboardPage() {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const [usersList, setUsersList] = useState([]);
@@ -25,20 +25,13 @@ export default function DoctorDashboardPage() {
   const [promoSentNotice, setPromoSentNotice] = useState(false);
 
   useEffect(() => {
-    fetchUsers();
+    let active = true;
+    api.get('/users')
+      .then((res) => { if (active) setUsersList(res.data || []); })
+      .catch((err) => console.error('Error fetching users:', err))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
-
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      const res = await api.get('/users');
-      setUsersList(res.data || []);
-    } catch (err) {
-      console.error('Error fetching users:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLogout = () => {
     logout();
