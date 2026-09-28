@@ -28,6 +28,3 @@ db.json
 
 # Variables de entorno (webhooks n8n, etc.)
 .env
-
-# Sesiones del simulador (hash de tokens activos)
-*.sesiones.json

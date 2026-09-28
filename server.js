@@ -1,31 +1,26 @@
 // ============================================================
-// SERVIDOR SIMULADO (solo desarrollo) — json-server + candado local
-// Replica el contrato que más adelante expondrán los webhooks de n8n:
-//   Acceso (pacientes y doctora, sin contraseñas): POST /auth/magic-link, POST /auth/verify,
-//   POST /logout, GET /me · Landing: POST /appointments
-//   Portal de pacientes: GET /me/portal, GET|POST /me/checkins, PUT /me/care, POST /me/sos
-//   Panel de la doctora: GET /admin/pacientes
-//   Para n8n (con X-N8N-Secret): GET /n8n/citas, GET /n8n/seguimiento, GET /n8n/retoques,
-//   agentes de IA: GET /n8n/paciente, POST /n8n/citas, GET /n8n/preparacion
-// Solo existen estas rutas: no se expone el CRUD genérico de json-server,
-// porque n8n no lo tendrá en producción.
+// SERVIDOR SIMULADO (solo desarrollo)
+// Atiende el mismo contrato que en producción atiende n8n (flujo "API de la clínica"),
+// con la misma lógica: api/nucleo.mjs. Aquí las tablas viven en db.json; en n8n, en Google Sheets.
+// Este archivo solo agrega lo que en producción hace la infraestructura:
+// HTTP, CORS, límite de intentos y el envío de eventos al cerebro de n8n.
 // ============================================================
 import fs from 'node:fs';
+import http from 'node:http';
 import crypto from 'node:crypto';
-import jsonServer from 'json-server';
+import { crearApi, TABLAS } from './api/nucleo.mjs';
 
 const DB_FILE = process.env.DB_FILE || 'db.json';
 const PORT = Number(process.env.PORT) || 3001;
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 horas
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:4173').split(',');
-// Webhook único del cerebro maestro de n8n (opcional). Recibe todos los eventos:
-// appointment.created, auth.magic_link, checkin.alert, sos.triggered.
+// Webhook del cerebro maestro de n8n (opcional). Recibe los eventos: citas, acceso, check-ins, SOS, campañas.
 // Se queda en el servidor: el navegador nunca ve la URL.
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
 // Secreto compartido con n8n: viaja en X-N8N-Secret en ambos sentidos
 const N8N_SHARED_SECRET = process.env.N8N_SHARED_SECRET || '';
 const PORTAL_URL = process.env.PORTAL_URL || 'http://localhost:5173';
-const MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutos, un solo uso
+const SESSION_SECRET = process.env.SESSION_SECRET || 'solo-desarrollo-cambia-SESSION_SECRET';
+if (!process.env.SESSION_SECRET) console.warn('⚠️  SESSION_SECRET no está definido: se usa uno de desarrollo.');
 
 // db.json contiene datos de pacientes y no se versiona: se crea desde la plantilla
 if (!fs.existsSync(DB_FILE)) {
@@ -33,436 +28,115 @@ if (!fs.existsSync(DB_FILE)) {
   console.log('📄 db.json creado desde db.example.json');
 }
 
-const server = jsonServer.create();
-const router = jsonServer.router(DB_FILE);
-const db = router.db;
-db.defaults({ users: [], appointments: [], portal: [], checkins: [], sosAlerts: [] }).write();
-
-// CORS restringido a los orígenes del frontend (en vez del CORS abierto por defecto)
-server.use((req, res, next) => {
-  const origin = req.header('Origin');
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Vary', 'Origin');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  }
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
-  next();
+const api = crearApi({
+  secretoSesion: SESSION_SECRET,
+  secretoN8n: N8N_SHARED_SECRET,
+  portalUrl: PORTAL_URL,
+  // Sin n8n conectado, el enlace mágico se muestra en pantalla en lugar de enviarse por WhatsApp
+  modoDesarrollo: !N8N_WEBHOOK_URL,
+  cripto: {
+    hmac: (clave, texto) => crypto.createHmac('sha256', clave).update(texto).digest('hex'),
+    sha256: (texto) => crypto.createHash('sha256').update(texto).digest('hex'),
+    aleatorio: (bytes) => crypto.randomBytes(bytes).toString('hex'),
+    igual: (a, b) => {
+      const x = Buffer.from(String(a));
+      const y = Buffer.from(String(b));
+      return x.length === y.length && crypto.timingSafeEqual(x, y);
+    },
+  },
 });
-server.use(jsonServer.defaults({ noCors: true, static: 'public' }));
-server.use(jsonServer.bodyParser);
 
-// ── Utilidades ─────────────────────────────────────────────
-// Sesiones: se guardan en disco (solo el hash del token) para sobrevivir a reinicios del servidor
-const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
-const SESSIONS_FILE = process.env.SESSIONS_FILE || DB_FILE.replace(/\.json$/, '') + '.sesiones.json';
-const sessions = new Map(); // sha256(token) -> { userId, role, expiresAt }
-try {
-  for (const [key, value] of Object.entries(JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8')))) {
-    if (value.expiresAt > Date.now()) sessions.set(key, value);
-  }
-} catch {
-  // Primera ejecución o archivo ilegible: se empieza sin sesiones
-}
-const saveSessions = () => {
-  const vigentes = Object.fromEntries([...sessions].filter(([, v]) => v.expiresAt > Date.now()));
-  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(vigentes));
-};
-
-// Ya no hay contraseñas, pero un db.json antiguo puede conservar hashes: nunca salen al navegador
-const withoutPassword = (user) => {
-  if (!user || typeof user !== 'object') return user;
-  const { password: _password, ...safe } = user;
-  return safe;
-};
-
-const issueSession = (user) => {
-  const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(hashToken(token), { userId: user.id, role: user.role, expiresAt: Date.now() + SESSION_TTL_MS });
-  saveSessions();
-  return token;
-};
-
-const getSession = (req) => {
-  const header = req.header('Authorization') || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const key = hashToken(token);
-  const session = sessions.get(key);
-  if (!session) return null;
-  if (session.expiresAt < Date.now()) {
-    sessions.delete(key);
-    saveSessions();
-    return null;
-  }
-  return { ...session, key };
-};
-
-// Envía un evento a un webhook de n8n sin bloquear la respuesta al usuario
-const notifyN8n = (event, payload) => {
+// Envía un evento al cerebro de n8n sin bloquear la respuesta al usuario
+const notifyN8n = ({ event, ...payload }) => {
   if (!N8N_WEBHOOK_URL) return;
   fetch(N8N_WEBHOOK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-N8N-Secret': N8N_SHARED_SECRET },
-    body: JSON.stringify({ event, sentAt: new Date().toISOString(), ...payload }),
+    body: JSON.stringify({ event, ...payload }),
   }).catch((err) => console.error(`⚠️  No se pudo notificar a n8n (${event}):`, err.message));
 };
 
-const str = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
-const phoneKey = (phone) => String(phone || '').replace(/\D/g, '').slice(-8); // últimos 8 dígitos (CR)
-const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-
-// Límite simple de solicitudes por IP para endpoints públicos (anti-spam / fuerza bruta)
+// Límite simple de solicitudes por IP para endpoints públicos (en producción: reglas del proxy)
+const LIMITES = {
+  'POST /appointments': [5, 10 * 60 * 1000],
+  'POST /auth/magic-link': [5, 15 * 60 * 1000],
+  'POST /auth/verify': [10, 15 * 60 * 1000],
+  'POST /me/checkins': [10, 60 * 60 * 1000],
+  'POST /me/sos': [3, 10 * 60 * 1000],
+};
 const rateBuckets = new Map();
-const rateLimit = (max, windowMs) => (req, res, next) => {
-  const key = `${req.path}:${req.ip}`;
+const excedeLimite = (clave, ip) => {
+  const limite = LIMITES[clave];
+  if (!limite) return false;
+  const [max, windowMs] = limite;
+  const key = `${clave}:${ip}`;
   const now = Date.now();
   const hits = (rateBuckets.get(key) || []).filter((t) => now - t < windowMs);
-  if (hits.length >= max) {
-    return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos e intenta de nuevo.' });
-  }
+  if (hits.length >= max) return true;
   hits.push(now);
   rateBuckets.set(key, hits);
-  next();
+  return false;
 };
 
-// ── Endpoints públicos ─────────────────────────────────────
-// Conecta las citas con el portal: quien agenda queda registrado como paciente
-// (sin contraseña) y puede entrar a su portal con este mismo número de WhatsApp.
-const findOrCreatePatient = ({ nombre, telefono, email = '' }, source) => {
-  const existing = db.get('users').find((u) => u.role === 'member' && phoneKey(u.phone) === phoneKey(telefono)).value();
-  if (existing) return existing;
-  const emailTaken = email && db.get('users').find({ email: email.toLowerCase() }).value();
-  const patient = {
-    id: `usr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-    name: nombre,
-    email: isEmail(email) && !emailTaken ? email.toLowerCase() : '',
-    phone: telefono,
-    role: 'member',
-    source,
-    dateJoined: new Date().toISOString(),
-  };
-  db.get('users').push(patient).write();
-  return patient;
-};
-
-// Solicitud de cita desde la landing (visitantes sin sesión)
-server.post('/appointments', rateLimit(5, 10 * 60 * 1000), (req, res) => {
-  const appointment = {
-    id: `apt_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-    nombre: str(req.body.nombre, 80),
-    telefono: str(req.body.telefono, 20),
-    email: str(req.body.email, 120),
-    tratamiento: str(req.body.tratamiento, 80),
-    fecha: str(req.body.fecha, 10),
-    mensaje: str(req.body.mensaje, 500),
-    estado: 'pendiente', // El estado lo decide el servidor, no el cliente
-    createdAt: new Date().toISOString(),
-  };
-
-  // Consentimiento informado (Ley 8968): sin él no se registran datos de salud
-  if (req.body.consentimiento !== true) {
-    return res.status(400).json({ error: 'Necesitamos tu aceptación del aviso de privacidad para registrar la cita.' });
-  }
-  appointment.consentimiento = { version: str(req.body.avisoVersion, 40) || 'sin-version', fecha: appointment.createdAt };
-
-  if (appointment.nombre.length < 3 || appointment.telefono.length < 8 || !appointment.tratamiento || !/^\d{4}-\d{2}-\d{2}$/.test(appointment.fecha)) {
-    return res.status(400).json({ error: 'Datos de la cita inválidos.' });
-  }
-
-  appointment.userId = findOrCreatePatient(appointment, 'landing-cita').id;
-  db.get('appointments').push(appointment).write();
-
-  // Automatización n8n (opcional): confirmar por WhatsApp, recordatorio 24 h, instrucciones previas
-  notifyN8n('appointment.created', { appointment });
-
-  // Al visitante solo se le confirma la recepción: no se devuelven datos almacenados
-  res.status(201).json({ ok: true, id: appointment.id });
-});
-
-// ── Acceso sin contraseña por WhatsApp (pacientes y doctora) ──
-const magicLinks = new Map(); // sha256(token) -> { userId, expiresAt }
-
-server.post('/auth/magic-link', rateLimit(5, 15 * 60 * 1000), (req, res) => {
-  const key = phoneKey(req.body.phone);
-  // Respuesta idéntica exista o no el número: no revela quién es paciente
-  const response = { ok: true };
-  if (key.length < 8) return res.status(400).json({ error: 'Ingresa un número de WhatsApp válido.' });
-
-  const user = db.get('users').find((u) => phoneKey(u.phone) === key).value();
-  if (user) {
-    const token = crypto.randomBytes(32).toString('hex');
-    magicLinks.set(hashToken(token), { userId: user.id, expiresAt: Date.now() + MAGIC_LINK_TTL_MS });
-    const link = `${PORTAL_URL}/portal/verificar#${token}`;
-
-    if (N8N_WEBHOOK_URL) {
-      notifyN8n('auth.magic_link', { phone: user.phone, name: user.name, role: user.role, link });
-    } else {
-      // Sin n8n configurado (solo desarrollo) el enlace se muestra en consola y en pantalla
-      console.log(`🔑 Enlace mágico para ${user.name}: ${link}`);
-      response.devLink = link;
-    }
-  }
-  res.json(response);
-});
-
-server.post('/auth/verify', rateLimit(10, 15 * 60 * 1000), (req, res) => {
-  const token = typeof req.body.token === 'string' ? req.body.token : '';
-  const entry = magicLinks.get(hashToken(token));
-  magicLinks.delete(hashToken(token)); // un solo uso
-  const user = entry && entry.expiresAt > Date.now() && db.get('users').find({ id: entry.userId }).value();
-  if (!user) {
-    return res.status(401).json({ error: 'El enlace expiró o ya fue usado. Pide uno nuevo.' });
-  }
-  res.json({ token: issueSession(user), user: withoutPassword(user) });
-});
-
-// ── Rutas para los flujos programados de n8n (servidor a servidor) ──
-const requireN8n = (req, res, next) => {
-  if (!N8N_SHARED_SECRET) return res.status(503).json({ error: 'Integración con n8n no configurada (N8N_SHARED_SECRET).' });
-  const given = Buffer.from(req.header('X-N8N-Secret') || '');
-  const expected = Buffer.from(N8N_SHARED_SECRET);
-  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
-    return res.status(401).json({ error: 'Secreto de n8n inválido.' });
-  }
-  next();
-};
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-// Fecha de hoy en Costa Rica (YYYY-MM-DD), sin depender de la zona horaria del servidor
-const todayCR = () => new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
-const daysFromToday = (isoDate) => Math.round((Date.parse(isoDate.slice(0, 10)) - Date.parse(todayCR())) / DAY_MS);
-const contactOf = (userId) => {
-  const user = db.get('users').find({ id: userId }).value();
-  return user ? { patientId: user.id, name: user.name, phone: user.phone } : null;
-};
-
-// Citas de un día (p. ej. mañana y confirmadas) para el recordatorio de 24 h
-server.get('/n8n/citas', requireN8n, (req, res) => {
-  const fecha = str(req.query.fecha, 10);
-  const estado = str(req.query.estado, 20);
-  const items = db.get('appointments')
-    .filter((a) => (!fecha || a.fecha === fecha) && (!estado || a.estado === estado))
-    .map((a) => ({ id: a.id, nombre: a.nombre, telefono: a.telefono, tratamiento: a.tratamiento, fecha: a.fecha, hora: a.hora || '', estado: a.estado }))
-    .value();
-  res.json({ items });
-});
-
-// Pacientes en ventana de recuperación (14 días) para el seguimiento diario
-server.get('/n8n/seguimiento', requireN8n, (req, res) => {
-  const items = db.get('portal').value()
-    .filter((p) => p.lastTreatment?.date)
-    .map((p) => ({ ...contactOf(p.userId), diasDesdeTratamiento: -daysFromToday(p.lastTreatment.date) }))
-    .filter((p) => p.patientId && p.diasDesdeTratamiento >= 0 && p.diasDesdeTratamiento <= 14);
-  res.json({ items });
-});
-
-// Pasos del mapa de belleza con fecha ideal en los próximos N días (retoques y controles)
-server.get('/n8n/retoques', requireN8n, (req, res) => {
-  const dias = Math.min(Math.max(Number(req.query.dias) || 14, 1), 60);
-  const items = db.get('portal').value().flatMap((p) =>
-    (p.roadmap || [])
-      .filter((step) => (step.status === 'next' || step.status === 'future') && daysFromToday(step.date) >= 0 && daysFromToday(step.date) <= dias)
-      .map((step) => ({ ...contactOf(p.userId), stepId: step.id, tipo: step.kind, titulo: step.title, fecha: step.date }))
-  ).filter((i) => i.patientId);
-  res.json({ items });
-});
-
-// ── Herramientas de los agentes de IA (mínimo privilegio por perfil) ──
-const findPatientByPhone = (telefono) =>
-  db.get('users').find((u) => u.role === 'member' && phoneKey(u.phone) === phoneKey(telefono)).value();
-
-// Ficha según quién pregunta: la Enfermera ve lo clínico, la Recepcionista solo lo administrativo.
-// Ninguna recibe teléfono, correo ni apellidos: solo lo necesario para su tarea.
-server.get('/n8n/paciente', requireN8n, (req, res) => {
-  const user = findPatientByPhone(str(req.query.telefono, 20));
-  if (!user) return res.json({ encontrada: false });
-  const portal = db.get('portal').find({ userId: user.id }).value() || {};
-  const nombre = user.name.split(/\s+/)[0];
-  const proximaCita = db.get('appointments')
-    .filter((a) => a.userId === user.id && a.estado !== 'cancelada' && daysFromToday(a.fecha) >= 0)
-    .sortBy('fecha').map((a) => ({ fecha: a.fecha, hora: a.hora || '', estado: a.estado, tratamiento: a.tratamiento }))
-    .head().value() || null;
-
-  if (req.query.perfil === 'clinico') {
-    const since = portal.care?.since ? Date.parse(portal.care.since) : null;
-    return res.json({
-      encontrada: true,
-      nombre,
-      ultimoTratamiento: portal.lastTreatment ? { nombre: portal.lastTreatment.name, fecha: portal.lastTreatment.date.slice(0, 10) } : null,
-      diaDeRecuperacion: portal.lastTreatment ? -daysFromToday(portal.lastTreatment.date) + 1 : null,
-      cuidadosVigentes: since
-        ? (portal.care.items || []).filter((i) => since + i.hours * 3600000 > Date.now()).map((i) => (i.type === 'dont' ? 'NO: ' : 'Hacer: ') + i.text)
-        : [],
-      ultimosCheckins: db.get('checkins').filter({ userId: user.id }).orderBy('createdAt', 'desc').take(3)
-        .map((c) => ({ fecha: c.createdAt.slice(0, 10), animo: c.mood, molestia: c.pain, nota: c.note })).value(),
-    });
-  }
-  res.json({
-    encontrada: true,
-    nombre,
-    proximaCita,
-    paquetes: (portal.packages || []).map((p) => ({ nombre: p.name, sesionesUsadas: p.used, sesionesTotales: p.total })),
+const leerCuerpo = (req) => new Promise((resolve, reject) => {
+  let data = '';
+  req.on('data', (chunk) => {
+    data += chunk;
+    if (data.length > 100_000) reject(new Error('Cuerpo demasiado grande'));
   });
-});
-
-// La Recepcionista VIP registra la cita que reservó en la agenda (queda confirmada)
-server.post('/n8n/citas', requireN8n, (req, res) => {
-  const cita = {
-    id: `apt_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-    nombre: str(req.body.nombre, 80),
-    telefono: str(req.body.telefono, 20),
-    email: '',
-    tratamiento: str(req.body.tratamiento, 80) || 'Valoración General',
-    fecha: str(req.body.fecha, 10),
-    hora: str(req.body.hora, 20),
-    mensaje: str(req.body.nota, 300),
-    estado: 'confirmada',
-    origen: 'recepcionista-ia',
-    createdAt: new Date().toISOString(),
-  };
-  if (cita.nombre.length < 2 || phoneKey(cita.telefono).length < 8 || !/^\d{4}-\d{2}-\d{2}$/.test(cita.fecha) || !cita.hora) {
-    return res.status(400).json({ error: 'Faltan datos: nombre, teléfono, fecha (AAAA-MM-DD) y hora.' });
-  }
-  cita.userId = findOrCreatePatient(cita, 'recepcionista-ia').id;
-  db.get('appointments').push(cita).write();
-  res.status(201).json({ ok: true, id: cita.id, fecha: cita.fecha, hora: cita.hora });
-});
-
-// Citas confirmadas del día con el historial necesario para el resumen ejecutivo de la doctora
-server.get('/n8n/preparacion', requireN8n, (req, res) => {
-  const fecha = str(req.query.fecha, 10) || todayCR();
-  const items = db.get('appointments').filter({ fecha, estado: 'confirmada' }).value().map((cita) => {
-    const user = db.get('users').find({ id: cita.userId }).value() || findPatientByPhone(cita.telefono);
-    const portal = (user && db.get('portal').find({ userId: user.id }).value()) || {};
-    return {
-      citaId: cita.id,
-      paciente: cita.nombre,
-      hora: cita.hora || '',
-      motivo: cita.tratamiento,
-      mensajeDeLaPaciente: cita.mensaje || '',
-      tratamientosPrevios: (portal.roadmap || []).filter((s) => s.status === 'done' || s.status === 'current')
-        .map((s) => `${s.date}: ${s.title}`),
-      proximosPasosDelPlan: (portal.roadmap || []).filter((s) => s.status === 'next' || s.status === 'future')
-        .slice(0, 2).map((s) => `${s.date}: ${s.title}`),
-      productosAplicados: (portal.certificates || []).map((c) => `${c.appliedOn}: ${c.product} (${c.zone}, ${c.amount})`),
-      ultimosCheckins: user
-        ? db.get('checkins').filter({ userId: user.id }).orderBy('createdAt', 'desc').take(3)
-          .map((c) => `${c.createdAt.slice(0, 10)}: ánimo ${c.mood}, molestia ${c.pain}/10${c.note ? `, "${c.note}"` : ''}`).value()
-        : [],
-    };
+  req.on('end', () => {
+    try { resolve(data ? JSON.parse(data) : {}); } catch { reject(new Error('JSON inválido')); }
   });
-  res.json({ fecha, items });
+  req.on('error', reject);
 });
 
-// ── 🔒 CANDADO: todo lo demás requiere sesión válida ────────
-server.use((req, res, next) => {
-  const session = getSession(req);
-  if (!session) {
-    return res.status(401).json({ error: '🔒 Acceso Denegado. Candado Local Activado.' });
+const server = http.createServer(async (req, res) => {
+  const enviar = (status, body) => {
+    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(body === undefined ? '' : JSON.stringify(body));
+  };
+
+  // CORS restringido a los orígenes del frontend
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, OPTIONS');
   }
-  req.session = session;
-  next();
+  if (req.method === 'OPTIONS') return enviar(204);
+
+  const url = new URL(req.url, 'http://localhost');
+  if (excedeLimite(`${req.method} ${url.pathname}`, req.socket.remoteAddress)) {
+    return enviar(429, { error: 'Demasiados intentos. Espera unos minutos e intenta de nuevo.' });
+  }
+
+  let body;
+  try {
+    body = ['POST', 'PUT', 'PATCH'].includes(req.method) ? await leerCuerpo(req) : {};
+  } catch (err) {
+    return enviar(400, { error: err.message });
+  }
+
+  // Lectura y escritura síncronas: cada petición ve y deja db.json completo
+  const db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  let resultado;
+  try {
+    resultado = api.manejar({ metodo: req.method, ruta: url.pathname + url.search, body, headers: req.headers }, db);
+  } catch (err) {
+    console.error('❌ Error inesperado:', err);
+    return enviar(500, { error: 'Error interno del servidor.' });
+  }
+  if (Object.keys(resultado.cambios).length > 0) {
+    const datos = Object.fromEntries(TABLAS.map((t) => [t, db[t]]));
+    fs.writeFileSync(DB_FILE, JSON.stringify(datos, null, 2) + '\n');
+  }
+  if (resultado.body?.devLink) console.log(`🔑 Enlace mágico (modo desarrollo): ${resultado.body.devLink}`);
+  resultado.eventos.forEach(notifyN8n);
+  enviar(resultado.status, resultado.body);
 });
-
-server.post('/logout', (req, res) => {
-  sessions.delete(req.session.key);
-  saveSessions();
-  res.json({ ok: true });
-});
-
-server.get('/me', (req, res) => {
-  const user = db.get('users').find({ id: req.session.userId }).value();
-  if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
-  res.json(withoutPassword(user));
-});
-
-// ── Portal de pacientes: cada ruta /me/* opera solo sobre los datos de la sesión ──
-const MOODS = ['muy-bien', 'bien', 'regular', 'molestias', 'preocupacion'];
-const SOS_REASONS = ['dolor', 'inflamacion', 'aspecto', 'duda'];
-
-const patientContact = (userId) => {
-  const user = db.get('users').find({ id: userId }).value();
-  return user ? { id: user.id, name: user.name, phone: user.phone } : { id: userId };
-};
-
-server.get('/me/portal', (req, res) => {
-  const portal = db.get('portal').find({ userId: req.session.userId }).value();
-  // Sin plan todavía: el frontend muestra el estado vacío (primera valoración pendiente)
-  res.json(portal || null);
-});
-
-server.put('/me/care', (req, res) => {
-  const portal = db.get('portal').find({ userId: req.session.userId });
-  if (!portal.value()) return res.status(404).json({ error: 'Todavía no tienes un protocolo de cuidados.' });
-  const validIds = new Set((portal.value().care?.items || []).map((i) => i.id));
-  const doneIds = Array.isArray(req.body.doneIds) ? req.body.doneIds.filter((id) => validIds.has(id)) : [];
-  portal.assign({ careDone: doneIds }).write();
-  res.json({ doneIds });
-});
-
-server.get('/me/checkins', (req, res) => {
-  const list = db.get('checkins').filter({ userId: req.session.userId }).orderBy('createdAt', 'desc').take(30).value();
-  res.json(list);
-});
-
-server.post('/me/checkins', rateLimit(10, 60 * 60 * 1000), (req, res) => {
-  const mood = MOODS.includes(req.body.mood) ? req.body.mood : null;
-  const pain = Number.isInteger(req.body.pain) && req.body.pain >= 0 && req.body.pain <= 10 ? req.body.pain : null;
-  if (!mood || pain === null) return res.status(400).json({ error: 'Indica cómo te sientes y tu nivel de molestia.' });
-
-  // Regla de seguimiento proactivo: preocupación, incomodidad con dolor medio o dolor alto
-  const needsFollowUp = mood === 'preocupacion' || pain >= 7 || (mood === 'molestias' && pain >= 5);
-  const checkin = {
-    id: `chk_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-    userId: req.session.userId,
-    mood,
-    pain,
-    note: str(req.body.note, 400),
-    needsFollowUp,
-    createdAt: new Date().toISOString(),
-  };
-  db.get('checkins').push(checkin).write();
-
-  // Todos los check-in pasan por la Enfermera Virtual (analista emocional) en n8n.
-  // needsFollowUp es la regla fija: si la IA falla, n8n igual escala con ella.
-  const portal = db.get('portal').find({ userId: req.session.userId }).value();
-  const recoveryDay = portal?.lastTreatment?.date ? -daysFromToday(portal.lastTreatment.date) : null;
-  notifyN8n('checkin.created', { patient: patientContact(req.session.userId), checkin, recoveryDay });
-  res.status(201).json(checkin);
-});
-
-server.post('/me/sos', rateLimit(3, 10 * 60 * 1000), (req, res) => {
-  const alert = {
-    id: `sos_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-    userId: req.session.userId,
-    reason: SOS_REASONS.includes(req.body.reason) ? req.body.reason : 'duda',
-    note: str(req.body.note, 400),
-    status: 'abierta',
-    createdAt: new Date().toISOString(),
-  };
-  db.get('sosAlerts').push(alert).write();
-  notifyN8n('sos.triggered', { patient: patientContact(req.session.userId), alert });
-  res.status(201).json({ ok: true, id: alert.id });
-});
-
-// ── Panel de la doctora: solo rutas /admin/* explícitas ──
-server.use('/admin', (req, res, next) => {
-  if (req.session.role !== 'doctor') return res.status(403).json({ error: 'No tienes permiso para acceder a este recurso.' });
-  next();
-});
-
-server.get('/admin/pacientes', (req, res) => {
-  const pacientes = db.get('users').filter({ role: 'member' }).orderBy('dateJoined', 'desc').value()
-    .map(({ id, name, email, phone, source, dateJoined }) => ({ id, name, email, phone, source, dateJoined }));
-  res.json(pacientes);
-});
-
-// Cualquier otra ruta no existe (el CRUD genérico de json-server no se expone)
-server.use((req, res) => res.status(404).json({ error: 'Recurso no encontrado.' }));
 
 server.listen(PORT, () => {
-  console.log(`✅ Base de datos simulada corriendo en puerto ${PORT}`);
-  console.log('🔒 Candado de Seguridad Local: ACTIVADO');
+  console.log(`✅ Simulador de la API corriendo en el puerto ${PORT}`);
   console.log(N8N_WEBHOOK_URL ? '🧠 Cerebro maestro de n8n: CONECTADO' : '🧠 Cerebro maestro de n8n: no configurado (N8N_WEBHOOK_URL)');
 });

@@ -14,7 +14,7 @@ Según los requisitos, el frontend es **100 % puro** y **n8n es el único backen
 | Agenda | **Google Calendar** | La agenda real de la doctora: la Recepcionista consulta la disponibilidad y reserva ahí. |
 | Mensajería | **WhatsApp Cloud API (Meta)** | Plantillas aprobadas para lo que inicia la clínica, y texto libre para responder en el chat. |
 
-**Simulador de desarrollo:** mientras n8n no tenga los datos reales, `server.js` (json-server) imita exactamente las rutas que expondrá n8n. No forma parte del producto: al pasar a producción se reemplaza `VITE_API_URL` por la URL de los webhooks de n8n, y el CSP de `index.html` se ajusta solo.
+**Simulador de desarrollo:** mientras n8n no tenga los datos reales, `server.js` atiende las mismas rutas con la misma lógica que n8n (`api/nucleo.mjs`). No forma parte del producto: al pasar a producción se reemplaza `VITE_API_URL` por la URL de los webhooks de n8n, y el CSP de `index.html` se ajusta solo.
 
 ## 2. Arquitectura
 
@@ -63,29 +63,43 @@ El flujo importable está en [`n8n/flujos/cerebro-maestro-clinica.json`](../n8n/
 3. La regla fija del check-in escala aunque la IA falle.
 4. Si un agente no responde, la paciente recibe un mensaje de contención y la doctora un aviso.
 
-## 4. Contrato de la API (lo que hoy simula `server.js`)
+## 4. Contrato de la API
+
+La lógica del contrato está en un solo archivo, [`api/nucleo.mjs`](../api/nucleo.mjs), sin dependencias:
+- **Desarrollo:** `server.js` lo atiende con las tablas en `db.json`.
+- **Producción:** el flujo de n8n `API de la clínica` copia ese mismo código en su nodo *Núcleo API*, con las tablas en Google Sheets.
+
+`npm run verificar` recorre el contrato completo contra el simulador, y `npm run probar:n8n` lo hace contra el flujo de n8n.
 
 | Método y ruta | Quién | Qué hace |
 |---|---|---|
-| `POST /auth/magic-link` `{phone}` | Público | Genera un token de un solo uso (15 min) y lo envía por WhatsApp. Responde lo mismo exista o no el número. |
-| `POST /auth/verify` `{token}` | Público | Canjea el token por una sesión (8 h). Es el único acceso, también para la doctora: no hay contraseñas. |
-| `GET /admin/pacientes` | Doctora | Directorio de pacientes (sin datos de acceso). |
-| `GET /me/portal` | Paciente | Plan, mapa de belleza, cuidados, paquetes, lotes, fotos y videos. |
+| `POST /appointments` | Público | Solicitud de cita desde la landing. Registra a la persona como paciente y, si marcó la casilla, su consentimiento de promociones. Evento: `appointment.created`. |
+| `POST /auth/magic-link` `{phone}` | Público | Enlace de un solo uso (15 min) por WhatsApp, para pacientes y doctora. Responde lo mismo exista o no el número. Evento: `auth.magic_link` (incluye `role`). |
+| `POST /auth/verify` `{token}` | Público | Canjea el enlace por una sesión firmada (8 h paciente, 4 h doctora). No hay contraseñas. |
+| `GET /me` · `POST /logout` | Sesión | Perfil propio. Cerrar sesión borra el token del navegador (las sesiones no se guardan). |
+| `GET /me/portal` | Paciente | Plan, mapa de belleza, cuidados, paquetes, productos, fotos y videos. |
 | `PUT /me/care` `{doneIds}` | Paciente | Guarda los cuidados marcados. |
-| `GET/POST /me/checkins` | Paciente | Diario emocional. Cada registro se envía al cerebro como `checkin.created`. |
-| `POST /me/sos` `{reason, note}` | Paciente | Línea de tranquilidad: `sos.triggered`. |
-| `POST /appointments` | Público | Solicitud de cita desde la landing: `appointment.created`. Registra a la persona como paciente. |
+| `GET/POST /me/checkins` | Paciente | Diario emocional. Evento: `checkin.created`. |
+| `POST /me/sos` `{reason, note}` | Paciente | Línea de tranquilidad. Evento: `sos.triggered`. |
+| `GET /admin/hoy` | Doctora | Consultas confirmadas de hoy (con el resumen de 3 puntos), solicitudes pendientes y alertas abiertas. |
+| `GET /admin/citas?estado=` | Doctora | Citas por estado. |
+| `PATCH /admin/citas/:id` `{estado, fecha, hora}` | Doctora | Confirmar (exige hora), reprogramar o cancelar. Eventos: `appointment.confirmed` / `appointment.cancelled`. |
+| `GET /admin/pacientes` · `GET /admin/pacientes/:id` | Doctora | Directorio y ficha (plan, citas y check-ins). |
+| `PUT /admin/pacientes/:id/plan` | Doctora | Guarda el plan completo; rechaza datos inválidos. |
+| `GET /admin/alertas?estado=` · `PATCH /admin/alertas/:id` | Doctora | Bandeja de SOS y check-ins marcados; marcar como atendida con una nota. |
+| `POST /admin/campanas` `{mensaje}` | Doctora | Promoción solo a quienes aceptaron recibirla. Evento: `campaign.sent`. |
 | `GET /n8n/citas`, `/n8n/seguimiento`, `/n8n/retoques` | n8n (secreto) | Datos para las rutinas programadas. |
-| `GET /n8n/paciente?perfil=clinico\|recepcion` | n8n (secreto) | Fichas mínimas por perfil para cada agente. |
-| `POST /n8n/citas` | n8n (secreto) | Registro de las citas que reserva la Recepcionista. |
-| `GET /n8n/preparacion` | n8n (secreto) | Consultas del día con el historial necesario para el resumen. |
+| `GET /n8n/paciente?perfil=clinico|recepcion` | n8n (secreto) | Fichas mínimas por perfil para cada agente. |
+| `POST /n8n/citas` | n8n (secreto) | Registro de las citas que reserva la Recepcionista (quedan confirmadas). |
+| `GET /n8n/preparacion` · `POST /n8n/resumen` | n8n (secreto) | Consultas del día para el resumen ejecutivo y registro del resumen en el panel. |
 
-En producción, cada ruta pública es un Webhook de n8n y las rutas `/n8n/*` se convierten en lecturas y escrituras de Google Sheets dentro del mismo cerebro.
+Cualquier otra ruta responde 401 sin sesión y 404 con sesión: no hay acceso genérico a las tablas.
 
 ## 5. Seguridad y privacidad
 
 - **Acceso sin contraseña:** el token viaja en el fragmento `#` (no llega a los logs), se guarda solo su hash, es de un solo uso y expira a los 15 minutos. Las respuestas no revelan si un número es paciente.
-- **Aislamiento:** toda ruta `/me/*` opera solo sobre la sesión. En producción, n8n valida el token de sesión en cada webhook antes de leer la hoja.
+- **Sesiones sin almacenamiento:** el token es `userId.rol.expiración.firma` (HMAC-SHA256). Se valida en cada petición, junto con que el usuario siga existiendo con ese rol. Cerrar sesión solo borra el token del navegador, por eso la expiración es corta.
+- **Aislamiento:** toda ruta `/me/*` opera solo sobre la sesión, y las `/admin/*` exigen el rol de doctora.
 - **Fotos médicas:** en una carpeta privada de Google Drive. n8n las entrega solo a la paciente con sesión válida, nunca como enlaces públicos.
 - **Discreción:** modo discreto (desenfoca fotos, tratamientos, notas y productos) y título de pestaña genérico ("Portal privado"). Los WhatsApp a pacientes no nombran tratamientos.
 - **IA:** minimización de datos (sin teléfonos; sin nombres en el check-in ni en el resumen) y sin guardar ejecuciones exitosas en n8n.
