@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "server": "node --env-file-if-exists=.env server.js",
     "test": "vitest",
-    "verificar": "node scripts/verificar.mjs"
+    "verificar": "node scripts/verificar.mjs",
+    "probar:n8n": "node scripts/probar-n8n.mjs",
+    "generar:n8n": "node n8n/generar-api.mjs && node n8n/generar-cerebro.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

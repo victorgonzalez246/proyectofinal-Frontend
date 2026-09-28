@@ -5,8 +5,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
-const HERE = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT_FILE = path.join(HERE, 'flujos', 'cerebro-maestro-clinica.json');
 
 // IDs estables (mismo nombre -> mismo id) para que los diffs de git sean limpios
@@ -16,7 +17,8 @@ const uuidFrom = (seed) => {
 };
 
 // Cuerpo de una función como texto: el código de los nodos Code se escribe como JS real
-const bodyOf = (fn) => fn.toString().replace(/^[^{]*\{\n?/, '').replace(/\}\s*$/, '').replace(/^ {2}/gm, '');
+// (finales de línea normalizados: en Windows el archivo puede tener CRLF)
+const bodyOf = (fn) => fn.toString().replace(/\r\n/g, '\n').replace(/^[^{]*\{\n?/, '').replace(/\}\s*$/, '').replace(/^ {2}/gm, '');
 
 // ── Código compartido por los nodos que preparan mensajes ──
 const HELPERS = bodyOf(() => {
@@ -216,6 +218,9 @@ const CRON_RECORDATORIO = cron('Diario 8:00 · Recordatorios', [0, 560], '0 8 * 
 const CRON_SEGUIMIENTO = cron('Diario 10:00 · Seguimiento', [0, 720], '0 10 * * *');
 const CRON_PASOS = cron('Lunes 9:00 · Próximos pasos', [0, 880], '0 9 * * 1');
 const MANUAL = add('Probar ahora', 'n8n-nodes-base.manualTrigger', 1, [0, 1040], {});
+const CRON_RESPALDO = cron('Domingo 23:00 · Respaldo', [0, 1200], '0 23 * * 0');
+// Se dispara cuando falla cualquier flujo que tenga este como "Error workflow" (ver n8n/README.md)
+const ERROR_IN = add('Falla en un flujo', 'n8n-nodes-base.errorTrigger', 1, [0, 1360], {});
 
 // ════════════════════ Columna 2 · Cada disparador define su "accion" ════════════════════
 const RESPONDER = add('Responder OK', 'n8n-nodes-base.respondToWebhook', 1.1, [220, 0], {
@@ -229,10 +234,12 @@ const NORMALIZAR = code('Normalizar evento', [440, 0], () => {
   const body = $('Webhook clínica').first().json.body || {};
   const ACCIONES = {
     'appointment.created': 'cita_recibida',
+    'appointment.confirmed': 'cita_confirmada',
+    'appointment.cancelled': 'cita_cancelada',
     'auth.magic_link': 'acceso_portal',
     'checkin.created': 'checkin',
-    'checkin.alert': 'checkin',
     'sos.triggered': 'sos',
+    'campaign.sent': 'campana',
   };
   return [{ json: { accion: ACCIONES[body.event] || 'desconocido', evento: body.event || '', payload: body } }];
 }, { helpers: false });
@@ -252,10 +259,26 @@ const NORMALIZAR_WA = code('Normalizar mensaje', [440, 200], () => {
   }];
 }, { helpers: false });
 
+const NORMALIZAR_ERROR = code('Normalizar falla', [440, 1360], () => {
+  // Datos mínimos de la falla para avisar a la doctora (sin el contenido de la ejecución)
+  const e = $input.first().json;
+  return [{
+    json: {
+      accion: 'falla_sistema',
+      payload: {
+        flujo: e.workflow?.name || 'Flujo desconocido',
+        nodo: e.execution?.lastNodeExecuted || e.trigger?.error?.node?.name || '',
+        mensaje: String(e.execution?.error?.message || e.trigger?.error?.message || 'Error desconocido').slice(0, 300),
+      },
+    },
+  }];
+}, { helpers: false });
+
 const RUTINA_PREPARACION = setAccion('Rutina: preparar consultas', [440, 400], 'preparacion_consultas');
 const RUTINA_RECORDATORIO = setAccion('Rutina: recordatorio 24 h', [440, 560], 'recordatorio_cita');
 const RUTINA_SEGUIMIENTO = setAccion('Rutina: seguimiento', [440, 720], 'seguimiento');
 const RUTINA_PASOS = setAccion('Rutina: próximos pasos', [440, 880], 'proximos_pasos');
+const RUTINA_RESPALDO = setAccion('Rutina: respaldo', [440, 1200], 'respaldo');
 const TODAS = code('Todas las rutinas', [440, 1040], () => {
   // Prueba manual: ejecuta todas las rutinas programadas de una vez
   return ['preparacion_consultas', 'recordatorio_cita', 'seguimiento', 'proximos_pasos'].map((accion) => ({ json: { accion } }));
@@ -272,6 +295,9 @@ const CONFIG_FIELDS = [
   ['googleCalendarId', 'primary'],
   ['baseClinicaSheetId', 'REEMPLAZAR_ID_DE_LA_HOJA'],
   ['baseClinicaRango', 'BaseClinica!A:D'],
+  // Hoja de datos de la API (la misma de "Configuración API") y carpeta privada de Drive para su respaldo semanal
+  ['datosSheetId', 'REEMPLAZAR_ID_DE_LA_HOJA_DE_DATOS'],
+  ['respaldoCarpetaId', 'REEMPLAZAR_ID_DE_LA_CARPETA_DE_RESPALDOS'],
 ];
 const CONFIG = add('Configuración', 'n8n-nodes-base.set', 3.4, [680, 520], {
   assignments: {
@@ -291,6 +317,11 @@ const RUTAS = [
   ['recordatorio_cita', 'Recordatorio 24 h'],
   ['seguimiento', 'Seguimiento'],
   ['proximos_pasos', 'Próximos pasos'],
+  ['cita_confirmada', 'Cita confirmada'],
+  ['cita_cancelada', 'Cita cancelada'],
+  ['campana', 'Campaña'],
+  ['respaldo', 'Respaldo semanal'],
+  ['falla_sistema', 'Falla del sistema'],
 ];
 const ROUTER = router('Router por acción', [900, 520], 'accion', RUTAS, 'Evento desconocido');
 
@@ -308,10 +339,27 @@ const SEGURIDAD = code('Red de seguridad clínica', [1140, Y_CHAT], () => {
     'sangra mucho', 'sangrado abundante', 'fiebre alta',
   ];
   const senal = SENALES.find((s) => texto.includes(s));
-  return [{ json: { ...item, ruta: senal ? 'emergencia' : 'conversacion', senal: senal || '' } }];
+  // "BAJA" (solo esa palabra) deja de enviar promociones; una emergencia siempre tiene prioridad
+  const baja = !senal && /^\s*(baja|stop)\s*[.!]*\s*$/.test(texto);
+  return [{ json: { ...item, ruta: senal ? 'emergencia' : baja ? 'baja' : 'conversacion', senal: senal || '' } }];
 }, { helpers: false });
 
-const RUTA_CHAT = router('¿Emergencia?', [1360, Y_CHAT], 'ruta', [['emergencia', 'Emergencia'], ['conversacion', 'Conversación']]);
+const RUTA_CHAT = router('¿Emergencia?', [1360, Y_CHAT], 'ruta', [['emergencia', 'Emergencia'], ['conversacion', 'Conversación'], ['baja', 'Baja de promociones']]);
+
+const API_BAJA = add('API: baja de promociones', 'n8n-nodes-base.httpRequest', 4.2, [1600, Y_CHAT - 340], {
+  method: 'POST',
+  url: `={{ ${CFG}.apiUrl }}/n8n/baja`,
+  authentication: 'genericCredentialType',
+  genericAuthType: 'httpHeaderAuth',
+  sendBody: true,
+  specifyBody: 'json',
+  jsonBody: `={{ JSON.stringify({ telefono: ${CHAT}.from }) }}`,
+  options: {},
+}, { retryOnFail: true, maxTries: 3, waitBetweenTries: 2000 });
+const TXT_BAJA = code('Respuesta de baja', [1820, Y_CHAT - 340], () => {
+  const p = $('Red de seguridad clínica').first().json.payload;
+  return [{ json: { to: p.from, texto: 'Listo: ya no te enviaremos promociones. Seguirás recibiendo los avisos de tus citas y cuidados.' } }];
+}, { helpers: false });
 
 const MSG_EMERGENCIA = code('Alerta de emergencia', [1600, Y_CHAT - 200], () => {
   const p = $input.first().json.payload;
@@ -497,6 +545,8 @@ const MSG_CITA = code('Mensajes: cita recibida', [1140, 860], () => {
 const MSG_ACCESO = code('Mensajes: acceso al portal', [1140, 1020], () => {
   const evento = $input.first().json.payload;
   if (!evento.phone || !evento.link) return [];
+  // La doctora entra al panel médico con su propia plantilla
+  if (evento.role === 'doctor') return [msg(evento.phone, 'acceso_panel', [evento.link])];
   return [msg(evento.phone, 'acceso_portal', [firstName(evento.name), evento.link])];
 });
 
@@ -508,6 +558,7 @@ const SEPARAR = code('Separar consultas', [1360, Y_PREP], () => {
   // Una consulta por item. A la IA no le llegan teléfonos ni nombres.
   return ($input.first().json.items || []).map((c) => ({
     json: {
+      citaId: c.citaId,
       paciente: c.paciente,
       hora: c.hora,
       contexto: [
@@ -545,6 +596,27 @@ const MSG_RESUMEN = code('Mensajes: resumen para la doctora', [1860, Y_PREP], ()
     return msg(cfg.clinicWhatsapp, 'resumen_consulta', [c.paciente, c.hora || 'hoy', ...puntos]);
   });
 });
+
+// El mismo resumen queda en la vista "Hoy" del panel de la doctora
+const GUARDAR_RESUMEN = code('Resumen para el panel', [1860, Y_PREP + 160], () => {
+  const consultas = $('Separar consultas').all();
+  return $input.all().flatMap((item, i) => {
+    const r = item.json.output;
+    const c = consultas[i].json;
+    if (!r || !c.citaId) return []; // sin IA, el panel muestra que el resumen no llegó
+    return [{ json: { citaId: c.citaId, puntos: [r.punto_1, r.punto_2, r.punto_3] } }];
+  });
+}, { helpers: false });
+const API_RESUMEN = add('API: guardar resumen', 'n8n-nodes-base.httpRequest', 4.2, [2080, Y_PREP + 160], {
+  method: 'POST',
+  url: `={{ ${CFG}.apiUrl }}/n8n/resumen`,
+  authentication: 'genericCredentialType',
+  genericAuthType: 'httpHeaderAuth',
+  sendBody: true,
+  specifyBody: 'json',
+  jsonBody: '={{ JSON.stringify($json) }}',
+  options: {},
+}, { retryOnFail: true, maxTries: 3, waitBetweenTries: 2000, onError: 'continueRegularOutput' });
 
 // ════════════════════ Ramas 7-9 · Rutinas de seguimiento ════════════════════
 const API_CITAS = apiGet('API: citas confirmadas de mañana', [1140, 1340],
@@ -595,7 +667,42 @@ const MSG_PASOS = code('Mensajes: próximos pasos', [1360, 1660], () => {
   return mensajes;
 });
 
-const IGNORAR = add('Ignorar evento', 'n8n-nodes-base.noOp', 1, [1140, 1820], {});
+// ════════════════════ Ramas 10-12 · Panel de la doctora: confirmación, cancelación y campañas ════════════════════
+const MSG_CONFIRMADA = code('Mensajes: cita confirmada', [1140, 1820], () => {
+  const { patient = {}, cita = {} } = $input.first().json.payload;
+  if (!patient.phone) return [];
+  // Sin nombrar el tratamiento (discreción); sirve también para una cita reprogramada
+  return [msg(patient.phone, 'cita_confirmada', [firstName(patient.name), fechaLarga(cita.fecha), cita.hora, cfg.portalUrl + '/portal'])];
+});
+const MSG_CANCELADA = code('Mensajes: cita cancelada', [1140, 1980], () => {
+  const { patient = {}, cita = {} } = $input.first().json.payload;
+  if (!patient.phone) return [];
+  return [msg(patient.phone, 'cita_cancelada', [firstName(patient.name), fechaLarga(cita.fecha)])];
+});
+const MSG_CAMPANA = code('Mensajes: campaña', [1140, 2140], () => {
+  // La API ya filtró a quienes aceptaron promociones; la plantilla incluye cómo darse de baja
+  const { mensaje, destinatarios = [] } = $input.first().json.payload;
+  return destinatarios.map((d) => msg(d.phone, 'promocion', [d.name, mensaje]));
+});
+
+// ════════════════════ Ramas 13-14 · Mantenimiento: respaldo y fallas ════════════════════
+const RESPALDO = add('Respaldar hoja de datos', 'n8n-nodes-base.httpRequest', 4.2, [1140, 2300], {
+  method: 'POST',
+  url: `=https://www.googleapis.com/drive/v3/files/{{ ${CFG}.datosSheetId }}/copy`,
+  authentication: 'predefinedCredentialType',
+  nodeCredentialType: 'googleDriveOAuth2Api',
+  sendBody: true,
+  specifyBody: 'json',
+  jsonBody: `={{ JSON.stringify({ name: 'Respaldo clínica ' + $now.setZone('America/Costa_Rica').toFormat('yyyy-MM-dd'), parents: [${CFG}.respaldoCarpetaId] }) }}`,
+  options: {},
+  // Sin onError: si el respaldo falla, el aviso de fallas le escribe a la doctora
+}, { retryOnFail: true, maxTries: 3, waitBetweenTries: 10000 });
+const MSG_FALLA = code('Mensajes: falla del sistema', [1140, 2460], () => {
+  const p = $input.first().json.payload;
+  return [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Falla del sistema', 'n8n', p.flujo, (p.nodo ? 'Nodo: ' + p.nodo + '. ' : '') + p.mensaje])];
+});
+
+const IGNORAR = add('Ignorar evento', 'n8n-nodes-base.noOp', 1, [1140, 2620], {});
 
 // ════════════════════ Salidas: WhatsApp Cloud API ════════════════════
 const RETRY = { retryOnFail: true, maxTries: 3, waitBetweenTries: 3000, onError: 'continueRegularOutput' };
@@ -633,13 +740,17 @@ link(CRON_RECORDATORIO, RUTINA_RECORDATORIO);
 link(CRON_SEGUIMIENTO, RUTINA_SEGUIMIENTO);
 link(CRON_PASOS, RUTINA_PASOS);
 link(MANUAL, TODAS);
-[NORMALIZAR, NORMALIZAR_WA, RUTINA_PREPARACION, RUTINA_RECORDATORIO, RUTINA_SEGUIMIENTO, RUTINA_PASOS, TODAS]
+link(CRON_RESPALDO, RUTINA_RESPALDO);
+link(ERROR_IN, NORMALIZAR_ERROR);
+[NORMALIZAR, NORMALIZAR_WA, RUTINA_PREPARACION, RUTINA_RECORDATORIO, RUTINA_SEGUIMIENTO, RUTINA_PASOS, TODAS, RUTINA_RESPALDO, NORMALIZAR_ERROR]
   .forEach((n) => link(n, CONFIG));
 link(CONFIG, ROUTER);
 
 // Salidas del Router en el mismo orden que RUTAS (+ respaldo)
-[SEGURIDAD, CONTEXTO_CHECKIN, MSG_SOS, MSG_CITA, MSG_ACCESO, API_PREP, API_CITAS, API_SEGUIMIENTO, API_PASOS]
-  .forEach((n, i) => link(ROUTER, n, i));
+const SALIDAS = [SEGURIDAD, CONTEXTO_CHECKIN, MSG_SOS, MSG_CITA, MSG_ACCESO, API_PREP, API_CITAS, API_SEGUIMIENTO, API_PASOS,
+  MSG_CONFIRMADA, MSG_CANCELADA, MSG_CAMPANA, RESPALDO, MSG_FALLA];
+if (SALIDAS.length !== RUTAS.length) throw new Error('Cada ruta del Router necesita su nodo de salida');
+SALIDAS.forEach((n, i) => link(ROUTER, n, i));
 link(ROUTER, IGNORAR, RUTAS.length);
 
 // Chat: red de seguridad → emergencia o clasificador → agentes
@@ -647,12 +758,14 @@ link(SEGURIDAD, RUTA_CHAT);
 link(RUTA_CHAT, MSG_EMERGENCIA, 0);
 link(RUTA_CHAT, TXT_EMERGENCIA, 0);
 link(RUTA_CHAT, CLASIFICADOR, 1);
+link(RUTA_CHAT, API_BAJA, 2);
+link(API_BAJA, TXT_BAJA);
 link(CLASIFICADOR, ENFERMERA, 0); // clinica
 link(CLASIFICADOR, RECEPCIONISTA, 1); // administrativa
 link(CLASIFICADOR, ENFERMERA, 2); // sin categoría clara → la opción clínica es la más segura
 link(ENFERMERA, RESPUESTA_ENFERMERA);
 link(RECEPCIONISTA, RESPUESTA_RECEPCION);
-[TXT_EMERGENCIA, RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION].forEach((n) => link(n, RESPONDER_WA));
+[TXT_EMERGENCIA, RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION, TXT_BAJA].forEach((n) => link(n, RESPONDER_WA));
 [RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION].forEach((n) => link(n, AVISO_SIN_IA));
 
 // Check-in y preparación de consultas
@@ -661,18 +774,21 @@ link(ANALISTA, DECIDIR);
 link(API_PREP, SEPARAR);
 link(SEPARAR, RESUMIDOR);
 link(RESUMIDOR, MSG_RESUMEN);
+link(RESUMIDOR, GUARDAR_RESUMEN);
+link(GUARDAR_RESUMEN, API_RESUMEN);
 link(API_CITAS, MSG_RECORDATORIO);
 link(API_SEGUIMIENTO, MSG_SEGUIMIENTO);
 link(API_PASOS, MSG_PASOS);
 
-[MSG_EMERGENCIA, AVISO_SIN_IA, DECIDIR, MSG_SOS, MSG_CITA, MSG_ACCESO, MSG_RESUMEN, MSG_RECORDATORIO, MSG_SEGUIMIENTO, MSG_PASOS]
+[MSG_EMERGENCIA, AVISO_SIN_IA, DECIDIR, MSG_SOS, MSG_CITA, MSG_ACCESO, MSG_RESUMEN, MSG_RECORDATORIO, MSG_SEGUIMIENTO, MSG_PASOS,
+  MSG_CONFIRMADA, MSG_CANCELADA, MSG_CAMPANA, MSG_FALLA]
   .forEach((n) => link(n, ENVIAR));
 
 // ════════════════════ Notas en el lienzo ════════════════════
 const nota = (name, position, width, height, content, color) =>
   add(name, 'n8n-nodes-base.stickyNote', 1, position, { content, width, height, ...(color ? { color } : {}) });
 nota('Nota: cerebro', [-40, -300], 820, 240,
-  '## 🧠 Cerebro maestro · Clínica Dra. Laura\n**Entradas:** Webhook del sitio (citas, acceso, check-in, SOS), WhatsApp entrante (chat con agentes) y CRON diarios.\nTodo pasa por **Configuración** (edítala una sola vez) y el **Router por acción**.\n**Probar ahora** ejecuta todas las rutinas programadas.');
+  '## 🧠 Cerebro maestro · Clínica Dra. Laura\n**Entradas:** eventos de la API (citas, confirmaciones, acceso, check-in, SOS, campañas), WhatsApp entrante (chat con agentes y "BAJA"), CRON diarios, respaldo del domingo y **Falla en un flujo**.\nTodo pasa por **Configuración** (edítala una sola vez) y el **Router por acción**.\n**Probar ahora** ejecuta las rutinas diarias. En *Settings → Error workflow* de este flujo y del flujo **API** elige este mismo flujo.');
 nota('Nota: multi-agente', [1100, Y_CHAT - 420], 1480, 180,
   '## 🤖 Equipo de agentes\n**Red de seguridad (sin IA)** → emergencias directo a la doctora. **Clasificador** → **Agente IA 1 · Enfermera Virtual** (triaje clínico, puede despertar a la doctora) o **Agente IA 2 · Recepcionista VIP** (agenda y reservas). Cada agente tiene su propio modelo, memoria y herramientas: la recepcionista no ve datos clínicos y la enfermera no puede reservar.', 5);
 nota('Nota: IA con respaldo', [1100, Y_CHECKIN - 180], 820, 140,

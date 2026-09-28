@@ -129,6 +129,37 @@
     },
     {
       "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 23 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "75b695b5-e219-48af-a22d-5adab7d30e6e",
+      "name": "Domingo 23:00 · Respaldo",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "459c6162-2a96-4eee-ab12-8f8328146e88",
+      "name": "Falla en un flujo",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1360
+      ]
+    },
+    {
+      "parameters": {
         "respondWith": "json",
         "responseBody": "{\n  \"ok\": true\n}",
         "options": {}
@@ -144,7 +175,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Traduce el evento que envía el servidor a una acción del cerebro\nconst body = $('Webhook clínica').first().json.body || {};\nconst ACCIONES = {\n  'appointment.created': 'cita_recibida',\n  'auth.magic_link': 'acceso_portal',\n  'checkin.created': 'checkin',\n  'checkin.alert': 'checkin',\n  'sos.triggered': 'sos',\n};\nreturn [{ json: { accion: ACCIONES[body.event] || 'desconocido', evento: body.event || '', payload: body } }];\n"
+        "jsCode": "// Traduce el evento que envía el servidor a una acción del cerebro\nconst body = $('Webhook clínica').first().json.body || {};\nconst ACCIONES = {\n  'appointment.created': 'cita_recibida',\n  'appointment.confirmed': 'cita_confirmada',\n  'appointment.cancelled': 'cita_cancelada',\n  'auth.magic_link': 'acceso_portal',\n  'checkin.created': 'checkin',\n  'sos.triggered': 'sos',\n  'campaign.sent': 'campana',\n};\nreturn [{ json: { accion: ACCIONES[body.event] || 'desconocido', evento: body.event || '', payload: body } }];\n"
       },
       "id": "a2c01c44-0dc5-443e-aca2-fb2490cd69f8",
       "name": "Normalizar evento",
@@ -166,6 +197,19 @@
       "position": [
         440,
         200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Datos mínimos de la falla para avisar a la doctora (sin el contenido de la ejecución)\nconst e = $input.first().json;\nreturn [{\n  json: {\n    accion: 'falla_sistema',\n    payload: {\n      flujo: e.workflow?.name || 'Flujo desconocido',\n      nodo: e.execution?.lastNodeExecuted || e.trigger?.error?.node?.name || '',\n      mensaje: String(e.execution?.error?.message || e.trigger?.error?.message || 'Error desconocido').slice(0, 300),\n    },\n  },\n}];\n"
+      },
+      "id": "d3109023-ddc2-4efd-a5ee-186b64e443fc",
+      "name": "Normalizar falla",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        1360
       ]
     },
     {
@@ -262,6 +306,29 @@
     },
     {
       "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ad8013d9-38e6-4ceb-a325-6a1e43fa0f3a",
+              "name": "accion",
+              "value": "respaldo",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8d7fb6bb-25e2-40c9-ad99-7e81fca3d335",
+      "name": "Rutina: respaldo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        1200
+      ]
+    },
+    {
+      "parameters": {
         "jsCode": "// Prueba manual: ejecuta todas las rutinas programadas de una vez\nreturn ['preparacion_consultas', 'recordatorio_cita', 'seguimiento', 'proximos_pasos'].map((accion) => ({ json: { accion } }));\n"
       },
       "id": "2421e0ce-e286-4192-a462-00ef89d7dfd1",
@@ -329,6 +396,18 @@
               "id": "c27ac2ed-df42-4cfb-a3c2-ed7da9a3fc01",
               "name": "baseClinicaRango",
               "value": "BaseClinica!A:D",
+              "type": "string"
+            },
+            {
+              "id": "9934b633-161b-46ee-a473-95618e249506",
+              "name": "datosSheetId",
+              "value": "REEMPLAZAR_ID_DE_LA_HOJA_DE_DATOS",
+              "type": "string"
+            },
+            {
+              "id": "a66ed076-1032-4805-a7f2-85131aa4b8a2",
+              "name": "respaldoCarpetaId",
+              "value": "REEMPLAZAR_ID_DE_LA_CARPETA_DE_RESPALDOS",
               "type": "string"
             }
           ]
@@ -564,6 +643,126 @@
               },
               "renameOutput": true,
               "outputKey": "Próximos pasos"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "58109a0c-b512-4b01-a0ff-ec2ee63de747",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "cita_confirmada",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Cita confirmada"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a37038e0-00fe-40ac-abb6-f7c50cd2b6b1",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "cita_cancelada",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Cita cancelada"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b4e756ca-0b6b-4069-a414-2bb79a5edbdc",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "campana",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Campaña"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "9d7b625e-0906-4af8-aa4a-a0639e5c6ee5",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "respaldo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Respaldo semanal"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "be5ba2c9-84a9-4ca3-a53e-9f857114a733",
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "falla_sistema",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Falla del sistema"
             }
           ]
         },
@@ -583,7 +782,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Regla fija, sin IA: una emergencia nunca depende de un modelo de lenguaje\nconst item = $input.first().json;\nconst texto = String(item.payload.texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');\nconst SENALES = [\n  'no puedo respirar', 'me ahogo', 'me falta el aire', 'dificultad para respirar',\n  'se me cierra la garganta', 'garganta hinchada', 'lengua hinchada', 'dolor en el pecho',\n  'no veo', 'perdi la vista', 'vision borrosa', 'veo borroso', 'veo doble',\n  'piel morada', 'se puso morad', 'piel blanca', 'se puso blanc', 'desmay', 'convuls',\n  'sangra mucho', 'sangrado abundante', 'fiebre alta',\n];\nconst senal = SENALES.find((s) => texto.includes(s));\nreturn [{ json: { ...item, ruta: senal ? 'emergencia' : 'conversacion', senal: senal || '' } }];\n"
+        "jsCode": "// Regla fija, sin IA: una emergencia nunca depende de un modelo de lenguaje\nconst item = $input.first().json;\nconst texto = String(item.payload.texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');\nconst SENALES = [\n  'no puedo respirar', 'me ahogo', 'me falta el aire', 'dificultad para respirar',\n  'se me cierra la garganta', 'garganta hinchada', 'lengua hinchada', 'dolor en el pecho',\n  'no veo', 'perdi la vista', 'vision borrosa', 'veo borroso', 'veo doble',\n  'piel morada', 'se puso morad', 'piel blanca', 'se puso blanc', 'desmay', 'convuls',\n  'sangra mucho', 'sangrado abundante', 'fiebre alta',\n];\nconst senal = SENALES.find((s) => texto.includes(s));\n// \"BAJA\" (solo esa palabra) deja de enviar promociones; una emergencia siempre tiene prioridad\nconst baja = !senal && /^\\s*(baja|stop)\\s*[.!]*\\s*$/.test(texto);\nreturn [{ json: { ...item, ruta: senal ? 'emergencia' : baja ? 'baja' : 'conversacion', senal: senal || '' } }];\n"
       },
       "id": "8b97a7b1-fe4c-4a14-a956-2f4b2c983981",
       "name": "Red de seguridad clínica",
@@ -645,6 +844,30 @@
               },
               "renameOutput": true,
               "outputKey": "Conversación"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "44fe3f31-882b-44bd-a8f8-0727ce940d68",
+                    "leftValue": "={{ $json.ruta }}",
+                    "rightValue": "baja",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Baja de promociones"
             }
           ]
         },
@@ -657,6 +880,42 @@
       "position": [
         1360,
         -560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Configuración').first().json.apiUrl }}/n8n/baja",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ telefono: $('Red de seguridad clínica').first().json.payload.from }) }}",
+        "options": {}
+      },
+      "id": "b6323e7f-db00-4221-a35b-206bffd645ff",
+      "name": "API: baja de promociones",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        -900
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Red de seguridad clínica').first().json.payload;\nreturn [{ json: { to: p.from, texto: 'Listo: ya no te enviaremos promociones. Seguirás recibiendo los avisos de tus citas y cuidados.' } }];\n"
+      },
+      "id": "bca9ef5b-70f1-4ad3-a795-6e3d5db0dbd0",
+      "name": "Respuesta de baja",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        -900
       ]
     },
     {
@@ -1126,7 +1385,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst evento = $input.first().json.payload;\nif (!evento.phone || !evento.link) return [];\nreturn [msg(evento.phone, 'acceso_portal', [firstName(evento.name), evento.link])];\n"
+        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst evento = $input.first().json.payload;\nif (!evento.phone || !evento.link) return [];\n// La doctora entra al panel médico con su propia plantilla\nif (evento.role === 'doctor') return [msg(evento.phone, 'acceso_panel', [evento.link])];\nreturn [msg(evento.phone, 'acceso_portal', [firstName(evento.name), evento.link])];\n"
       },
       "id": "1bc60bd7-4840-4475-aa22-e066a2f993ef",
       "name": "Mensajes: acceso al portal",
@@ -1155,7 +1414,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Una consulta por item. A la IA no le llegan teléfonos ni nombres.\nreturn ($input.first().json.items || []).map((c) => ({\n  json: {\n    paciente: c.paciente,\n    hora: c.hora,\n    contexto: [\n      'Motivo de la cita: ' + c.motivo,\n      'Mensaje al agendar: ' + (c.mensajeDeLaPaciente || '(ninguno)'),\n      'Tratamientos previos: ' + (c.tratamientosPrevios.join('; ') || '(primera vez)'),\n      'Productos aplicados: ' + (c.productosAplicados.join('; ') || '(ninguno registrado)'),\n      'Próximos pasos del plan: ' + (c.proximosPasosDelPlan.join('; ') || '(sin plan todavía)'),\n      'Últimos check-ins: ' + (c.ultimosCheckins.join('; ') || '(sin registros)'),\n    ].join('\\n'),\n  },\n}));\n"
+        "jsCode": "// Una consulta por item. A la IA no le llegan teléfonos ni nombres.\nreturn ($input.first().json.items || []).map((c) => ({\n  json: {\n    citaId: c.citaId,\n    paciente: c.paciente,\n    hora: c.hora,\n    contexto: [\n      'Motivo de la cita: ' + c.motivo,\n      'Mensaje al agendar: ' + (c.mensajeDeLaPaciente || '(ninguno)'),\n      'Tratamientos previos: ' + (c.tratamientosPrevios.join('; ') || '(primera vez)'),\n      'Productos aplicados: ' + (c.productosAplicados.join('; ') || '(ninguno registrado)'),\n      'Próximos pasos del plan: ' + (c.proximosPasosDelPlan.join('; ') || '(sin plan todavía)'),\n      'Últimos check-ins: ' + (c.ultimosCheckins.join('; ') || '(sin registros)'),\n    ].join('\\n'),\n  },\n}));\n"
       },
       "id": "7470d970-7f6e-4134-a6bf-50204bcfce5d",
       "name": "Separar consultas",
@@ -1229,6 +1488,43 @@
         1860,
         1180
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const consultas = $('Separar consultas').all();\nreturn $input.all().flatMap((item, i) => {\n  const r = item.json.output;\n  const c = consultas[i].json;\n  if (!r || !c.citaId) return []; // sin IA, el panel muestra que el resumen no llegó\n  return [{ json: { citaId: c.citaId, puntos: [r.punto_1, r.punto_2, r.punto_3] } }];\n});\n"
+      },
+      "id": "a8187498-d578-45d8-a4e9-e2b57443e153",
+      "name": "Resumen para el panel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1860,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Configuración').first().json.apiUrl }}/n8n/resumen",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "7a493197-b716-437b-ae82-06d6a819f60c",
+      "name": "API: guardar resumen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2080,
+        1340
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -1318,6 +1614,81 @@
       ]
     },
     {
+      "parameters": {
+        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst { patient = {}, cita = {} } = $input.first().json.payload;\nif (!patient.phone) return [];\n// Sin nombrar el tratamiento (discreción); sirve también para una cita reprogramada\nreturn [msg(patient.phone, 'cita_confirmada', [firstName(patient.name), fechaLarga(cita.fecha), cita.hora, cfg.portalUrl + '/portal'])];\n"
+      },
+      "id": "425c5a30-94aa-4166-a075-5a3c38bd0eee",
+      "name": "Mensajes: cita confirmada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1820
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst { patient = {}, cita = {} } = $input.first().json.payload;\nif (!patient.phone) return [];\nreturn [msg(patient.phone, 'cita_cancelada', [firstName(patient.name), fechaLarga(cita.fecha)])];\n"
+      },
+      "id": "18dccbef-09a2-4a44-ab00-48cfafef53ba",
+      "name": "Mensajes: cita cancelada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1980
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\n// La API ya filtró a quienes aceptaron promociones; la plantilla incluye cómo darse de baja\nconst { mensaje, destinatarios = [] } = $input.first().json.payload;\nreturn destinatarios.map((d) => msg(d.phone, 'promocion', [d.name, mensaje]));\n"
+      },
+      "id": "feb40616-1b39-4f64-a15a-e4f659442a4f",
+      "name": "Mensajes: campaña",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        2140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $('Configuración').first().json.datosSheetId }}/copy",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: 'Respaldo clínica ' + $now.setZone('America/Costa_Rica').toFormat('yyyy-MM-dd'), parents: [$('Configuración').first().json.respaldoCarpetaId] }) }}",
+        "options": {}
+      },
+      "id": "3366baf1-bf86-4b23-a33e-723fa5fa7f6f",
+      "name": "Respaldar hoja de datos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        2300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\nconst msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });\n\nconst p = $input.first().json.payload;\nreturn [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Falla del sistema', 'n8n', p.flujo, (p.nodo ? 'Nodo: ' + p.nodo + '. ' : '') + p.mensaje])];\n"
+      },
+      "id": "e9f9b63d-7996-4d6b-a26c-286882ffe9f8",
+      "name": "Mensajes: falla del sistema",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        2460
+      ]
+    },
+    {
       "parameters": {},
       "id": "bdfd6ed3-1095-407f-ab6d-a7b5e91ecfd2",
       "name": "Ignorar evento",
@@ -1325,7 +1696,7 @@
       "typeVersion": 1,
       "position": [
         1140,
-        1820
+        2620
       ]
     },
     {
@@ -1378,7 +1749,7 @@
     },
     {
       "parameters": {
-        "content": "## 🧠 Cerebro maestro · Clínica Dra. Laura\n**Entradas:** Webhook del sitio (citas, acceso, check-in, SOS), WhatsApp entrante (chat con agentes) y CRON diarios.\nTodo pasa por **Configuración** (edítala una sola vez) y el **Router por acción**.\n**Probar ahora** ejecuta todas las rutinas programadas.",
+        "content": "## 🧠 Cerebro maestro · Clínica Dra. Laura\n**Entradas:** eventos de la API (citas, confirmaciones, acceso, check-in, SOS, campañas), WhatsApp entrante (chat con agentes y \"BAJA\"), CRON diarios, respaldo del domingo y **Falla en un flujo**.\nTodo pasa por **Configuración** (edítala una sola vez) y el **Router por acción**.\n**Probar ahora** ejecuta las rutinas diarias. En *Settings → Error workflow* de este flujo y del flujo **API** elige este mismo flujo.",
         "width": 820,
         "height": 240
       },
@@ -1689,6 +2060,28 @@
         ]
       ]
     },
+    "Domingo 23:00 · Respaldo": {
+      "main": [
+        [
+          {
+            "node": "Rutina: respaldo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Falla en un flujo": {
+      "main": [
+        [
+          {
+            "node": "Normalizar falla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Normalizar evento": {
       "main": [
         [
@@ -1756,6 +2149,28 @@
       ]
     },
     "Todas las rutinas": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rutina: respaldo": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar falla": {
       "main": [
         [
           {
@@ -1844,6 +2259,41 @@
         ],
         [
           {
+            "node": "Mensajes: cita confirmada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mensajes: cita cancelada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mensajes: campaña",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respaldar hoja de datos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mensajes: falla del sistema",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Ignorar evento",
             "type": "main",
             "index": 0
@@ -1879,6 +2329,24 @@
         [
           {
             "node": "Clasificador de intención",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API: baja de promociones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: baja de promociones": {
+      "main": [
+        [
+          {
+            "node": "Respuesta de baja",
             "type": "main",
             "index": 0
           }
@@ -1975,6 +2443,17 @@
         ]
       ]
     },
+    "Respuesta de baja": {
+      "main": [
+        [
+          {
+            "node": "Responder por WhatsApp (texto)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Contexto del check-in": {
       "main": [
         [
@@ -2024,6 +2503,22 @@
         [
           {
             "node": "Mensajes: resumen para la doctora",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Resumen para el panel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumen para el panel": {
+      "main": [
+        [
+          {
+            "node": "API: guardar resumen",
             "type": "main",
             "index": 0
           }
@@ -2163,6 +2658,50 @@
       ]
     },
     "Mensajes: próximos pasos": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (plantilla)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensajes: cita confirmada": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (plantilla)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensajes: cita cancelada": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (plantilla)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensajes: campaña": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (plantilla)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensajes: falla del sistema": {
       "main": [
         [
           {

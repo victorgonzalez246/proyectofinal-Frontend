@@ -97,7 +97,9 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
 
     const metodo = String(peticion.metodo || 'GET').toUpperCase();
     const [ruta, queryString = ''] = String(peticion.ruta || '/').split('?');
-    const query = { ...Object.fromEntries(new URLSearchParams(queryString)), ...(peticion.query || {}) };
+    const query = { ...parsearQuery(queryString), ...(peticion.query || {}) };
+    // Las rutas de un solo recurso llevan el id en la query (?id=): n8n no publica rutas con parámetros en la URL del contrato
+    const idConsulta = str(query.id, 80);
     const body = peticion.body && typeof peticion.body === 'object' ? peticion.body : {};
     const headers = Object.fromEntries(Object.entries(peticion.headers || {}).map(([k, v]) => [k.toLowerCase(), String(v)]));
 
@@ -415,8 +417,8 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
         return [200, items];
       }],
 
-      ['PATCH', '/admin/citas/:id', 'doctora', (s, params) => {
-        const cita = db.appointments.find((a) => a.id === params.id);
+      ['PATCH', '/admin/citas', 'doctora', () => {
+        const cita = db.appointments.find((a) => a.id === idConsulta);
         if (!cita) falla(404, 'Cita no encontrada.');
         const estado = body.estado === undefined ? cita.estado : body.estado;
         const fecha = body.fecha === undefined ? cita.fecha : str(body.fecha, 10);
@@ -449,8 +451,8 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
         return [200, items];
       }],
 
-      ['GET', '/admin/pacientes/:id', 'doctora', (s, params) => {
-        const user = usuario(params.id);
+      ['GET', '/admin/pacientes/ficha', 'doctora', () => {
+        const user = usuario(idConsulta);
         if (!user || user.role !== 'member') falla(404, 'Paciente no encontrada.');
         return [200, {
           paciente: { ...usuarioPublico(user), source: user.source, dateJoined: user.dateJoined, promociones: Boolean(user.promociones?.acepta) },
@@ -461,16 +463,16 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
       }],
 
       // La doctora solo puede retirar el consentimiento de promociones, nunca darlo en nombre de la paciente
-      ['PATCH', '/admin/pacientes/:id', 'doctora', (s, params) => {
-        const user = usuario(params.id);
+      ['PATCH', '/admin/pacientes', 'doctora', () => {
+        const user = usuario(idConsulta);
         if (!user || user.role !== 'member') falla(404, 'Paciente no encontrada.');
         if (body.promociones !== false) falla(400, 'Solo se puede retirar el consentimiento de promociones.');
         if (user.promociones?.acepta) guardar('users', { ...user, promociones: { ...user.promociones, acepta: false, baja: new Date(ahora()).toISOString() } });
         return [200, { ok: true }];
       }],
 
-      ['PUT', '/admin/pacientes/:id/plan', 'doctora', (s, params) => {
-        const user = usuario(params.id);
+      ['PUT', '/admin/pacientes/plan', 'doctora', () => {
+        const user = usuario(idConsulta);
         if (!user || user.role !== 'member') falla(404, 'Paciente no encontrada.');
         const anterior = planDe(user.id);
         const plan = limpiarPlan(body, nuevoId);
@@ -492,15 +494,15 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
         return [200, alertas().filter((a) => !estado || a.estado === estado)];
       }],
 
-      ['PATCH', '/admin/alertas/:id', 'doctora', (s, params) => {
+      ['PATCH', '/admin/alertas', 'doctora', () => {
         if (!['abierta', 'atendida'].includes(body.estado)) falla(400, 'Estado de alerta inválido.');
         const respuesta = str(body.respuesta, 400);
-        const sos = db.sosAlerts.find((a) => a.id === params.id);
-        const checkin = !sos && db.checkins.find((c) => c.id === params.id && c.needsFollowUp);
+        const sos = db.sosAlerts.find((a) => a.id === idConsulta);
+        const checkin = !sos && db.checkins.find((c) => c.id === idConsulta && c.needsFollowUp);
         if (sos) guardar('sosAlerts', { ...sos, status: body.estado, respuesta });
         else if (checkin) guardar('checkins', { ...checkin, estado: body.estado, respuesta });
         else falla(404, 'Alerta no encontrada.');
-        return [200, alertas().find((a) => a.id === params.id)];
+        return [200, alertas().find((a) => a.id === idConsulta)];
       }],
 
       ['POST', '/admin/campanas', 'doctora', () => {
@@ -524,8 +526,7 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
 
     try {
       for (const [m, patron, acceso, handler] of rutas) {
-        const params = coincide(patron, ruta);
-        if (!params || m !== metodo) continue;
+        if (patron !== ruta.replace(/\/+$/, '') || m !== metodo) continue;
 
         let sesion = null;
         if (acceso === 'n8n') {
@@ -537,7 +538,7 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
           if (acceso === 'paciente' && sesion.role !== 'member') falla(403, 'No tienes permiso para acceder a este recurso.');
           if (acceso === 'doctora' && sesion.role !== 'doctor') falla(403, 'No tienes permiso para acceder a este recurso.');
         }
-        const [status, cuerpo] = handler(sesion, params);
+        const [status, cuerpo] = handler(sesion);
         return responder(status, cuerpo);
       }
       // Rutas privadas desconocidas: primero se exige sesión, para no revelar qué existe
@@ -555,17 +556,15 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
   return { manejar };
 }
 
-// '/admin/citas/:id' contra '/admin/citas/apt_1' → { id: 'apt_1' }; sin coincidencia → null
-function coincide(patron, ruta) {
-  const a = patron.split('/');
-  const b = ruta.replace(/\/+$/, '').split('/');
-  if (a.length !== b.length) return null;
-  const params = {};
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i].startsWith(':')) params[a[i].slice(1)] = decodeURIComponent(b[i]);
-    else if (a[i] !== b[i]) return null;
-  }
-  return params;
+// "a=1&b=dos" → { a: '1', b: 'dos' }. (Los nodos Code de n8n no tienen URLSearchParams.)
+function parsearQuery(texto) {
+  const decodificar = (s) => {
+    try { return decodeURIComponent(s.replace(/\+/g, ' ')); } catch { return s; }
+  };
+  return Object.fromEntries(texto.split('&').filter(Boolean).map((par) => {
+    const i = par.indexOf('=');
+    return i < 0 ? [decodificar(par), ''] : [decodificar(par.slice(0, i)), decodificar(par.slice(i + 1))];
+  }));
 }
 
 // ── Validación del plan de una paciente (lo que edita la doctora) ──

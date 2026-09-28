@@ -79,6 +79,14 @@ try {
   const cerebro = revisar('n8n/flujos/cerebro-maestro-clinica.json');
   ok(cerebro.rotas.length === 0, `Cerebro: ${cerebro.wf.nodes.length} nodos y ninguna conexión rota`);
   ok(cerebro.wf.nodes.some((n) => n.name === 'Agente IA 1 · Enfermera Virtual') && cerebro.wf.nodes.some((n) => n.name === 'Agente IA 2 · Recepcionista VIP'), 'Cerebro: incluye los dos agentes de IA');
+  const apiWf = revisar('n8n/flujos/api-clinica.json');
+  ok(apiWf.rotas.length === 0, `API: ${apiWf.wf.nodes.length} nodos y ninguna conexión rota`);
+  const codigo = (archivo) => fs.readFileSync(archivo, 'utf8').replace(/\r\n/g, '\n').replace(/^export /gm, '');
+  const jsNucleo = apiWf.wf.nodes.find((n) => n.name === 'Núcleo API')?.parameters.jsCode || '';
+  ok(jsNucleo.includes(codigo('api/nucleo.mjs')) && jsNucleo.includes(codigo('api/hojas.mjs')), 'API: el nodo Núcleo lleva la versión actual de api/ (si falla: npm run generar:n8n)');
+  const webhooks = apiWf.wf.nodes.filter((n) => n.type === 'n8n-nodes-base.webhook').map((n) => n.name).sort();
+  const { RUTAS } = await import('../n8n/generar-api.mjs');
+  ok(webhooks.join() === RUTAS.map(([m, r]) => `${m} ${r}`).sort().join(), `API: un Webhook por cada una de las ${RUTAS.length} rutas del contrato`);
 } catch (err) {
   ok(false, `No se pudieron leer los flujos: ${err.message}`);
 }

@@ -21,25 +21,25 @@ export const adminService = {
     call(() => api.get('/admin/citas', { params: estado ? { estado } : {} }), 'No pudimos cargar las citas.'),
 
   updateCita: (id, cambios) =>
-    call(() => api.patch(`/admin/citas/${encodeURIComponent(id)}`, cambios), 'No pudimos actualizar la cita.'),
+    call(() => api.patch('/admin/citas', cambios, { params: { id } }), 'No pudimos actualizar la cita.'),
 
   getPacientes: () => call(() => api.get('/admin/pacientes'), 'No pudimos cargar las pacientes.'),
 
   getPaciente: (id) =>
-    call(() => api.get(`/admin/pacientes/${encodeURIComponent(id)}`), 'No pudimos cargar la ficha de la paciente.'),
+    call(() => api.get('/admin/pacientes/ficha', { params: { id } }), 'No pudimos cargar la ficha de la paciente.'),
 
   retirarPromociones: (id) =>
-    call(() => api.patch(`/admin/pacientes/${encodeURIComponent(id)}`, { promociones: false }), 'No pudimos actualizar el consentimiento.'),
+    call(() => api.patch('/admin/pacientes', { promociones: false }, { params: { id } }), 'No pudimos actualizar el consentimiento.'),
 
   savePlan: (id, plan) =>
-    call(() => api.put(`/admin/pacientes/${encodeURIComponent(id)}/plan`, plan), 'No pudimos guardar el plan.'),
+    call(() => api.put('/admin/pacientes/plan', plan, { params: { id } }), 'No pudimos guardar el plan.'),
 
   getAlertas: (estado = '') =>
     call(() => api.get('/admin/alertas', { params: estado ? { estado } : {} }), 'No pudimos cargar las alertas.'),
 
   updateAlerta: (id, { estado, respuesta = '' }) =>
     call(
-      () => api.patch(`/admin/alertas/${encodeURIComponent(id)}`, { estado, respuesta: sanitizeInput(respuesta.trim()) }),
+      () => api.patch('/admin/alertas', { estado, respuesta: sanitizeInput(respuesta.trim()) }, { params: { id } }),
       'No pudimos actualizar la alerta.'
     ),
 

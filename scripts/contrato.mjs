@@ -112,28 +112,30 @@ export async function probarContrato({ api, secreto, receptor, ok }) {
   const pacientes = await call('GET', '/admin/pacientes', { token: sesionDoc });
   const nueva = pacientes.data?.find?.((p) => p.phone === cita.telefono);
   ok(pacientes.status === 200 && pacientes.data.some((p) => p.id === 'pac-demo-1' && p.tienePlan) && nueva?.promociones === true, 'Ve el directorio con plan y consentimiento de promociones');
-  ok((await call('GET', '/users', { token: sesionDoc })).status === 404, 'No hay CRUD genérico expuesto');
+  // El simulador responde 404; en n8n una ruta sin Webhook la contesta n8n (500 sin cuerpo)
+  const generico = await call('GET', '/users', { token: sesionDoc });
+  ok(generico.status >= 400 && !Array.isArray(generico.data) && !JSON.stringify(generico.data ?? '').includes('@'), 'No hay CRUD genérico: una ruta inexistente no expone datos');
 
   const pendientes = await call('GET', '/admin/citas?estado=pendiente', { token: sesionDoc });
   ok(pendientes.data?.some?.((c) => c.id === creada.data.id), 'Ve las solicitudes de cita pendientes');
-  const sinHora = await call('PATCH', `/admin/citas/${creada.data.id}`, { token: sesionDoc, body: { estado: 'confirmada' } });
+  const sinHora = await call('PATCH', `/admin/citas?id=${creada.data.id}`, { token: sesionDoc, body: { estado: 'confirmada' } });
   ok(sinHora.status === 400, 'No puede confirmar una cita sin hora');
-  const confirmada = await call('PATCH', `/admin/citas/${creada.data.id}`, { token: sesionDoc, body: { estado: 'confirmada', hora: '15:30' } });
+  const confirmada = await call('PATCH', `/admin/citas?id=${creada.data.id}`, { token: sesionDoc, body: { estado: 'confirmada', hora: '15:30' } });
   ok(confirmada.status === 200 && confirmada.data.estado === 'confirmada' && confirmada.data.hora === '15:30', 'Confirma la cita con hora');
   ok(Boolean(await receptor.esperar('appointment.confirmed', (e) => e.cita?.id === creada.data.id && e.cita.hora === '15:30')), 'La confirmación avisa a la paciente');
   const citasN8n = await call('GET', `/n8n/citas?fecha=${manana}&estado=confirmada`, { secret: secreto });
   ok(citasN8n.data?.items?.some((c) => c.id === creada.data.id), 'El recordatorio de 24 h ya la encuentra');
-  await call('PATCH', `/admin/citas/${creada.data.id}`, { token: sesionDoc, body: { estado: 'cancelada' } });
+  await call('PATCH', `/admin/citas?id=${creada.data.id}`, { token: sesionDoc, body: { estado: 'cancelada' } });
   ok(Boolean(await receptor.esperar('appointment.cancelled', (e) => e.cita?.id === creada.data.id)), 'La cancelación avisa a la paciente');
 
   const abiertas = await call('GET', '/admin/alertas?estado=abierta', { token: sesionDoc });
   ok(abiertas.data?.some?.((a) => a.id === sos.data.id && a.tipo === 'sos') && abiertas.data.some((a) => a.id === preocupada.data.id && a.tipo === 'checkin'), 'La bandeja de alertas reúne SOS y check-ins marcados');
-  const atendida = await call('PATCH', `/admin/alertas/${sos.data.id}`, { token: sesionDoc, body: { estado: 'atendida', respuesta: 'La llamé, todo bien' } });
+  const atendida = await call('PATCH', `/admin/alertas?id=${sos.data.id}`, { token: sesionDoc, body: { estado: 'atendida', respuesta: 'La llamé, todo bien' } });
   ok(atendida.status === 200 && atendida.data.estado === 'atendida', 'Marca una alerta como atendida');
   const hoy = await call('GET', '/admin/hoy', { token: sesionDoc });
   ok(hoy.status === 200 && hoy.data.alertasAbiertas === 1 && Array.isArray(hoy.data.citas), 'El resumen del día cuenta las alertas abiertas');
 
-  const planInvalido = await call('PUT', `/admin/pacientes/${nueva?.id}/plan`, { token: sesionDoc, body: { roadmap: [{ date: manana, title: 'X', kind: 'inventado', status: 'next' }] } });
+  const planInvalido = await call('PUT', `/admin/pacientes/plan?id=${nueva?.id}`, { token: sesionDoc, body: { roadmap: [{ date: manana, title: 'X', kind: 'inventado', status: 'next' }] } });
   ok(planInvalido.status === 400, 'Rechaza un plan con datos inválidos');
   const plan = {
     lastTreatment: { name: 'Toxina botulínica', date: `${manana}T10:00:00-06:00` },
@@ -142,18 +144,18 @@ export async function probarContrato({ api, secreto, receptor, ok }) {
     packages: [{ name: 'Mantenimiento anual', total: 2, used: 1, validUntil: '2027-12-31' }],
     certificates: [{ product: 'Botox', brand: 'Allergan', lot: 'L123', expiry: '2028-01', appliedOn: manana, zone: 'Entrecejo', amount: '20 U' }],
   };
-  const guardado = await call('PUT', `/admin/pacientes/${nueva?.id}/plan`, { token: sesionDoc, body: plan });
+  const guardado = await call('PUT', `/admin/pacientes/plan?id=${nueva?.id}`, { token: sesionDoc, body: plan });
   ok(guardado.status === 200 && guardado.data.care.items[0].id && guardado.data.userId === nueva?.id, 'Guarda el plan de una paciente nueva');
   const nuevaPaciente = await entrar(cita.telefono);
   const suPortal = await call('GET', '/me/portal', { token: nuevaPaciente.sesion });
   ok(suPortal.data?.lastTreatment?.name === 'Toxina botulínica' && suPortal.data.packages.length === 1, 'La paciente ve su plan en su portal');
-  const ficha = await call('GET', `/admin/pacientes/${nueva?.id}`, { token: sesionDoc });
+  const ficha = await call('GET', `/admin/pacientes/ficha?id=${nueva?.id}`, { token: sesionDoc });
   ok(ficha.status === 200 && ficha.data.citas.length === 1 && ficha.data.plan?.roadmap?.length === 1, 'La ficha reúne plan, citas y check-ins');
 
   const campana = await call('POST', '/admin/campanas', { token: sesionDoc, body: { mensaje: 'Este mes: 15 % en skinboosters.' } });
   const eventoCampana = await receptor.esperar('campaign.sent');
   ok(campana.data?.enviados === 1 && eventoCampana?.destinatarios?.length === 1, 'La campaña llega solo a quien aceptó promociones');
-  ok((await call('PATCH', `/admin/pacientes/${nueva?.id}`, { token: sesionDoc, body: { promociones: true } })).status === 400, 'La doctora no puede dar consentimiento en nombre de la paciente');
+  ok((await call('PATCH', `/admin/pacientes?id=${nueva?.id}`, { token: sesionDoc, body: { promociones: true } })).status === 400, 'La doctora no puede dar consentimiento en nombre de la paciente');
   await call('POST', '/n8n/baja', { secret: secreto, body: { telefono: cita.telefono } });
   const trasBaja = await call('POST', '/admin/campanas', { token: sesionDoc, body: { mensaje: 'Otra promoción de prueba.' } });
   ok(trasBaja.status === 400, 'Quien responde BAJA deja de recibir promociones');

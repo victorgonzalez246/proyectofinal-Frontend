@@ -28,7 +28,7 @@ Estos archivos ya no los usa la app, pero moverlos o borrarlos quedó para ti. L
 ## 🟠 2. Dejarlo corriendo en tu máquina
 
 - [ ] Revisar y hacer push de lo nuevo: `git push origin main` (después de hacer el repo privado).
-- [ ] El archivo `.env` ya existe con un `N8N_SHARED_SECRET` generado. **No lo compartas ni lo subas** (ya está en `.gitignore`).
+- [ ] Crear el archivo `.env` desde `.env.example` (no existe todavía). Sin él, el simulador usa secretos de desarrollo y lo avisa en la consola. **No lo compartas ni lo subas** (está en `.gitignore`).
 - [ ] Probar el flujo completo en el navegador:
   1. `npm run server` y `npm run dev`.
   2. Agenda una cita desde la landing con tu número.
@@ -62,25 +62,29 @@ La doctora debe revisar y aprobar estos textos, que escribí como ejemplo:
 - [ ] Revisar las condiciones de tratamiento de datos de **Meta (WhatsApp)**, **Google** y **Anthropic** antes de usar datos reales.
 - [ ] Evaluar si la base de datos debe inscribirse ante la **PRODHAB** (Agencia de Protección de Datos de los Habitantes).
 
-## 🟡 6. Cuentas para activar n8n y los agentes de IA
+## 🟡 6. Cuentas para poner en producción (n8n es todo el backend)
 
 La guía paso a paso está en [`n8n/README.md`](../n8n/README.md).
 
+- [ ] **n8n 2.x publicado por HTTPS** (n8n Cloud o un servidor), con `NODE_FUNCTION_ALLOW_BUILTIN=crypto`.
 - [ ] **Meta / WhatsApp Business:**
   - [ ] Crear la app, conectar el número y generar un token permanente.
-  - [ ] Crear y hacer aprobar las **10 plantillas** (nombres y textos en la guía).
+  - [ ] Crear y hacer aprobar las **14 plantillas** (nombres, categorías y textos en la guía).
 - [ ] **Anthropic:** crear una API key (console.anthropic.com).
 - [ ] **Google:**
-  - [ ] Crear la hoja "Base clínica" (pestaña `BaseClinica`) a partir del CSV.
+  - [ ] Crear la **hoja de datos** con sus 6 pestañas y la fila de la doctora (con su número real).
+  - [ ] Crear la hoja **Base clínica** (pestaña `BaseClinica`) a partir del CSV.
+  - [ ] Crear una carpeta privada de Drive para los respaldos semanales.
   - [ ] Dar acceso al calendario de la doctora.
 - [ ] **n8n:**
-  - [ ] Importar `n8n/flujos/cerebro-maestro-clinica.json`.
-  - [ ] Crear las 6 credenciales.
-  - [ ] Llenar el nodo **Configuración**.
-  - [ ] Activar el flujo.
-- [ ] Copiar la *Production URL* del webhook en `N8N_WEBHOOK_URL` del `.env` y reiniciar `npm run server`.
-- [ ] Para el chat de WhatsApp: exponer n8n por HTTPS (túnel o servidor) y registrar el webhook en Meta.
-- [ ] Hacer una prueba real de cada rama (la guía tiene la lista) antes de usarlo con pacientes.
+  - [ ] Importar los **dos** flujos (`n8n/flujos/api-clinica.json` y `cerebro-maestro-clinica.json`).
+  - [ ] Crear las **7 credenciales**.
+  - [ ] Llenar *Configuración API* (con dos secretos nuevos) y *Configuración* del cerebro.
+  - [ ] En los dos flujos: *Settings → Error workflow → Clínica · Cerebro maestro*.
+  - [ ] Publicar los dos flujos y registrar el webhook de WhatsApp en Meta.
+- [ ] **Sitio:** `VITE_API_URL=https://tu-n8n.com/webhook`, generar el flujo API con `ORIGEN_PERMITIDO` = dominio del sitio, `npm run build` y publicar `dist/` (Vercel o Netlify).
+- [ ] **Proxy delante de n8n** con límite de intentos para las rutas públicas (ver la guía).
+- [ ] Hacer una prueba real de cada rama con un número propio antes de usarlo con pacientes.
 
 ## 🟡 7. Contenido del portal
 
@@ -95,6 +99,7 @@ La guía paso a paso está en [`n8n/README.md`](../n8n/README.md).
 |---|---|
 | `npm run server` | Simulador de backend en :3001 |
 | `npm run dev` | Sitio en :5173 |
-| `npm run verificar` | Comprueba el sistema completo (24 pruebas) |
+| `npm run verificar` | Contrato completo de la API contra el simulador + estructura de los flujos de n8n |
+| `npm run probar:n8n` | Los dos flujos de n8n en un n8n real y local |
 | `npm run build` | Genera la versión de producción |
-| `node n8n/generar-cerebro.mjs` | Regenera el JSON del cerebro de n8n desde código |
+| `npm run generar:n8n` | Regenera los dos flujos de n8n desde código |

@@ -19,32 +19,36 @@ Según los requisitos, el frontend es **100 % puro** y **n8n es el único backen
 ## 2. Arquitectura
 
 ```
-┌──────────────────────── Navegador (React, 100 % frontend) ────────────────────────┐
-│  Landing · formulario de cita            Portal /portal · token en sessionStorage  │
-└───────────────────────────────┬────────────────────────────────────────────────────┘
-                                │ HTTPS · fetch/axios (mismo contrato en ambas fases)
-            Hoy (desarrollo)    ▼                       Producción
-            server.js (simulador) ─ eventos ─►   n8n · Webhooks del portal
-                                │                        │
-                                └────────── X-N8N-Secret ┘
-                                                         ▼
-┌──────────────────────────────── 🧠 n8n · cerebro maestro ─────────────────────────────────┐
-│ Entradas: Webhook clínica · WhatsApp entrante · CRON 7:00 / 8:00 / 10:00 / lunes 9:00    │
-│      └─► Configuración ─► Router por acción                                              │
-│            ├─ Chat WhatsApp ─► Red de seguridad (sin IA) ─► emergencia: alerta + 911     │
-│            │                    └─► Clasificador ─┬─► 🤖 Agente 1 · Enfermera Virtual    │
-│            │                                      └─► 🤖 Agente 2 · Recepcionista VIP    │
-│            ├─ Check-in ─► Enfermera (analista emocional) + regla fija ─► alerta roja    │
-│            ├─ SOS (sin IA) ─► alerta inmediata + contención                              │
-│            ├─ Cita · Acceso al portal · Recordatorio 24 h · Seguimiento · Próximos pasos│
-│            └─ Preparar consultas (7:00) ─► Recepcionista: resumen de 3 puntos ─► doctora │
-└───────┬─────────────────────┬──────────────────────┬───────────────────────┬─────────────┘
-        ▼                     ▼                      ▼                       ▼
-  Google Sheets         Google Calendar        Claude (Anthropic)     WhatsApp Cloud API
-  base clínica, datos   agenda de la doctora   solo datos mínimos     paciente · doctora
+┌──────────────────────── Navegador (React, 100 % frontend, estático) ─────────────────────────┐
+│  Landing · cita        Portal /portal (paciente)        Panel /admin (doctora)               │
+│                        token firmado en sessionStorage                                        │
+└──────────────────────────────────────┬───────────────────────────────────────────────────────┘
+                                       │ HTTPS · axios · mismo contrato en ambas fases
+          Desarrollo                   ▼                          Producción
+   server.js + db.json  ◄── api/nucleo.mjs (misma lógica) ──►  n8n · flujo API ── Google Sheets
+          │                                                         │   (un Webhook por ruta)
+          └──────────── eventos con X-N8N-Secret ───────────────────┤
+                                                                    ▼
+┌───────────────────────────────── 🧠 n8n · flujo Cerebro maestro ─────────────────────────────┐
+│ Entradas: eventos de la API · WhatsApp entrante · CRON 7:00/8:00/10:00/lunes 9:00/dom 23:00  │
+│           · Falla en cualquier flujo                                                         │
+│      └─► Configuración ─► Router por acción                                                  │
+│            ├─ Chat ─► Red de seguridad (sin IA): emergencia → doctora + 911 · "BAJA"         │
+│            │          └─► Clasificador ─┬─► 🤖 Agente 1 · Enfermera Virtual                  │
+│            │                            └─► 🤖 Agente 2 · Recepcionista VIP                  │
+│            ├─ Check-in ─► analista emocional (IA) + regla fija ─► alerta                     │
+│            ├─ SOS (sin IA) ─► alerta inmediata + contención                                  │
+│            ├─ Cita recibida · confirmada · cancelada · acceso (paciente/doctora) · campaña  │
+│            ├─ Resumen de 3 puntos (7:00) ─► WhatsApp de la doctora y vista "Hoy" del panel   │
+│            ├─ Recordatorio 24 h · seguimiento · próximos pasos                               │
+│            └─ Respaldo semanal de la hoja · aviso de fallas a la doctora                     │
+└───────┬─────────────────────┬──────────────────────┬──────────────────────┬──────────────────┘
+        ▼                     ▼                      ▼                      ▼
+  Google Sheets/Drive   Google Calendar        Claude (Anthropic)     WhatsApp Cloud API
+  datos, base clínica   agenda de la doctora   solo datos mínimos     paciente · doctora
 ```
 
-El flujo importable está en [`n8n/flujos/cerebro-maestro-clinica.json`](../n8n/flujos/cerebro-maestro-clinica.json), con su guía en [`n8n/README.md`](../n8n/README.md).
+Los flujos importables están en [`n8n/flujos/`](../n8n/flujos/), con su guía en [`n8n/README.md`](../n8n/README.md).
 
 ## 3. Módulo de IA: arquitectura multi-agente
 
@@ -83,11 +87,11 @@ La lógica del contrato está en un solo archivo, [`api/nucleo.mjs`](../api/nucl
 | `POST /me/sos` `{reason, note}` | Paciente | Línea de tranquilidad. Evento: `sos.triggered`. |
 | `GET /admin/hoy` | Doctora | Consultas confirmadas de hoy (con el resumen de 3 puntos), solicitudes pendientes y alertas abiertas. |
 | `GET /admin/citas?estado=` | Doctora | Citas por estado. |
-| `PATCH /admin/citas/:id` `{estado, fecha, hora}` | Doctora | Confirmar (exige hora), reprogramar o cancelar. Eventos: `appointment.confirmed` / `appointment.cancelled`. |
-| `GET /admin/pacientes` · `GET /admin/pacientes/:id` | Doctora | Directorio y ficha (plan, citas y check-ins). |
-| `PATCH /admin/pacientes/:id` `{promociones: false}` | Doctora | Retira el consentimiento de promociones. La doctora nunca puede darlo en nombre de la paciente. |
-| `PUT /admin/pacientes/:id/plan` | Doctora | Guarda el plan completo; rechaza datos inválidos. |
-| `GET /admin/alertas?estado=` · `PATCH /admin/alertas/:id` | Doctora | Bandeja de SOS y check-ins marcados; marcar como atendida con una nota. |
+| `PATCH /admin/citas?id=` `{estado, fecha, hora}` | Doctora | Confirmar (exige hora), reprogramar o cancelar. Eventos: `appointment.confirmed` / `appointment.cancelled`. |
+| `GET /admin/pacientes` · `GET /admin/pacientes/ficha?id=` | Doctora | Directorio y ficha (plan, citas y check-ins). |
+| `PATCH /admin/pacientes?id=` `{promociones: false}` | Doctora | Retira el consentimiento de promociones. La doctora nunca puede darlo en nombre de la paciente. |
+| `PUT /admin/pacientes/plan?id=` | Doctora | Guarda el plan completo; rechaza datos inválidos. |
+| `GET /admin/alertas?estado=` · `PATCH /admin/alertas?id=` | Doctora | Bandeja de SOS y check-ins marcados; marcar como atendida con una nota. |
 | `POST /admin/campanas` `{mensaje}` | Doctora | Promoción solo a quienes aceptaron recibirla. Evento: `campaign.sent`. |
 | `GET /n8n/citas`, `/n8n/seguimiento`, `/n8n/retoques` | n8n (secreto) | Datos para las rutinas programadas. |
 | `GET /n8n/paciente?perfil=clinico|recepcion` | n8n (secreto) | Fichas mínimas por perfil para cada agente. |
@@ -95,7 +99,9 @@ La lógica del contrato está en un solo archivo, [`api/nucleo.mjs`](../api/nucl
 | `GET /n8n/preparacion` · `POST /n8n/resumen` | n8n (secreto) | Consultas del día para el resumen ejecutivo y registro del resumen en el panel. |
 | `POST /n8n/baja` `{telefono}` | n8n (secreto) | La paciente respondió "BAJA" por WhatsApp: deja de recibir promociones. |
 
-Cualquier otra ruta responde 401 sin sesión y 404 con sesión: no hay acceso genérico a las tablas.
+Cualquier otra ruta responde con error y sin datos: no hay acceso genérico a las tablas.
+
+Las rutas de un solo recurso llevan el id en la query (`?id=`) y no en la ruta: n8n publica los Webhooks con parámetros de ruta anteponiendo su propio id, y la URL dejaría de ser la del contrato.
 
 ## 5. Seguridad y privacidad
 
@@ -119,4 +125,4 @@ npm run server   # simulador en :3001
 npm run dev      # frontend en :5173
 ```
 
-Entra a `/portal/acceso` con el número demo **8888 0001** (Valeria Rojas). Sin n8n configurado, el simulador muestra el enlace mágico en pantalla y en la consola.
+Entra a `/portal/acceso` con el número demo **8888 0001** (Valeria Rojas), o con **8888 8888** para el panel de la doctora. Sin n8n configurado, el simulador muestra el enlace mágico en pantalla y en la consola.

@@ -1,130 +1,208 @@
-# 🧠 Cerebro maestro de n8n: Clínica Dra. Laura Jiménez
+# 🧠 n8n: el backend de la Clínica Dra. Laura Jiménez
 
-Toda la automatización de la clínica vive en **un solo flujo**:
-[`flujos/cerebro-maestro-clinica.json`](flujos/cerebro-maestro-clinica.json). Se importa una vez y se configura en un solo nodo.
+En producción no hay servidor propio: **n8n es todo el backend**. Son dos flujos:
+
+| Flujo | Archivo | Qué hace |
+|---|---|---|
+| **Clínica · API** | [`flujos/api-clinica.json`](flujos/api-clinica.json) | Atiende al sitio: un Webhook por ruta del contrato. Guarda los datos en Google Sheets. |
+| **Clínica · Cerebro maestro** | [`flujos/cerebro-maestro-clinica.json`](flujos/cerebro-maestro-clinica.json) | Automatizaciones: WhatsApp, los dos agentes de IA, rutinas diarias, respaldo y aviso de fallas. |
+
+Los dos JSON se generan desde código. **No los edites a mano:**
+
+```bash
+npm run generar:n8n                                  # regenera ambos
+ORIGEN_PERMITIDO=https://tu-sitio.com npm run generar:n8n   # CORS del sitio publicado
+```
 
 ## Arquitectura
 
 ```
-ENTRADAS                         NÚCLEO                         RAMAS                                          SALIDAS
-───────────────────────────────  ─────────────────────────────  ─────────────────────────────────────────────  ─────────────────
-Webhook clínica (sitio) ──┐                                     ┌─ Chat WhatsApp ─► Red de seguridad (sin IA)
-  cita · acceso ·         │                                     │                   ├─ emergencia ─► alerta + "llama al 911" ─────► WhatsApp
-  check-in · SOS          │                                     │                   └─ conversación ─► Clasificador (Haiku)
-WhatsApp entrante ────────┤                                     │                        ├─ clínica ─► 🤖 Agente IA 1 · Enfermera Virtual ──► WhatsApp (texto)
-  (chat de pacientes)     ├─► Configuración ─► Router ─────────┤                        └─ administrativa ─► 🤖 Agente IA 2 · Recepcionista VIP
-CRON 7:00  preparar ──────┤     (única)       por acción        ├─ Check-in ─► Enfermera · analista emocional ─► decidir (IA + regla) ─► alerta
-CRON 8:00  recordatorios ─┤                                     ├─ SOS (sin IA) ─► alerta inmediata + contención ─────────────────────► WhatsApp
-CRON 10:00 seguimiento ───┤                                     ├─ Cita recibida / Acceso al portal ─────────────────────────────────► (plantillas)
-Lunes 9:00 próximos pasos ┤                                     ├─ Preparar consultas ─► Recepcionista · resumen de 3 puntos ─► doctora
-Probar ahora (manual) ────┘                                     └─ Recordatorio 24 h / Seguimiento / Próximos pasos
+Sitio (React, estático) ──HTTPS──► Flujo API ── Webhook por ruta ─► Leer hojas ─► Núcleo API ─► Escribir hojas ─► Responder
+                                        │                                             (api/nucleo.mjs)
+                                        └── eventos (X-N8N-Secret) ──► Flujo Cerebro
+                                                                          │
+   WhatsApp entrante ─────────────────────────────────────────────────────┤
+   CRON 7:00 · 8:00 · 10:00 · lunes 9:00 · domingo 23:00 ────────────────┤
+   Falla en cualquier flujo ─────────────────────────────────────────────┘
+                                                              ▼
+                                       Configuración ─► Router por acción ─► ramas ─► WhatsApp Cloud API
 ```
+
+**Núcleo API.** El nodo *Núcleo API* lleva dentro el código de [`api/nucleo.mjs`](../api/nucleo.mjs) y [`api/hojas.mjs`](../api/hojas.mjs) tal cual:
+- `server.js` usa esa misma lógica en desarrollo, así que `npm run verificar` prueba exactamente lo que corre en n8n;
+- si cambias el núcleo, `npm run verificar` falla hasta que regeneres los flujos.
+
+### Ramas del cerebro
+
+| Acción | Origen | Qué envía |
+|---|---|---|
+| Chat WhatsApp | La paciente escribe | Red de seguridad sin IA (emergencias → doctora y 911), "BAJA" → deja de recibir promociones, y si no, Clasificador → **Enfermera Virtual** o **Recepcionista VIP** |
+| Check-in | Portal | Analista emocional (IA) + regla fija de respaldo → alerta a la doctora |
+| SOS | Portal | Alerta inmediata a la doctora + contención a la paciente (sin IA) |
+| Cita recibida | Landing | Aviso a la paciente (con enlace a su portal) y a la doctora |
+| Cita confirmada / cancelada | Panel de la doctora | Aviso a la paciente con fecha y hora (sin nombrar el tratamiento) |
+| Acceso | Pantalla de acceso | Enlace mágico: `acceso_portal` a pacientes, `acceso_panel` a la doctora |
+| Campaña | Panel de la doctora | `promocion` solo a quienes la aceptaron |
+| Preparar consultas (7:00) | CRON | Resumen de 3 puntos (IA) por WhatsApp y en la vista *Hoy* del panel |
+| Recordatorio 24 h (8:00) | CRON | Citas confirmadas de mañana, con instrucciones previas |
+| Seguimiento (10:00) | CRON | Días 1, 3, 7 y 14 después del tratamiento |
+| Próximos pasos (lunes 9:00) | CRON | Pasos del mapa de belleza de la semana |
+| Respaldo (domingo 23:00) | CRON | Copia de la hoja de datos en una carpeta privada de Drive |
+| Falla del sistema | Cualquier flujo que falle | Aviso a la doctora por WhatsApp |
 
 ### Los dos agentes
 
 | | 🤖 Agente IA 1 · Enfermera Virtual | 🤖 Agente IA 2 · Recepcionista VIP |
 |---|---|---|
-| **Perfil** | Clínico y contención | Administrativo |
-| **Tareas** | Triaje 24/7 por WhatsApp. Analista emocional de cada check-in del portal. | Agenda autónoma por WhatsApp. Resumen ejecutivo de 3 puntos para la doctora antes de cada consulta (7:00). |
-| **Herramientas** | `ficha_paciente` (perfil clínico), `base_clinica` (Google Sheets), `despertar_doctora` (alerta por WhatsApp) | `ficha_recepcion` (sin datos clínicos), `disponibilidad_agenda` y `bloquear_agenda` (Google Calendar), `registrar_cita` |
+| **Tareas** | Triaje 24/7 por WhatsApp y análisis emocional de cada check-in | Agenda por WhatsApp y resumen de 3 puntos antes de cada consulta |
+| **Herramientas** | `ficha_paciente` (perfil clínico), `base_clinica`, `despertar_doctora` | `ficha_recepcion` (sin datos clínicos), `disponibilidad_agenda`, `bloquear_agenda`, `registrar_cita` |
 | **No puede** | Reservar citas ni ver la agenda | Ver historiales clínicos ni responder temas de salud |
 | **Modelo** | Claude Sonnet 5 | Claude Sonnet 5 (el clasificador usa Claude Haiku 4.5) |
 
 ### Decisiones de seguridad
 
-- **Las emergencias no dependen de la IA.** Una regla fija detecta señales como "no puedo respirar" o "piel morada", avisa a la doctora y responde con el 911 antes de que intervenga cualquier modelo. El SOS del portal tampoco pasa por IA.
-- **Doble red en el check-in.** La analista emocional detecta miedo o ansiedad aunque la paciente marque "bien". Si la IA falla, igual se escala con la regla fija del servidor.
-- **Nadie queda sin respuesta.** Si un agente falla, la paciente recibe un mensaje de contención y la doctora un aviso de "mensaje sin responder".
-- **Mínimo privilegio.** Cada agente tiene su propio modelo, memoria y herramientas. El teléfono de la paciente sale del mensaje entrante y nunca de la IA, así que un agente no puede consultar la ficha de otra persona.
-- **Minimización de datos.** Al modelo no le llegan teléfonos. En el check-in y en el resumen tampoco le llegan nombres.
-- **Privacidad en n8n.** No se guardan los datos de las ejecuciones exitosas.
+- **Las emergencias no dependen de la IA:** una regla fija las detecta antes que cualquier modelo. El SOS tampoco pasa por IA.
+- **Doble red en el check-in:** si la IA falla o subestima, escala la regla fija de la API.
+- **Nadie queda sin respuesta:** si un agente falla, la paciente recibe contención y la doctora un aviso.
+- **Mínimo privilegio:** cada agente tiene su modelo, memoria y herramientas. El teléfono sale del mensaje entrante, nunca de la IA.
+- **Minimización de datos:** al modelo no le llegan teléfonos; en el check-in y el resumen, tampoco nombres.
+- **Sesiones firmadas (HMAC), sin guardarlas:** la API valida la firma, la expiración y que el usuario siga existiendo con ese rol.
+- **Privacidad en n8n:** el flujo API no guarda ninguna ejecución, porque cada una carga las hojas completas. El cerebro no guarda las exitosas.
 
-> ⚠️ **Antes de producción:** los check-ins, los historiales y los mensajes de las pacientes se envían a Anthropic para que los procesen los agentes. Se necesita el consentimiento informado de las pacientes, conforme a la Ley 8968 de Protección de Datos de Costa Rica, y revisar las condiciones de uso de datos de Anthropic.
+> ⚠️ **Antes de producción:** los check-ins, historiales y mensajes se envían a Anthropic. Se necesita el consentimiento informado de las pacientes (Ley 8968) y revisar las condiciones de uso de datos de Anthropic, Google y Meta.
 
-## 1. Levantar n8n en local
+## 1. Instalar n8n
+
+n8n **2.x**. El nodo *Núcleo API* necesita el módulo `crypto` de Node:
 
 ```bash
-n8n start            # o: docker run -it --rm -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n
+NODE_FUNCTION_ALLOW_BUILTIN=crypto n8n start
+# Docker: docker run -e NODE_FUNCTION_ALLOW_BUILTIN=crypto -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n
 ```
 
-Si usas Docker, en el nodo **Configuración** cambia `apiUrl` a `http://host.docker.internal:3001`.
-El chat por WhatsApp necesita que Meta alcance tu n8n por HTTPS. En local usa un túnel (por ejemplo `n8n start --tunnel`).
+En producción, n8n debe estar publicado por **HTTPS**: lo necesitan el sitio y Meta.
 
-## 2. Credenciales
+## 2. Hoja de datos (Google Sheets)
+
+Crea una hoja de cálculo privada con **6 pestañas**, con estos nombres exactos:
+
+`users` · `appointments` · `portal` · `checkins` · `sosAlerts` · `accesos`
+
+Solo `users` necesita datos al inicio: la fila de encabezados y la doctora. Las demás columnas y filas las crea la API.
+
+| id | name | phone | role |
+|---|---|---|---|
+| u-doc-1 | Dra. Laura Jiménez | +506 XXXX XXXX | doctor |
+
+Con ese número la doctora recibe su enlace para entrar al panel.
+
+> **Edita los datos desde el panel, no en la hoja.** Google Sheets convierte lo que se escribe a mano (por ejemplo, fechas en números) y las listas se guardan como JSON en una celda.
+
+Además, la hoja **Base clínica** (pestaña `BaseClinica`) se crea desde [`base-clinica-ejemplo.csv`](base-clinica-ejemplo.csv). La Enfermera solo responde con lo que diga esa hoja, y **la doctora debe revisarla**.
+
+## 3. Credenciales
 
 | Credencial (tipo en n8n) | Se usa en | Qué poner |
 |---|---|---|
-| **Header Auth** · `Clínica · Secreto n8n` | Webhook clínica, nodos `API: …`, `ficha_paciente`, `ficha_recepcion`, `registrar_cita` | Nombre `X-N8N-Secret`, valor igual a `N8N_SHARED_SECRET` del `.env` |
-| **Header Auth** · `WhatsApp Cloud API` | `Enviar WhatsApp (plantilla)`, `Responder por WhatsApp (texto)`, `despertar_doctora` | Nombre `Authorization`, valor `Bearer <token permanente de Meta>` |
-| **WhatsApp OAuth API** | `WhatsApp entrante` | Client ID y Client Secret de tu app de Meta |
-| **Anthropic** | Los 5 nodos `Modelo · …` | Tu API key de Anthropic |
-| **Google Sheets OAuth2** | `base_clinica` | Cuenta con acceso a la hoja de la base clínica |
+| **Header Auth** · `Clínica · Secreto n8n` | Cerebro: *Webhook clínica*, nodos `API: …`, `ficha_*`, `registrar_cita`. API: *Enviar al cerebro* | Nombre `X-N8N-Secret`, valor = `n8nSecret` de *Configuración API* |
+| **Header Auth** · `WhatsApp Cloud API` | *Enviar WhatsApp*, *Responder por WhatsApp*, `despertar_doctora` | Nombre `Authorization`, valor `Bearer <token permanente de Meta>` |
+| **WhatsApp OAuth API** | *WhatsApp entrante* | Client ID y Client Secret de la app de Meta |
+| **Anthropic** | Los 5 nodos `Modelo · …` | API key de Anthropic |
+| **Google Sheets OAuth2** | API: *Leer hojas*, *Escribir hojas*. Cerebro: `base_clinica` | Cuenta con acceso a las dos hojas |
 | **Google Calendar OAuth2** | `disponibilidad_agenda`, `bloquear_agenda` | Cuenta de la agenda de la doctora |
+| **Google Drive OAuth2** | *Respaldar hoja de datos* | Cuenta con acceso a la hoja de datos y a la carpeta de respaldos |
 
-> Un agente **no arranca si alguna de sus herramientas no tiene credencial**. Por ejemplo, sin Google Sheets la Enfermera no responde y se activa la respuesta de respaldo.
+> Un agente **no arranca si una de sus herramientas no tiene credencial**: entonces se activa la respuesta de respaldo.
 
-## 3. Importar y configurar
+## 4. Importar y configurar
 
-1. *Workflows → Import from File* → `n8n/flujos/cerebro-maestro-clinica.json`.
+1. *Workflows → Import from File*: importa los **dos** JSON.
 2. Asigna las credenciales en los nodos marcados en rojo.
-3. Edita el nodo **Configuración** (es el único lugar con datos de la clínica):
+3. **Flujo API → nodo *Configuración API*** (único lugar con datos de la instalación):
 
-| Campo | Ejemplo |
-|---|---|
-| `whatsappPhoneNumberId` | Phone Number ID de Meta (WhatsApp → API Setup) |
-| `clinicWhatsapp` | `50688888888`: WhatsApp de la doctora, que recibe las alertas y los resúmenes |
-| `portalUrl` | `http://localhost:5173` |
-| `apiUrl` | `http://localhost:3001` |
-| `googleCalendarId` | `primary` o el ID de la agenda de la clínica |
-| `baseClinicaSheetId` | El ID de la hoja de Google (el tramo largo de su URL) |
-| `baseClinicaRango` | `BaseClinica!A:D` |
-| `templateLanguage` | `es` (o el idioma con que aprobaste las plantillas) |
+   | Campo | Valor |
+   |---|---|
+   | `sheetsApi` | `https://sheets.googleapis.com/v4` (no cambiar) |
+   | `sheetId` | ID de la hoja de datos (el tramo largo de su URL) |
+   | `portalUrl` | URL pública del sitio, p. ej. `https://clinica.com` |
+   | `cerebroWebhookUrl` | *Production URL* del nodo *Webhook clínica* del cerebro |
+   | `sessionSecret` | Secreto largo y aleatorio: firma las sesiones |
+   | `n8nSecret` | Otro secreto distinto: el mismo de la credencial `Clínica · Secreto n8n` |
 
-4. **Base clínica:** crea una hoja de Google con una pestaña `BaseClinica` e importa [`base-clinica-ejemplo.csv`](base-clinica-ejemplo.csv). **Las respuestas son ejemplos: la doctora debe revisarlas y completarlas.** La Enfermera solo responde con lo que está en esa hoja.
-5. Activa el flujo, copia la *Production URL* del nodo **Webhook clínica** y ponla en el `.env` del proyecto:
+   Para generar cada secreto: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+   Si cambias `sessionSecret`, todas las sesiones abiertas se cierran.
 
-```env
-N8N_SHARED_SECRET=<el mismo del paso 2>
-N8N_WEBHOOK_URL=http://localhost:5678/webhook/clinica/eventos
+4. **Flujo Cerebro → nodo *Configuración***:
+
+   | Campo | Ejemplo |
+   |---|---|
+   | `whatsappPhoneNumberId` | Phone Number ID de Meta (WhatsApp → API Setup) |
+   | `clinicWhatsapp` | `50688888888`: WhatsApp de la doctora (alertas y resúmenes) |
+   | `portalUrl` | La misma URL del sitio |
+   | `apiUrl` | Base de los webhooks del flujo API: `https://tu-n8n.com/webhook` |
+   | `googleCalendarId` | `primary` o el ID de la agenda |
+   | `baseClinicaSheetId` / `baseClinicaRango` | ID de la hoja *Base clínica* / `BaseClinica!A:D` |
+   | `datosSheetId` | El mismo `sheetId` de la hoja de datos |
+   | `respaldoCarpetaId` | ID de la carpeta privada de Drive para los respaldos |
+   | `templateLanguage` | `es` (o el idioma con que aprobaste las plantillas) |
+
+5. En **los dos flujos**: *Settings → Error workflow → Clínica · Cerebro maestro*. Sin esto, las fallas no le llegan a la doctora.
+6. Publica los dos flujos. En Meta, apunta el webhook de WhatsApp a la URL del nodo *WhatsApp entrante*.
+7. En el sitio, `VITE_API_URL` = `https://tu-n8n.com/webhook` y vuelve a compilar (`npm run build`).
+8. Genera el flujo API con el dominio real del sitio: `ORIGEN_PERMITIDO=https://clinica.com npm run generar:n8n` (CORS) y vuelve a importarlo.
+
+### Límite de intentos
+
+n8n no limita las peticiones por IP. El simulador sí lo hace (`server.js`). En producción, pon reglas de *rate limiting* en el proxy o CDN delante de n8n (por ejemplo, Cloudflare) para las rutas públicas:
+- `/webhook/auth/magic-link`: 5 cada 15 min;
+- `/webhook/auth/verify`: 10 cada 15 min;
+- `/webhook/appointments`: 5 cada 10 min.
+
+### Concurrencia
+
+Cada petición lee las hojas, calcula y escribe solo las filas que cambió. Si dos peticiones **crean** filas en la misma pestaña en el mismo segundo, la segunda puede escribir sobre la primera. Para el volumen de una clínica es muy improbable. Si crece, limita el flujo API a una ejecución a la vez (modo *queue* con concurrencia 1) o migra el almacén.
+
+## 5. Plantillas de WhatsApp (aprobar en Meta)
+
+Las respuestas del chat son texto libre, permitido porque la paciente escribió primero (ventana de 24 h). Todo lo que inicia la clínica usa plantillas aprobadas:
+
+| Nombre | Categoría | Texto sugerido |
+|---|---|---|
+| `cita_recibida` | Utilidad | Hola {{1}}, recibimos tu solicitud de cita para el {{2}}. Te escribimos por aquí para confirmar la hora. Tu portal privado ya está listo: {{3}} |
+| `nueva_solicitud_cita` | Utilidad | Nueva solicitud de cita: {{1}} ({{2}}) quiere {{3}} el {{4}}. |
+| `cita_confirmada` | Utilidad | Hola {{1}}, tu cita quedó confirmada para el {{2}} a las {{3}}. Te esperamos. Tu portal: {{4}} |
+| `cita_cancelada` | Utilidad | Hola {{1}}, tu cita del {{2}} fue cancelada. Si quieres reprogramarla, responde a este mensaje. |
+| `acceso_portal` | Autenticación | Hola {{1}}, este es tu acceso a tu portal privado con la Dra. Laura: {{2}}. Vale por 15 minutos y funciona una sola vez. |
+| `acceso_panel` | Autenticación | Tu acceso al panel médico: {{1}}. Vale por 15 minutos y funciona una sola vez. Si no lo pediste, ignora este mensaje. |
+| `alerta_clinica` | Utilidad | Alerta ({{1}}): {{2}}, {{3}}. {{4}} |
+| `sos_recibido` | Utilidad | {{1}}, la Dra. Laura ya recibió tu aviso y te escribe en minutos. Si es una emergencia médica, llama al 911. |
+| `resumen_consulta` | Utilidad | Consulta de hoy: {{1}} a las {{2}}. 1) {{3}} 2) {{4}} 3) {{5}} |
+| `recordatorio_cita` | Utilidad | Hola {{1}}, te esperamos mañana {{2}} a las {{3}}. Antes de tu cita: {{4}} |
+| `seguimiento_tratamiento` | Utilidad | Hola {{1}}, ¿cómo te sientes hoy? Cuéntanos en tu portal: {{2}} |
+| `proximo_paso_mapa` | Utilidad | Hola {{1}}, tu próximo paso en tu mapa de belleza es el {{2}}. Míralo aquí: {{3}} |
+| `resumen_semana_clinica` | Utilidad | Esta semana hay {{1}} paso(s) del mapa de belleza: {{2}} |
+| `promocion` | Marketing | Hola {{1}}, {{2}} Si no quieres recibir más promociones, responde BAJA. |
+
+Los mensajes a pacientes nunca nombran el tratamiento, porque una notificación puede verse en la pantalla bloqueada. Meta cobra las plantillas de marketing aparte.
+
+## 6. Cómo se prueba
+
+```bash
+npm run verificar     # contrato completo contra el simulador + estructura de los flujos
+npm run probar:n8n    # los dos flujos en un n8n real y local (necesita n8n instalado)
 ```
 
-6. Reinicia `npm run server`. Debe aparecer `🧠 Cerebro maestro de n8n: CONECTADO`.
-7. En tu app de Meta, apunta el webhook de WhatsApp a la URL que muestra el nodo **WhatsApp entrante**.
+`probar:n8n` usa una carpeta temporal (no toca tu n8n) y simuladores de Google Sheets y de la API de WhatsApp:
+- **Flujo API:** recorre el contrato completo, CORS, que un error no escriba en las hojas.
+- **Cerebro:** recibe los eventos reales que emitió la API y comprueba cada WhatsApp: cita recibida, acceso de paciente y doctora, SOS, check-in, confirmación, cancelación y campaña. Además, el chat ("BAJA" y una emergencia) y el aviso a la doctora cuando Google Sheets falla.
 
-## 4. Plantillas de WhatsApp (aprobar en Meta)
+**Queda por verificar con cuentas reales:**
+- las ramas con IA (sin credenciales de Anthropic solo se prueba su respaldo sin IA);
+- el envío real por la API de Meta;
+- el acceso real a Google (Sheets, Calendar, Drive).
 
-Las respuestas de los agentes en el chat son texto libre, permitido porque la paciente escribió primero (ventana de 24 h). Todo lo que inicia la clínica usa plantillas aprobadas:
+## 7. Mantenimiento
 
-| Nombre | Texto sugerido |
-|---|---|
-| `cita_recibida` | Hola {{1}}, recibimos tu solicitud de cita para el {{2}}. Te escribimos por aquí para confirmar la hora. Tu portal privado ya está listo: {{3}} |
-| `nueva_solicitud_cita` | Nueva solicitud de cita: {{1}} ({{2}}) quiere {{3}} el {{4}}. |
-| `acceso_portal` | Hola {{1}}, este es tu acceso a tu portal privado con la Dra. Laura: {{2}}. Vale por 15 minutos y funciona una sola vez. |
-| `alerta_clinica` | Alerta ({{1}}): {{2}}, {{3}}. {{4}} |
-| `sos_recibido` | {{1}}, la Dra. Laura ya recibió tu aviso y te escribe en minutos. Si es una emergencia médica, llama al 911. |
-| `resumen_consulta` | Consulta de hoy: {{1}} a las {{2}}. 1) {{3}} 2) {{4}} 3) {{5}} |
-| `recordatorio_cita` | Hola {{1}}, te esperamos mañana {{2}} a las {{3}}. Antes de tu cita: {{4}} |
-| `seguimiento_tratamiento` | Hola {{1}}, ¿cómo te sientes hoy? Cuéntanos en tu portal: {{2}} |
-| `proximo_paso_mapa` | Hola {{1}}, tu próximo paso en tu mapa de belleza es el {{2}}. Míralo aquí: {{3}} |
-| `resumen_semana_clinica` | Esta semana hay {{1}} paso(s) del mapa de belleza: {{2}} |
-
-Los mensajes a pacientes nunca nombran el tratamiento: una notificación puede verse en la pantalla bloqueada.
-
-## 5. Cómo se probó
-
-Se importó y ejecutó en **n8n 2.38.7** contra el simulador (`server.js`), con WhatsApp y Anthropic reemplazados por receptores locales:
-
-- **Webhook:** 403 sin secreto; cita, acceso, SOS y evento desconocido enrutados correctamente.
-- **Rutinas:** recordatorio, seguimiento, próximos pasos y preparación de consultas.
-- **Chat:** la red de seguridad deriva la emergencia a la doctora y al 911 sin IA. El clasificador envía lo clínico a la Enfermera y lo administrativo a la Recepcionista.
-- **Herramientas:** las 7 se ejecutaron. La Recepcionista reservó en Calendar y registró la cita. La Enfermera despertó a la doctora.
-- **Fallos de IA:** respaldo en el check-in, el resumen y el chat.
-- **Privacidad:** lo que llega al modelo no contiene teléfonos. En el check-in y en el resumen tampoco nombres.
-
-**Pendiente de verificar con cuentas reales:** la calidad de las respuestas de Claude con los prompts, el envío por la API de Meta y el acceso a Google.
-
-## 6. Mantenimiento
-
-- **Recordatorio de 24 h:** toma las citas con `estado: "confirmada"`. Las reservas de la Recepcionista ya entran confirmadas.
-- **Instrucciones previas:** están en el nodo *Mensajes: recordatorio 24 h* y son textos de ejemplo que la doctora debe validar.
-- **Editar el flujo:** puedes editar directamente en n8n y exportar. Opcionalmente, `node n8n/generar-cerebro.mjs` regenera el JSON desde código.
+- **Recordatorio de 24 h:** toma las citas `confirmada` con hora. La doctora las confirma en el panel; las reservas de la Recepcionista ya entran confirmadas.
+- **Instrucciones previas:** en el nodo *Mensajes: recordatorio 24 h* del cerebro. Son textos de ejemplo que la doctora debe validar.
+- **Editar los flujos:** cambia `n8n/generar-*.mjs` o `api/`, ejecuta `npm run generar:n8n` y vuelve a importar. Si editas directo en n8n, el próximo `generar:n8n` sobrescribe esos cambios.
