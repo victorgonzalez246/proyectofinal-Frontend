@@ -6,7 +6,7 @@ Según los requisitos, el frontend es **100 % puro** y **n8n es el único backen
 
 | Capa | Elección | Por qué |
 |---|---|---|
-| Frontend | **React 19 + Vite + React Router** (ya en uso) | Mismo proyecto que la landing. Carga diferida del portal. Build estático para Vercel o Netlify. No tiene SDKs de bases de datos: solo `fetch`/`axios` a webhooks. |
+| Frontend | **React 19 + Vite + React Router** (ya en uso) | Mismo proyecto que la landing. Carga diferida del portal y del panel. Build estático para Vercel o Netlify. No tiene SDKs de bases de datos: solo `fetch` a webhooks. |
 | Animación | **framer-motion** | Transiciones del mapa, el check-in y las hojas. Respeta "reducir movimiento". |
 | Backend y orquestador | **n8n**: un único flujo, el *cerebro maestro* | Recibe todos los eventos en un webhook, los enruta con un Switch y ejecuta las rutinas programadas. La clínica ajusta reglas sin tocar código. |
 | Inteligencia | **Claude (Anthropic)** dentro de n8n: Sonnet 5 para los agentes y Haiku 4.5 para clasificar | Dos agentes con responsabilidades separadas (ver sección 3). |
@@ -23,7 +23,7 @@ Según los requisitos, el frontend es **100 % puro** y **n8n es el único backen
 │  Landing · cita        Portal /portal (paciente)        Panel /admin (doctora)               │
 │                        token firmado en sessionStorage                                        │
 └──────────────────────────────────────┬───────────────────────────────────────────────────────┘
-                                       │ HTTPS · axios · mismo contrato en ambas fases
+                                       │ HTTPS · fetch · mismo contrato en ambas fases
           Desarrollo                   ▼                          Producción
    server.js + db.json  ◄── api/nucleo.mjs (misma lógica) ──►  n8n · flujo API ── Google Sheets
           │                                                         │   (un Webhook por ruta)
@@ -111,7 +111,7 @@ Las rutas de un solo recurso llevan el id en la query (`?id=`) y no en la ruta: 
 - **Fotos médicas:** en una carpeta privada de Google Drive. n8n las entrega solo a la paciente con sesión válida, nunca como enlaces públicos.
 - **Discreción:** modo discreto (desenfoca fotos, tratamientos, notas y productos) y título de pestaña genérico ("Portal privado"). Los WhatsApp a pacientes no nombran tratamientos.
 - **IA:** minimización de datos (sin teléfonos; sin nombres en el check-in ni en el resumen) y sin guardar ejecuciones exitosas en n8n.
-- **Frontend:** CSP restringido, sanitización con DOMPurify, límites de intentos en endpoints públicos, sin contraseñas ni hashes en el bundle.
+- **Frontend:** CSP estricto en producción (solo scripts propios, sin `unsafe-inline` ni `unsafe-eval`). React escapa todo lo que muestra y no se usa `innerHTML`. Límites de intentos en las rutas públicas (el simulador los aplica; en producción, el proxy delante de n8n). Sin contraseñas.
 - **Pendiente antes de producción:**
   - Consentimiento informado para el uso de fotos y para el procesamiento con IA.
   - Bitácora de accesos y política de retención, conforme a la Ley 8968 de Protección de Datos de Costa Rica.

@@ -1,5 +1,4 @@
 import api from './api.js';
-import { sanitizeInput } from '../utils/security.js';
 import { TOKEN_KEY, USER_KEY } from './session.js';
 
 // Guarda la sesión emitida por el servidor
@@ -17,7 +16,7 @@ export const authService = {
    */
   async requestMagicLink(phone) {
     try {
-      const { data } = await api.post('/auth/magic-link', { phone: sanitizeInput(phone.trim()) });
+      const { data } = await api.post('/auth/magic-link', { phone: phone.trim() });
       return data;
     } catch (err) {
       throw new Error(err.response?.data?.error || 'No pudimos enviar el enlace. Intenta de nuevo en unos minutos.');

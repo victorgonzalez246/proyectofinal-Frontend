@@ -1,28 +1,32 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { Calendar, Send, CheckCircle, UserRound } from 'lucide-react'
-import { toast } from 'sonner'
-import { sanitizeInput } from '../../utils/security.js'
 import api from '../../services/api.js'
 import { CLINICA, AVISO_VERSION } from '../../config/clinica.js'
 
-const appointmentSchema = z.object({
-  nombre: z.string().min(3, 'El nombre debe tener al menos 3 caracteres').max(80),
-  telefono: z.string().min(8, 'Ingresa un número de teléfono válido').max(20),
-  email: z.string().email('Ingresa un correo electrónico válido').optional().or(z.literal('')),
-  tratamiento: z.string().min(1, 'Selecciona un tratamiento'),
-  fecha: z
-    .string()
-    .min(1, 'Selecciona una fecha deseada')
-    .refine((value) => value >= todayISO(), 'Selecciona una fecha a partir de hoy'),
-  mensaje: z.string().max(500).optional().or(z.literal('')),
-  consentimiento: z.boolean().refine((v) => v === true, 'Necesitamos tu aceptación para registrar la cita'),
-  promociones: z.boolean(),
-})
+// Reglas de validación de react-hook-form (las mismas que aplica la API)
+const REGLAS = {
+  nombre: {
+    validate: (v) => v.trim().length >= 3 || 'El nombre debe tener al menos 3 caracteres',
+    maxLength: { value: 80, message: 'El nombre es demasiado largo' },
+  },
+  telefono: {
+    validate: (v) => v.replace(/\D/g, '').length >= 8 || 'Ingresa un número de teléfono válido',
+    maxLength: { value: 20, message: 'Ingresa un número de teléfono válido' },
+  },
+  email: {
+    pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Ingresa un correo electrónico válido' },
+  },
+  tratamiento: { required: 'Selecciona un tratamiento' },
+  fecha: {
+    required: 'Selecciona una fecha deseada',
+    validate: (v) => v >= todayISO() || 'Selecciona una fecha a partir de hoy',
+  },
+  mensaje: { maxLength: { value: 500, message: 'El mensaje puede tener hasta 500 caracteres' } },
+  consentimiento: { validate: (v) => v === true || 'Necesitamos tu aceptación para registrar la cita' },
+}
 
 // Fecha local de hoy en formato YYYY-MM-DD (el mismo que usa <input type="date">)
 function todayISO() {
@@ -30,6 +34,9 @@ function todayISO() {
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
   return now.toISOString().slice(0, 10)
 }
+
+// Avisos con carga diferida: sonner no forma parte de la carga inicial de la landing
+const avisar = (tipo, titulo, opciones) => import('sonner').then(({ toast }) => toast[tipo](titulo, opciones))
 
 const treatmentOptions = [
   'Armonización Facial',
@@ -51,7 +58,6 @@ export default function AppointmentSection() {
     reset,
     formState: { errors, isSubmitting },
   } = useForm({
-    resolver: zodResolver(appointmentSchema),
     defaultValues: {
       nombre: '',
       telefono: '',
@@ -66,14 +72,14 @@ export default function AppointmentSection() {
 
   const onSubmit = async (data) => {
     try {
-      // Sanitize all text inputs
-      const sanitized = {
-        nombre: sanitizeInput(data.nombre),
-        telefono: sanitizeInput(data.telefono),
-        email: sanitizeInput(data.email || ''),
+      // Solicitud tal como la valida la API (el estado y la fecha de registro los decide ella)
+      const solicitud = {
+        nombre: data.nombre.trim(),
+        telefono: data.telefono.trim(),
+        email: (data.email || '').trim(),
         tratamiento: data.tratamiento,
         fecha: data.fecha,
-        mensaje: sanitizeInput(data.mensaje || ''),
+        mensaje: (data.mensaje || '').trim(),
         consentimiento: true,
         avisoVersion: AVISO_VERSION,
         // Aceptación explícita y separada de la cita (la casilla no viene marcada)
@@ -81,17 +87,17 @@ export default function AppointmentSection() {
       }
 
       // El estado y la fecha de registro los decide la API
-      await api.post('/appointments', sanitized)
+      await api.post('/appointments', solicitud)
 
       // Build WhatsApp message
       const whatsappMsg = encodeURIComponent(
         `✨ *Nueva Solicitud de Cita — Dra. Laura Jiménez*\n\n` +
-        `👤 *Nombre:* ${sanitized.nombre}\n` +
-        `📱 *Teléfono:* ${sanitized.telefono}\n` +
-        `${sanitized.email ? `📧 *Email:* ${sanitized.email}\n` : ''}` +
-        `💆 *Tratamiento:* ${sanitized.tratamiento}\n` +
-        `📅 *Fecha deseada:* ${sanitized.fecha}\n` +
-        `${sanitized.mensaje ? `💬 *Mensaje:* ${sanitized.mensaje}\n` : ''}` +
+        `👤 *Nombre:* ${solicitud.nombre}\n` +
+        `📱 *Teléfono:* ${solicitud.telefono}\n` +
+        `${solicitud.email ? `📧 *Email:* ${solicitud.email}\n` : ''}` +
+        `💆 *Tratamiento:* ${solicitud.tratamiento}\n` +
+        `📅 *Fecha deseada:* ${solicitud.fecha}\n` +
+        `${solicitud.mensaje ? `💬 *Mensaje:* ${solicitud.mensaje}\n` : ''}` +
         `\n_Solicitud enviada desde la web de la clínica._`
       )
 
@@ -99,7 +105,7 @@ export default function AppointmentSection() {
       // Directo a api.whatsapp.com: la redirección de wa.me convierte los emojis del texto en "�"
       window.open(`https://api.whatsapp.com/send?phone=${CLINICA.whatsapp}&text=${whatsappMsg}`, '_blank')
 
-      toast.success('¡Solicitud enviada con éxito!', {
+      avisar('success', '¡Solicitud enviada con éxito!', {
         description: 'Te redirigimos a WhatsApp para confirmar tu cita.',
       })
 
@@ -110,7 +116,7 @@ export default function AppointmentSection() {
       setTimeout(() => setSubmitted(false), 20000)
     } catch (error) {
       console.error('Error al agendar cita:', error)
-      toast.error('Error al enviar la solicitud', {
+      avisar('error', 'Error al enviar la solicitud', {
         description:
           error.response?.data?.error ||
           'No pudimos registrar tu solicitud. Intenta de nuevo o escríbenos por WhatsApp.',
@@ -221,7 +227,7 @@ export default function AppointmentSection() {
                     type="text"
                     className="form-input"
                     placeholder="Ej. María López Rodríguez"
-                    {...register('nombre')}
+                    {...register('nombre', REGLAS.nombre)}
                   />
                   {errors.nombre && <p className="form-error">{errors.nombre.message}</p>}
                 </div>
@@ -234,7 +240,7 @@ export default function AppointmentSection() {
                     type="tel"
                     className="form-input"
                     placeholder="Ej. +506 8888-8888"
-                    {...register('telefono')}
+                    {...register('telefono', REGLAS.telefono)}
                   />
                   {errors.telefono && <p className="form-error">{errors.telefono.message}</p>}
                 </div>
@@ -247,7 +253,7 @@ export default function AppointmentSection() {
                     type="email"
                     className="form-input"
                     placeholder="correo@ejemplo.com (opcional)"
-                    {...register('email')}
+                    {...register('email', REGLAS.email)}
                   />
                   {errors.email && <p className="form-error">{errors.email.message}</p>}
                 </div>
@@ -258,7 +264,7 @@ export default function AppointmentSection() {
                   <select
                     id="tratamiento"
                     className="form-select"
-                    {...register('tratamiento')}
+                    {...register('tratamiento', REGLAS.tratamiento)}
                   >
                     <option value="">Selecciona un tratamiento</option>
                     {treatmentOptions.map((t) => (
@@ -276,7 +282,7 @@ export default function AppointmentSection() {
                     type="date"
                     min={todayISO()}
                     className="form-input"
-                    {...register('fecha')}
+                    {...register('fecha', REGLAS.fecha)}
                   />
                   {errors.fecha && <p className="form-error">{errors.fecha.message}</p>}
                 </div>
@@ -290,7 +296,7 @@ export default function AppointmentSection() {
                     rows={3}
                     placeholder="Cuéntanos si tienes alguna pregunta o preferencia especial (opcional)"
                     style={{ resize: 'vertical', minHeight: '80px' }}
-                    {...register('mensaje')}
+                    {...register('mensaje', REGLAS.mensaje)}
                   />
                   {errors.mensaje && <p className="form-error">{errors.mensaje.message}</p>}
                 </div>
@@ -306,7 +312,7 @@ export default function AppointmentSection() {
                     id="consentimiento"
                     type="checkbox"
                     style={{ marginTop: '0.3rem', width: '1rem', height: '1rem', accentColor: 'var(--olive-maison)', flexShrink: 0 }}
-                    {...register('consentimiento')}
+                    {...register('consentimiento', REGLAS.consentimiento)}
                   />
                   <span>
                     Acepto el <Link to="/privacidad" style={{ textDecoration: 'underline', color: 'var(--charcoal)' }}>aviso de privacidad</Link> y

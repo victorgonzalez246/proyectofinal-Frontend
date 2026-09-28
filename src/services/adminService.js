@@ -1,5 +1,4 @@
 import api from './api.js';
-import { sanitizeInput } from '../utils/security.js';
 
 // Contrato del panel de la doctora (rutas /admin/*). Lo atiende server.js en desarrollo
 // y el flujo "API de la clínica" de n8n en producción, con la misma lógica (api/nucleo.mjs).
@@ -39,10 +38,10 @@ export const adminService = {
 
   updateAlerta: (id, { estado, respuesta = '' }) =>
     call(
-      () => api.patch('/admin/alertas', { estado, respuesta: sanitizeInput(respuesta.trim()) }, { params: { id } }),
+      () => api.patch('/admin/alertas', { estado, respuesta: respuesta.trim() }, { params: { id } }),
       'No pudimos actualizar la alerta.'
     ),
 
   sendCampana: (mensaje) =>
-    call(() => api.post('/admin/campanas', { mensaje: sanitizeInput(mensaje.trim()) }), 'No pudimos enviar la promoción.'),
+    call(() => api.post('/admin/campanas', { mensaje: mensaje.trim() }), 'No pudimos enviar la promoción.'),
 };

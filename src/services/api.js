@@ -1,48 +1,51 @@
-import axios from 'axios';
 import { TOKEN_KEY, USER_KEY } from './session.js';
 
-// Instancia base de Axios
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001', // Apunta al servidor simulado
-  headers: {
-    'Content-Type': 'application/json',
-  }
-});
+// Cliente HTTP mínimo sobre fetch (antes axios): misma forma de uso en los servicios.
+//   api.get(ruta, { params })  ·  api.post / put / patch(ruta, body, { params, headers })
+// Devuelve { data } y, si la respuesta no es 2xx, lanza un Error con `response: { status, data }`.
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'; // simulador local o webhooks de n8n
 
-// Interceptor de peticiones (Request Interceptor)
-api.interceptors.request.use(
-  (config) => {
-    // Obtenemos el token de sessionStorage (más seguro que localStorage para XSS)
-    const token = sessionStorage.getItem(TOKEN_KEY);
+const conQuery = (ruta, params = {}) => {
+  const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== '')).toString();
+  return `${BASE_URL}${ruta}${query ? `?${query}` : ''}`;
+};
 
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
+async function request(method, ruta, body, { params, headers } = {}) {
+  // El token vive en sessionStorage (se borra al cerrar la pestaña)
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  const res = await fetch(conQuery(ruta, params), {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
 
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+  let data = null;
+  try { data = await res.json(); } catch { /* respuesta sin cuerpo */ }
 
-// Interceptor de respuestas (Response Interceptor)
-api.interceptors.response.use(
-  (response) => {
-    // Si la respuesta es exitosa, la devolvemos directamente
-    return response;
-  },
-  (error) => {
-    // Solo cerramos sesión si había una sesión activa (token expirado o inválido).
-    // Un visitante público que recibe 401 no debe ser redirigido al login.
-    if (error.response?.status === 401 && sessionStorage.getItem(TOKEN_KEY)) {
-      console.warn("Sesión expirada o inválida. Cerrando sesión...");
+  if (!res.ok) {
+    // Sesión vencida o inválida: se cierra y se vuelve al acceso.
+    // Un visitante público que recibe 401 no debe ser redirigido.
+    if (res.status === 401 && token) {
       sessionStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(USER_KEY);
       window.location.href = '/portal/acceso';
     }
-    return Promise.reject(error);
+    const error = new Error(data?.error || `Error ${res.status}`);
+    error.response = { status: res.status, data };
+    throw error;
   }
-);
+  return { data };
+}
+
+const api = {
+  get: (ruta, config) => request('GET', ruta, undefined, config),
+  post: (ruta, body, config) => request('POST', ruta, body ?? undefined, config),
+  put: (ruta, body, config) => request('PUT', ruta, body, config),
+  patch: (ruta, body, config) => request('PATCH', ruta, body, config),
+};
 
 export default api;

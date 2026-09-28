@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, cierre-proyecto]
+  pull_request:
+
+jobs:
+  verificar:
+    name: Lint, tests, contrato y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run verificar
+      - run: npm run build
+
+  n8n:
+    name: Flujos en n8n real
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: verificar
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Misma versión con la que se probaron los flujos
+      - run: npm install -g n8n@2.38.6
+      - run: npm run probar:n8n

@@ -9,23 +9,20 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "server": "node --env-file-if-exists=.env server.js",
-    "test": "vitest",
+    "test": "vitest run",
     "verificar": "node scripts/verificar.mjs",
     "probar:n8n": "node scripts/probar-n8n.mjs",
-    "generar:n8n": "node n8n/generar-api.mjs && node n8n/generar-cerebro.mjs"
+    "generar:n8n": "node n8n/generar-api.mjs && node n8n/generar-cerebro.mjs",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.9.1",
-    "axios": "^1.20.0",
-    "dompurify": "^3.4.15",
     "framer-motion": "^13.4.0",
     "lucide-react": "^1.47.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.88.0",
     "react-router-dom": "^7.18.4",
-    "sonner": "^2.0.8",
-    "zod": "^4.6.5"
+    "sonner": "^2.0.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
