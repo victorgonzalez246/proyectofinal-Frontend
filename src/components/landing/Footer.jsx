@@ -35,7 +35,6 @@ const quickLinks = [
   { label: 'La Doctora', href: '#doctora' },
   { label: 'Agendar Cita', href: '#agendar' },
   { label: 'Portal de pacientes', href: '/portal/acceso' },
-  { label: 'Club de beneficios', href: '/auth' },
   { label: 'Aviso de privacidad', href: '/privacidad' },
 ]
 

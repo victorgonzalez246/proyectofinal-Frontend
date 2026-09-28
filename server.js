@@ -1,17 +1,18 @@
 // ============================================================
 // SERVIDOR SIMULADO (solo desarrollo) — json-server + candado local
 // Replica el contrato que más adelante expondrán los webhooks de n8n:
-//   POST /register, POST /login, POST /logout, GET /me, POST /appointments
-//   Portal de pacientes: POST /auth/magic-link, POST /auth/verify,
-//   GET /me/portal, GET|POST /me/checkins, PUT /me/care, POST /me/sos
+//   Acceso (pacientes y doctora, sin contraseñas): POST /auth/magic-link, POST /auth/verify,
+//   POST /logout, GET /me · Landing: POST /appointments
+//   Portal de pacientes: GET /me/portal, GET|POST /me/checkins, PUT /me/care, POST /me/sos
+//   Panel de la doctora: GET /admin/pacientes
 //   Para n8n (con X-N8N-Secret): GET /n8n/citas, GET /n8n/seguimiento, GET /n8n/retoques,
 //   agentes de IA: GET /n8n/paciente, POST /n8n/citas, GET /n8n/preparacion
+// Solo existen estas rutas: no se expone el CRUD genérico de json-server,
+// porque n8n no lo tendrá en producción.
 // ============================================================
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import jsonServer from 'json-server';
-import bcrypt from 'bcryptjs';
-import { WELCOME_COUPONS } from './src/data/welcomeCoupons.js';
 
 const DB_FILE = process.env.DB_FILE || 'db.json';
 const PORT = Number(process.env.PORT) || 3001;
@@ -69,6 +70,7 @@ const saveSessions = () => {
   fs.writeFileSync(SESSIONS_FILE, JSON.stringify(vigentes));
 };
 
+// Ya no hay contraseñas, pero un db.json antiguo puede conservar hashes: nunca salen al navegador
 const withoutPassword = (user) => {
   if (!user || typeof user !== 'object') return user;
   const { password: _password, ...safe } = user;
@@ -125,49 +127,6 @@ const rateLimit = (max, windowMs) => (req, res, next) => {
 };
 
 // ── Endpoints públicos ─────────────────────────────────────
-server.post('/register', rateLimit(5, 15 * 60 * 1000), (req, res) => {
-  const name = str(req.body.name, 80);
-  const email = str(req.body.email, 120).toLowerCase();
-  const phone = str(req.body.phone, 20);
-  const password = typeof req.body.password === 'string' ? req.body.password : '';
-
-  if (name.length < 2 || !isEmail(email) || password.length < 8 || password.length > 72) {
-    return res.status(400).json({ error: 'Datos de registro inválidos.' });
-  }
-  if (db.get('users').find({ email }).value()) {
-    return res.status(409).json({ error: 'Este correo electrónico ya se encuentra registrado.' });
-  }
-
-  const user = {
-    id: `usr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-    name,
-    email,
-    phone,
-    password: bcrypt.hashSync(password, 10),
-    role: 'member', // Nunca se acepta el rol desde el cliente
-    dateJoined: new Date().toISOString(),
-    subscribedToOffers: req.body.subscribeOffers !== false,
-    coupons: [...WELCOME_COUPONS],
-  };
-  db.get('users').push(user).write();
-
-  res.status(201).json({ token: issueSession(user), user: withoutPassword(user) });
-});
-
-server.post('/login', rateLimit(10, 15 * 60 * 1000), (req, res) => {
-  const email = str(req.body.email, 120).toLowerCase();
-  const password = typeof req.body.password === 'string' ? req.body.password : '';
-  const user = db.get('users').find({ email }).value();
-
-  // Mismo mensaje para correo inexistente o contraseña incorrecta (no revela qué cuentas existen)
-  // Pacientes creados desde una cita no tienen contraseña: solo entran con enlace mágico
-  if (!user || !user.password || !bcrypt.compareSync(password, user.password)) {
-    return res.status(401).json({ error: 'Credenciales inválidas. Por favor verifica tu correo y contraseña.' });
-  }
-
-  res.json({ token: issueSession(user), user: withoutPassword(user) });
-});
-
 // Conecta las citas con el portal: quien agenda queda registrado como paciente
 // (sin contraseña) y puede entrar a su portal con este mismo número de WhatsApp.
 const findOrCreatePatient = ({ nombre, telefono, email = '' }, source) => {
@@ -179,12 +138,9 @@ const findOrCreatePatient = ({ nombre, telefono, email = '' }, source) => {
     name: nombre,
     email: isEmail(email) && !emailTaken ? email.toLowerCase() : '',
     phone: telefono,
-    password: null,
     role: 'member',
     source,
     dateJoined: new Date().toISOString(),
-    subscribedToOffers: false,
-    coupons: [],
   };
   db.get('users').push(patient).write();
   return patient;
@@ -224,7 +180,7 @@ server.post('/appointments', rateLimit(5, 10 * 60 * 1000), (req, res) => {
   res.status(201).json({ ok: true, id: appointment.id });
 });
 
-// ── Portal de pacientes: acceso sin contraseña por WhatsApp ──
+// ── Acceso sin contraseña por WhatsApp (pacientes y doctora) ──
 const magicLinks = new Map(); // sha256(token) -> { userId, expiresAt }
 
 server.post('/auth/magic-link', rateLimit(5, 15 * 60 * 1000), (req, res) => {
@@ -233,14 +189,14 @@ server.post('/auth/magic-link', rateLimit(5, 15 * 60 * 1000), (req, res) => {
   const response = { ok: true };
   if (key.length < 8) return res.status(400).json({ error: 'Ingresa un número de WhatsApp válido.' });
 
-  const user = db.get('users').find((u) => u.role === 'member' && phoneKey(u.phone) === key).value();
+  const user = db.get('users').find((u) => phoneKey(u.phone) === key).value();
   if (user) {
     const token = crypto.randomBytes(32).toString('hex');
     magicLinks.set(hashToken(token), { userId: user.id, expiresAt: Date.now() + MAGIC_LINK_TTL_MS });
     const link = `${PORTAL_URL}/portal/verificar#${token}`;
 
     if (N8N_WEBHOOK_URL) {
-      notifyN8n('auth.magic_link', { phone: user.phone, name: user.name, link });
+      notifyN8n('auth.magic_link', { phone: user.phone, name: user.name, role: user.role, link });
     } else {
       // Sin n8n configurado (solo desarrollo) el enlace se muestra en consola y en pantalla
       console.log(`🔑 Enlace mágico para ${user.name}: ${link}`);
@@ -490,24 +446,20 @@ server.post('/me/sos', rateLimit(3, 10 * 60 * 1000), (req, res) => {
   res.status(201).json({ ok: true, id: alert.id });
 });
 
-// Permisos por rol: la doctora administra todo; un miembro solo puede leer su propio perfil
-server.use((req, res, next) => {
-  // /db devuelve la base completa sin pasar por el filtro de contraseñas: bloqueado para todos
-  if (req.path === '/db') return res.status(403).json({ error: 'Recurso no disponible.' });
-  // Rutas /me/* no definidas arriba no deben caer en el router genérico
-  if (req.path.startsWith('/me/')) return res.status(404).json({ error: 'Recurso no encontrado.' });
-  if (req.session.role === 'doctor') return next();
-  if (req.method === 'GET' && req.path === `/users/${req.session.userId}`) return next();
-  res.status(403).json({ error: 'No tienes permiso para acceder a este recurso.' });
+// ── Panel de la doctora: solo rutas /admin/* explícitas ──
+server.use('/admin', (req, res, next) => {
+  if (req.session.role !== 'doctor') return res.status(403).json({ error: 'No tienes permiso para acceder a este recurso.' });
+  next();
 });
 
-// Nunca se envían hashes de contraseña al navegador, ni siquiera a la doctora
-router.render = (req, res) => {
-  const data = res.locals.data;
-  res.jsonp(Array.isArray(data) ? data.map(withoutPassword) : withoutPassword(data));
-};
+server.get('/admin/pacientes', (req, res) => {
+  const pacientes = db.get('users').filter({ role: 'member' }).orderBy('dateJoined', 'desc').value()
+    .map(({ id, name, email, phone, source, dateJoined }) => ({ id, name, email, phone, source, dateJoined }));
+  res.json(pacientes);
+});
 
-server.use(router);
+// Cualquier otra ruta no existe (el CRUD genérico de json-server no se expone)
+server.use((req, res) => res.status(404).json({ error: 'Recurso no encontrado.' }));
 
 server.listen(PORT, () => {
   console.log(`✅ Base de datos simulada corriendo en puerto ${PORT}`);

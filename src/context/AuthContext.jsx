@@ -7,18 +7,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => authService.getCurrentUser());
   const loading = false;
 
-  const login = async (credentials) => {
-    const { user: loggedInUser, token } = await authService.login(credentials);
-    setUser(loggedInUser);
-    return { user: loggedInUser, token };
-  };
-
-  const register = async (formData) => {
-    const { user: registeredUser, token, welcomeCoupons } = await authService.register(formData);
-    setUser(registeredUser);
-    return { user: registeredUser, token, welcomeCoupons };
-  };
-
   const loginWithMagicLink = async (magicToken) => {
     const { user: verifiedUser, token } = await authService.verifyMagicLink(magicToken);
     setUser(verifiedUser);
@@ -37,8 +25,6 @@ export const AuthProvider = ({ children }) => {
     isDoctor: user?.role === 'doctor',
     isMember: user?.role === 'member',
     loading,
-    login,
-    register,
     loginWithMagicLink,
     logout
   };

@@ -68,7 +68,8 @@ El flujo importable está en [`n8n/flujos/cerebro-maestro-clinica.json`](../n8n/
 | Método y ruta | Quién | Qué hace |
 |---|---|---|
 | `POST /auth/magic-link` `{phone}` | Público | Genera un token de un solo uso (15 min) y lo envía por WhatsApp. Responde lo mismo exista o no el número. |
-| `POST /auth/verify` `{token}` | Público | Canjea el token por una sesión (8 h). |
+| `POST /auth/verify` `{token}` | Público | Canjea el token por una sesión (8 h). Es el único acceso, también para la doctora: no hay contraseñas. |
+| `GET /admin/pacientes` | Doctora | Directorio de pacientes (sin datos de acceso). |
 | `GET /me/portal` | Paciente | Plan, mapa de belleza, cuidados, paquetes, lotes, fotos y videos. |
 | `PUT /me/care` `{doneIds}` | Paciente | Guarda los cuidados marcados. |
 | `GET/POST /me/checkins` | Paciente | Diario emocional. Cada registro se envía al cerebro como `checkin.created`. |

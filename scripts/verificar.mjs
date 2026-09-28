@@ -64,8 +64,10 @@ try {
   ok((await call('POST', '/appointments', { body: { ...cita, consentimiento: true, avisoVersion: 'test' } })).status === 201, 'Con consentimiento, la cita se registra');
 
   console.log('\nSeguridad');
-  ok((await call('GET', '/users')).status === 401, 'Sin sesión no se pueden leer usuarios');
-  ok((await call('GET', '/users', { token: 'inventado' })).status === 401, 'Un token inventado se rechaza');
+  ok((await call('GET', '/admin/pacientes')).status === 401, 'Sin sesión no se pueden leer pacientes');
+  ok((await call('GET', '/admin/pacientes', { token: 'inventado' })).status === 401, 'Un token inventado se rechaza');
+  const conClave = await call('POST', '/login', { body: { email: 'doctora@laurajimenez.com', password: 'Admin123!' } });
+  ok(!conClave.data?.token, 'Ya no existe el acceso con contraseña');
 
   console.log('\nPortal · acceso por enlace mágico');
   const desconocido = await call('POST', '/auth/magic-link', { body: { phone: '7000 0000' } });
@@ -82,7 +84,16 @@ try {
   const portal = await call('GET', '/me/portal', { token: sesion });
   ok(portal.status === 200 && portal.data?.roadmap?.length > 0, 'Carga el mapa de belleza');
   ok((await call('POST', '/me/checkins', { token: sesion, body: { mood: 'bien', pain: 2 } })).status === 201, 'Guarda el check-in');
-  ok((await call('GET', '/users', { token: sesion })).status === 403, 'Una paciente no puede listar a otras pacientes');
+  ok((await call('GET', '/admin/pacientes', { token: sesion })).status === 403, 'Una paciente no puede listar a otras pacientes');
+
+  console.log('\nPanel de la doctora');
+  const magicDoc = await call('POST', '/auth/magic-link', { body: { phone: '8888 8888' } });
+  const docVerificada = await call('POST', '/auth/verify', { body: { token: magicDoc.data?.devLink?.split('#')[1] } });
+  const sesionDoc = docVerificada.data?.token;
+  ok(Boolean(sesionDoc) && docVerificada.data?.user?.role === 'doctor', 'La doctora entra con su enlace mágico');
+  const pacientes = await call('GET', '/admin/pacientes', { token: sesionDoc });
+  ok(pacientes.status === 200 && pacientes.data.some((p) => p.id === 'pac-demo-1') && pacientes.data.every((p) => !('password' in p)), 'Ve el directorio de pacientes, sin datos de acceso');
+  ok((await call('GET', '/users', { token: sesionDoc })).status === 404, 'El CRUD genérico de json-server no está expuesto');
 
   console.log('\nIntegración con n8n');
   ok((await call('GET', '/n8n/seguimiento')).status === 401, 'Las rutas de n8n exigen el secreto');

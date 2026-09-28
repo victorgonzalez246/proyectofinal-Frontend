@@ -11,10 +11,19 @@ Marca cada casilla al terminar. El plan de desarrollo que sigue está en [proxim
 
 `github.com/victorgonzalez246/proyectofinal-Frontend` se puede ver sin iniciar sesión (verificado).
 Su historial contiene `db.json`, con nombres, correos y hashes de contraseñas, y la contraseña de prueba de la doctora (`Admin123!`).
+El sistema ya no usa contraseñas (acceso solo por enlace mágico), pero ese historial sigue público.
 
 - [ ] Hacer el repositorio **privado**: GitHub → *Settings* → *General* → *Danger Zone* → *Change visibility*.
 - [ ] Si alguna de esas cuentas o contraseñas es real o se reutiliza en otro lado, cámbiala.
 - [ ] (Opcional) Limpiar el historial para borrar `db.json` de todos los commits. Reescribe la historia y exige `git push --force`: hazlo solo si entiendes el efecto o pide ayuda.
+
+## 🔴 1b. Terminar la limpieza de la Fase 1 (archivos)
+
+Estos archivos ya no los usa la app, pero moverlos o borrarlos quedó para ti. Los que no están en git (marcados con *) no tienen copia: muévelos fuera del repo en lugar de borrarlos.
+
+- [ ] Mover fuera del repo: `ANTEPROYECTO.html`*, `ANTEPROYECTO.md`*, `ANTEPROYECTO_CLINICA.docx`*, `generate_docx.js`*, `dashboard.zip`*, `login_standalone.html`*, `public/mockup_*.jpg`*.
+- [ ] Mover fuera del repo (código descartado): `src/components/dashboard/`* y `src/pages/LoginPage.jsx`*. Son la única fuente de avisos del linter.
+- [ ] Borrar con `git rm`: `src/pages/AuthPage.jsx`, `src/components/layout/`, `src/data/welcomeCoupons.js`, `src/assets/hero.png`, `src/assets/react.svg`, `src/assets/vite.svg`, `src/assets/brand/logo-variante-*.png`, `public/icons.svg` y `resumen_proyecto.md` (su contenido ya está en el `README.md`).
 
 ## 🟠 2. Dejarlo corriendo en tu máquina
 
@@ -25,12 +34,14 @@ Su historial contiene `db.json`, con nombres, correos y hashes de contraseñas, 
   2. Agenda una cita desde la landing con tu número.
   3. Entra a `/portal/acceso` con ese número.
   4. Entra también con el número demo **8888 0001**.
+  5. Entra al panel de la doctora con el número **8888 8888**.
 
 ## 🟠 3. Datos reales de la clínica
 
 Todos se editan en un solo archivo: [`src/config/clinica.js`](../src/config/clinica.js).
 
 - [ ] Número de WhatsApp real (`whatsapp`, `telefonoVisible`, `telefonoLlamada`).
+- [ ] Número real de la doctora en su usuario (`db.json` hoy, la hoja de Google en producción): con él recibe su enlace de acceso al panel.
 - [ ] Correo de contacto real (`email`).
 - [ ] Confirmar con la doctora las métricas del hero ("+12 años", "99.4 % satisfacción"). Si no son verificables, cámbialas o quítalas.
 - [ ] Confirmar si la doctora se presenta como **odontóloga** (así dice la sección "La Doctora") o como médica estética (así dicen otros textos).
@@ -84,6 +95,6 @@ La guía paso a paso está en [`n8n/README.md`](../n8n/README.md).
 |---|---|
 | `npm run server` | Simulador de backend en :3001 |
 | `npm run dev` | Sitio en :5173 |
-| `npm run verificar` | Comprueba el sistema completo (21 pruebas) |
+| `npm run verificar` | Comprueba el sistema completo (24 pruebas) |
 | `npm run build` | Genera la versión de producción |
 | `node n8n/generar-cerebro.mjs` | Regenera el JSON del cerebro de n8n desde código |

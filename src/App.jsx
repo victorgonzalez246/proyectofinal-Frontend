@@ -2,7 +2,6 @@ import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import LandingPage from './pages/LandingPage.jsx';
-import AuthPage from './pages/AuthPage.jsx';
 import PrivacyPage from './pages/PrivacyPage.jsx';
 import DoctorDashboardPage from './pages/DoctorDashboardPage.jsx';
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx';
@@ -24,14 +23,15 @@ function App() {
         <Routes>
           {/* Rutas Públicas */}
           <Route path="/" element={<LandingPage />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/login" element={<AuthPage />} />
           <Route path="/privacidad" element={<PrivacyPage />} />
+          {/* Acceso único (pacientes y doctora): enlace mágico por WhatsApp */}
           <Route path="/portal/acceso" element={<PortalAccess />} />
           <Route path="/portal/verificar" element={<PortalVerify />} />
+          <Route path="/auth" element={<Navigate to="/portal/acceso" replace />} />
+          <Route path="/login" element={<Navigate to="/portal/acceso" replace />} />
 
           {/* Ruta Protegida: Portal privado de pacientes */}
-          <Route element={<ProtectedRoute allowedRoles={['member']} redirectTo="/portal/acceso" />}>
+          <Route element={<ProtectedRoute allowedRoles={['member']} />}>
             <Route path="/portal" element={<PortalLayout />}>
               <Route index element={<PortalHome />} />
               <Route path="mapa" element={<PortalMap />} />

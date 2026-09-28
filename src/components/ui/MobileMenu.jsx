@@ -105,15 +105,6 @@ export default function MobileMenu({ isOpen, navLinks, portal, onClose }) {
                 <span>{portal.label}</span>
               </MotionLink>
             )}
-            <MotionLink
-              variants={linkVariants}
-              to="/auth"
-              onClick={onClose}
-              className="label-upper"
-              style={{ textDecoration: 'underline', textUnderlineOffset: '4px' }}
-            >
-              Club VIP y cupones
-            </MotionLink>
           </motion.div>
         </motion.div>
       )}

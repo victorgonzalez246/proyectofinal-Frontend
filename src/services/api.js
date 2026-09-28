@@ -39,7 +39,7 @@ api.interceptors.response.use(
       console.warn("Sesión expirada o inválida. Cerrando sesión...");
       sessionStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(USER_KEY);
-      window.location.href = '/login';
+      window.location.href = '/portal/acceso';
     }
     return Promise.reject(error);
   }

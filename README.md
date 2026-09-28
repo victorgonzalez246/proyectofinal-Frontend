@@ -1,87 +1,82 @@
-# 🏥 Proyecto Clínica Estética - Frontend
+# Clínica Dra. Laura Jiménez: frontend
 
-Este repositorio contiene la aplicación frontend para la gestión de la Clínica Estética de la Dra. Laura Jiménez. Fue inicializado con **React** y **Vite**, preparado con herramientas modernas de diseño, y blindado con prácticas de ciberseguridad para operar de manera independiente usando una base de datos mock local (`json-server`).
+Landing pública, portal privado de pacientes y panel de la doctora para la clínica de armonización facial.
 
----
+**Arquitectura:** el frontend es 100 % estático y **n8n es el único backend**. El navegador solo hace `fetch`/`axios` a webhooks; los datos los guarda n8n en Google Sheets, Drive y Calendar. `server.js` es un **simulador de desarrollo** que imita esos webhooks: no se despliega.
 
-## 🛠️ Tecnologías y Librerías Base
+## Stack
 
-- **Core:** React 19 + Vite
-- **Enrutamiento:** React Router DOM v7
-- **Estilos y UI:** Tailwind CSS v4
-- **Iconos:** Lucide React
-- **Gráficos:** Recharts
-- **Peticiones HTTP:** Axios
+| Capa | Herramienta |
+|---|---|
+| UI | React 19 + Vite, React Router 7, Tailwind CSS 4, framer-motion, lucide-react |
+| Formularios | react-hook-form + Zod |
+| HTTP | Axios (`src/services/api.js`) |
+| Seguridad en el navegador | DOMPurify (`src/utils/security.js`) y Content-Security-Policy en `index.html` |
+| Backend y automatizaciones | n8n (`n8n/`), con Claude para los dos agentes de IA |
+| Simulador de desarrollo | json-server encapsulado en `server.js` |
 
-## 🔒 Ciberseguridad Implementada (Frontend Impenetrable)
+## Acceso: sin contraseñas
 
-A pesar de no contar con un Backend real, se han implementado múltiples barreras de seguridad para proteger la integridad de la aplicación:
+Pacientes y doctora entran igual: escriben su número en `/portal/acceso` y reciben por WhatsApp un **enlace mágico** de un solo uso (15 minutos). Al abrirlo, la paciente va a `/portal` y la doctora a `/admin`.
 
-1. **Protección XSS (Cross-Site Scripting):** 
-   - Uso de `DOMPurify` para sanitizar entradas de usuario.
-   - Implementación de **Content Security Policy (CSP)** en el `index.html`.
-2. **Hasheo de Contraseñas:** 
-   - Las contraseñas se hashean en el frontend con `bcryptjs` antes de enviarse al almacenamiento local (`db.json`), asegurando que jamás se guarden en texto plano.
-3. **Validación de Esquemas:** 
-   - Uso de `Zod` para garantizar que la estructura y los datos enviados cumplan con reglas estrictas.
-4. **Candado Local (Servidor Mock Seguro):**
-   - El `json-server` fue encapsulado en un archivo Node (`server.js`) con un **middleware de seguridad**.
-   - Cualquier intento de acceder a los datos directamente a través de `http://localhost:3001` sin un Token de Autorización válido será bloqueado (`401 Acceso Denegado`).
-5. **Comunicaciones Seguras:**
-   - Se configuró un interceptor global en Axios (`src/services/api.js`).
-   - El Token JWT se almacena de forma segura en `sessionStorage` en lugar de `localStorage`.
-   - Las sesiones inválidas o expiradas son interceptadas automáticamente para desconectar al usuario.
+- El token viaja en el fragmento `#` de la URL y solo se guarda su hash.
+- La respuesta es idéntica exista o no el número.
+- La sesión se guarda en `sessionStorage` y expira a las 8 horas.
+- Sin n8n conectado (desarrollo), el enlace se muestra en pantalla y en la consola del simulador.
 
----
+**Cuentas de prueba** (en `db.example.json`):
 
-## 📁 Estructura del Proyecto
+| Rol | Número |
+|---|---|
+| Doctora | 8888 8888 |
+| Paciente demo (Valeria Rojas) | 8888 0001 |
+
+## Cómo correrlo
+
+```bash
+npm install
+cp .env.example .env     # completa N8N_SHARED_SECRET
+npm run server           # simulador en :3001
+npm run dev              # sitio en :5173
+```
+
+| Comando | Para qué |
+|---|---|
+| `npm run verificar` | Comprueba el sistema completo sobre una base temporal (no toca `db.json`) |
+| `npm run lint` | Linter (oxlint) |
+| `npm run build` | Versión de producción en `dist/` |
+| `node n8n/generar-cerebro.mjs` | Regenera el flujo de n8n desde código |
+
+## Estructura
 
 ```text
 src/
-├── assets/         # Imágenes, iconos y recursos estáticos
-├── components/     
-│   ├── layout/     # Componentes estructurales (MainLayout, AdminLayout, Navbars)
-│   └── ui/         # Componentes reutilizables (Botones, Tarjetas, Inputs)
-├── context/        # Estado global de React (AuthContext)
-├── hooks/          # Custom Hooks de React (ej. useAuth)
-├── pages/          # Páginas y vistas principales (Login, Dashboard, Pacientes)
-├── services/       # Lógica de llamadas a la API (api.js configurado con interceptores)
-└── utils/          # Funciones de ayuda y seguridad (security.js con DOMPurify y bcrypt)
+├── components/     landing/, auth/ (guardián de rutas), ui/
+├── config/         clinica.js: datos de contacto de la clínica (único lugar para editarlos)
+├── context/        sesión (AuthContext)
+├── pages/          landing, aviso de privacidad, panel de la doctora
+├── portal/         portal de pacientes (carga diferida)
+├── services/       api.js, authService.js, portalService.js
+└── utils/          sanitización
+server.js           simulador de los webhooks de n8n (solo desarrollo)
+n8n/                cerebro maestro de n8n y su guía
+docs/               arquitectura y contrato de la API
+pendientes/         tareas manuales y plan de implementación
 ```
 
----
+## Estado
 
-## 🚀 Cómo inicializar el proyecto
+| Pieza | Estado |
+|---|---|
+| Landing con solicitud de cita y consentimiento | ✅ Lista (datos de contacto de relleno) |
+| Portal de pacientes | ✅ Listo con una paciente demo |
+| Acceso por enlace mágico (pacientes y doctora) | ✅ Funciona contra el simulador |
+| Panel de la doctora | 🟡 Solo directorio de pacientes: ver `pendientes/proximos-desarrollos.md` |
+| Cerebro de n8n (dos agentes de IA) | 🟡 Listo para importar; falta probarlo con cuentas reales |
 
-Para trabajar en el entorno de desarrollo, es necesario levantar tanto la aplicación de React como nuestro servidor seguro local.
+## Documentación
 
-Abre dos terminales diferentes en la carpeta `clinica-app`:
-
-**Terminal 1 (Frontend - Vite):**
-```bash
-npm run dev
-```
-
-**Terminal 2 (Base de Datos con Candado Local):**
-```bash
-npm run server
-```
-
----
-
-## 🧪 Testing
-El proyecto está configurado para pruebas unitarias y de componentes.
-- **Librerías:** Vitest, React Testing Library, JSDom.
-- **Comando:** `npm run test`
-
----
-*Este documento será actualizado progresivamente conforme se vayan añadiendo páginas, componentes y flujos de negocio.*
-
----
-
-## ✅ Estado de Avance (Hitos Completados)
-
-### 1. Módulo de Autenticación y Registro VIP
-- **Diseño UI/UX Premium:** Interfaz de pantalla dividida con fotografía editorial y un formulario minimalista, respetando estrictamente el manual de marca y los espaciados (*whitespace*).
-- **Integración Segura:** Protección de candado local en `server.js` (`json-server`) conectada al frontend, guardando contraseñas en formato hash.
-- **Flujo de Usuarios:** Funcionalidad completa para que pacientes se registren (recibiendo cupones) y el equipo médico acceda a su portal de administración de forma exclusiva y limpia.
+- [`docs/ARQUITECTURA-PORTAL.md`](docs/ARQUITECTURA-PORTAL.md): arquitectura y contrato de la API.
+- [`n8n/README.md`](n8n/README.md): importar y configurar el cerebro de n8n.
+- [`pendientes/README.md`](pendientes/README.md): tareas manuales (cuentas, datos reales, revisión legal).
+- [`pendientes/proximos-desarrollos.md`](pendientes/proximos-desarrollos.md): plan de implementación por fases.

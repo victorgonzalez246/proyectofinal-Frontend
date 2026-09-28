@@ -40,8 +40,7 @@ function VideoCard({ video }) {
 }
 
 export default function PortalClinic() {
-  const { portal, user } = usePortal();
-  const coupons = (user?.coupons || []).filter((c) => c.status === 'active');
+  const { portal } = usePortal();
   const packages = portal?.packages || [];
   const certificates = portal?.certificates || [];
   const videos = portal?.videos || [];
@@ -70,23 +69,6 @@ export default function PortalClinic() {
         )}
       </section>
 
-      {coupons.length > 0 && (
-        <section className="p-section" aria-labelledby="coupons-title">
-          <h2 className="p-title" id="coupons-title">Beneficios del club</h2>
-          <p className="p-small" style={{ margin: '0.35rem 0 1rem' }}>Muestra el código en tu próxima cita.</p>
-          <div className="p-next">
-            {coupons.map((c) => (
-              <div key={c.code} className="p-panel p-panel--warm">
-                <span className="p-chip p-chip--rose">{c.discount}</span>
-                <p className="p-subtitle" style={{ marginTop: '0.75rem' }}>{c.title}</p>
-                <p className="p-small">{c.description}</p>
-                <p className="p-coupon">{c.code}</p>
-                <p className="p-small">Válido hasta el {formatDate(c.validUntil)}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       <section className="p-section" aria-labelledby="certs-title">
         <h2 className="p-title" id="certs-title">Certificado de productos</h2>

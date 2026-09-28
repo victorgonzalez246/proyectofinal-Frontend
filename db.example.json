@@ -4,26 +4,20 @@
       "id": "u-doc-1",
       "name": "Dra. Laura Jiménez",
       "email": "doctora@laurajimenez.com",
-      "phone": "+52 55 1234 5678",
-      "password": "$2b$10$37KORlYyGF7nm3hGVILtGekt0u9rAH5zDBKzYw4WgqDfrYUdlK1dG",
+      "phone": "+506 8888 8888",
       "role": "doctor",
       "specialty": "Medicina Estética y Rejuvenecimiento Facial",
-      "dateJoined": "2026-01-01T00:00:00.000Z",
-      "coupons": []
+      "dateJoined": "2026-01-01T00:00:00.000Z"
     },
     {
       "id": "pac-demo-1",
       "name": "Valeria Rojas",
       "email": "valeria.demo@example.com",
       "phone": "+506 8888 0001",
-      "password": "$2b$10$fXi5woMEsB275u/TOM42FumqpN3STZUABoWY30JYiX6d77JHfynhm",
       "role": "member",
-      "dateJoined": "2026-06-12T15:00:00.000Z",
-      "subscribedToOffers": true,
-      "coupons": []
+      "dateJoined": "2026-06-12T15:00:00.000Z"
     }
   ],
-  "patients": [],
   "appointments": [],
   "portal": [
     {

@@ -9,16 +9,17 @@ import logoMainWhite from '../../assets/brand/logo-isotipo.png'; // logo blanco 
 import draLaura from '../../assets/doctor/dra-laura-editorial-2.jpg';
 import '../portal.css';
 
-// Acceso sin contraseña: la paciente recibe por WhatsApp un enlace de un solo uso
+// Acceso sin contraseña (pacientes y doctora): se recibe por WhatsApp un enlace de un solo uso
 export default function PortalAccess() {
-  const { isAuthenticated, isMember } = useAuth();
+  const { isMember, isDoctor } = useAuth();
   const { resolvedTheme } = usePreferences();
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState('idle'); // idle | sending | sent
   const [devLink, setDevLink] = useState('');
   const [error, setError] = useState('');
 
-  if (isAuthenticated && isMember) return <Navigate to="/portal" replace />;
+  if (isMember) return <Navigate to="/portal" replace />;
+  if (isDoctor) return <Navigate to="/admin" replace />;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -102,9 +103,6 @@ export default function PortalAccess() {
             </button>
 
             <p className="p-note" style={{ marginTop: '1.5rem' }}>
-              ¿Eres miembro del club de beneficios? <Link to="/auth" className="p-link">Entra con tu correo</Link>
-            </p>
-            <p className="p-note" style={{ marginTop: '0.75rem' }}>
               Al entrar aceptas el <Link to="/privacidad" className="p-link">aviso de privacidad</Link>.
             </p>
           </form>
