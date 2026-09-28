@@ -85,6 +85,7 @@ La lógica del contrato está en un solo archivo, [`api/nucleo.mjs`](../api/nucl
 | `GET /admin/citas?estado=` | Doctora | Citas por estado. |
 | `PATCH /admin/citas/:id` `{estado, fecha, hora}` | Doctora | Confirmar (exige hora), reprogramar o cancelar. Eventos: `appointment.confirmed` / `appointment.cancelled`. |
 | `GET /admin/pacientes` · `GET /admin/pacientes/:id` | Doctora | Directorio y ficha (plan, citas y check-ins). |
+| `PATCH /admin/pacientes/:id` `{promociones: false}` | Doctora | Retira el consentimiento de promociones. La doctora nunca puede darlo en nombre de la paciente. |
 | `PUT /admin/pacientes/:id/plan` | Doctora | Guarda el plan completo; rechaza datos inválidos. |
 | `GET /admin/alertas?estado=` · `PATCH /admin/alertas/:id` | Doctora | Bandeja de SOS y check-ins marcados; marcar como atendida con una nota. |
 | `POST /admin/campanas` `{mensaje}` | Doctora | Promoción solo a quienes aceptaron recibirla. Evento: `campaign.sent`. |
@@ -92,6 +93,7 @@ La lógica del contrato está en un solo archivo, [`api/nucleo.mjs`](../api/nucl
 | `GET /n8n/paciente?perfil=clinico|recepcion` | n8n (secreto) | Fichas mínimas por perfil para cada agente. |
 | `POST /n8n/citas` | n8n (secreto) | Registro de las citas que reserva la Recepcionista (quedan confirmadas). |
 | `GET /n8n/preparacion` · `POST /n8n/resumen` | n8n (secreto) | Consultas del día para el resumen ejecutivo y registro del resumen en el panel. |
+| `POST /n8n/baja` `{telefono}` | n8n (secreto) | La paciente respondió "BAJA" por WhatsApp: deja de recibir promociones. |
 
 Cualquier otra ruta responde 401 sin sesión y 404 con sesión: no hay acceso genérico a las tablas.
 

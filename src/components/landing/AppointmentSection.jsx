@@ -21,6 +21,7 @@ const appointmentSchema = z.object({
     .refine((value) => value >= todayISO(), 'Selecciona una fecha a partir de hoy'),
   mensaje: z.string().max(500).optional().or(z.literal('')),
   consentimiento: z.boolean().refine((v) => v === true, 'Necesitamos tu aceptación para registrar la cita'),
+  promociones: z.boolean(),
 })
 
 // Fecha local de hoy en formato YYYY-MM-DD (el mismo que usa <input type="date">)
@@ -59,6 +60,7 @@ export default function AppointmentSection() {
       fecha: '',
       mensaje: '',
       consentimiento: false,
+      promociones: false,
     },
   })
 
@@ -74,11 +76,11 @@ export default function AppointmentSection() {
         mensaje: sanitizeInput(data.mensaje || ''),
         consentimiento: true,
         avisoVersion: AVISO_VERSION,
-        estado: 'pendiente',
-        createdAt: new Date().toISOString(),
+        // Aceptación explícita y separada de la cita (la casilla no viene marcada)
+        promociones: data.promociones === true,
       }
 
-      // Save to db.json via the secure API
+      // El estado y la fecha de registro los decide la API
       await api.post('/appointments', sanitized)
 
       // Build WhatsApp message
@@ -94,7 +96,8 @@ export default function AppointmentSection() {
       )
 
       // Open WhatsApp
-      window.open(`https://wa.me/${CLINICA.whatsapp}?text=${whatsappMsg}`, '_blank')
+      // Directo a api.whatsapp.com: la redirección de wa.me convierte los emojis del texto en "�"
+      window.open(`https://api.whatsapp.com/send?phone=${CLINICA.whatsapp}&text=${whatsappMsg}`, '_blank')
 
       toast.success('¡Solicitud enviada con éxito!', {
         description: 'Te redirigimos a WhatsApp para confirmar tu cita.',
@@ -311,6 +314,22 @@ export default function AppointmentSection() {
                   </span>
                 </label>
                 {errors.consentimiento && <p className="form-error">{errors.consentimiento.message}</p>}
+              </div>
+
+              {/* Promociones: opcional e independiente de la cita */}
+              <div style={{ marginTop: '0.75rem' }}>
+                <label
+                  htmlFor="promociones"
+                  style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--stone-muted)', fontWeight: 300, lineHeight: 1.6 }}
+                >
+                  <input
+                    id="promociones"
+                    type="checkbox"
+                    style={{ marginTop: '0.3rem', width: '1rem', height: '1rem', accentColor: 'var(--olive-maison)', flexShrink: 0 }}
+                    {...register('promociones')}
+                  />
+                  <span>(Opcional) Quiero recibir promociones de la clínica por WhatsApp. Puedo pedir que me den de baja cuando quiera.</span>
+                </label>
               </div>
 
               {/* Submit */}

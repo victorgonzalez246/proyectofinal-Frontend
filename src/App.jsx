@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import PrivacyPage from './pages/PrivacyPage.jsx';
-import DoctorDashboardPage from './pages/DoctorDashboardPage.jsx';
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx';
 
 // Portal de pacientes: se carga bajo demanda para no pesar en la landing
@@ -15,6 +14,15 @@ const PortalMap = lazy(() => import('./portal/pages/PortalMap.jsx'));
 const PortalCare = lazy(() => import('./portal/pages/PortalCare.jsx'));
 const PortalEvolution = lazy(() => import('./portal/pages/PortalEvolution.jsx'));
 const PortalClinic = lazy(() => import('./portal/pages/PortalClinic.jsx'));
+
+// Panel de la doctora: también bajo demanda
+const AdminLayout = lazy(() => import('./admin/AdminLayout.jsx'));
+const AdminHoy = lazy(() => import('./admin/pages/AdminHoy.jsx'));
+const AdminCitas = lazy(() => import('./admin/pages/AdminCitas.jsx'));
+const AdminPacientes = lazy(() => import('./admin/pages/AdminPacientes.jsx'));
+const AdminPaciente = lazy(() => import('./admin/pages/AdminPaciente.jsx'));
+const AdminAlertas = lazy(() => import('./admin/pages/AdminAlertas.jsx'));
+const AdminCampanas = lazy(() => import('./admin/pages/AdminCampanas.jsx'));
 
 function App() {
   return (
@@ -44,7 +52,14 @@ function App() {
 
           {/* Ruta Protegida: Exclusiva Dra. Laura Jiménez (Administración) */}
           <Route element={<ProtectedRoute allowedRoles={['doctor']} />}>
-            <Route path="/admin" element={<DoctorDashboardPage />} />
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminHoy />} />
+              <Route path="citas" element={<AdminCitas />} />
+              <Route path="pacientes" element={<AdminPacientes />} />
+              <Route path="pacientes/:id" element={<AdminPaciente />} />
+              <Route path="alertas" element={<AdminAlertas />} />
+              <Route path="campanas" element={<AdminCampanas />} />
+            </Route>
           </Route>
         </Routes>
       </Suspense>

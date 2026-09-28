@@ -325,6 +325,13 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
         return [200, { ok: true }];
       }],
 
+      // La paciente respondió "BAJA" por WhatsApp: deja de recibir promociones
+      ['POST', '/n8n/baja', 'n8n', () => {
+        const user = pacientePorTelefono(str(body.telefono, 20));
+        if (user?.promociones?.acepta) guardar('users', { ...user, promociones: { ...user.promociones, acepta: false, baja: new Date(ahora()).toISOString() } });
+        return [200, { ok: true }]; // misma respuesta aunque el número no exista
+      }],
+
       // Sesión (paciente o doctora)
       ['POST', '/logout', 'sesion', () => [200, { ok: true }]], // sin estado: el navegador borra el token
       ['GET', '/me', 'sesion', (s) => [200, usuarioPublico(s.user)]],
@@ -451,6 +458,15 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
           citas: db.appointments.filter((a) => a.userId === user.id).sort(porFecha('fecha', true)),
           checkins: checkinsDe(user.id, 10),
         }];
+      }],
+
+      // La doctora solo puede retirar el consentimiento de promociones, nunca darlo en nombre de la paciente
+      ['PATCH', '/admin/pacientes/:id', 'doctora', (s, params) => {
+        const user = usuario(params.id);
+        if (!user || user.role !== 'member') falla(404, 'Paciente no encontrada.');
+        if (body.promociones !== false) falla(400, 'Solo se puede retirar el consentimiento de promociones.');
+        if (user.promociones?.acepta) guardar('users', { ...user, promociones: { ...user.promociones, acepta: false, baja: new Date(ahora()).toISOString() } });
+        return [200, { ok: true }];
       }],
 
       ['PUT', '/admin/pacientes/:id/plan', 'doctora', (s, params) => {

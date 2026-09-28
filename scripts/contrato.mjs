@@ -153,6 +153,10 @@ export async function probarContrato({ api, secreto, receptor, ok }) {
   const campana = await call('POST', '/admin/campanas', { token: sesionDoc, body: { mensaje: 'Este mes: 15 % en skinboosters.' } });
   const eventoCampana = await receptor.esperar('campaign.sent');
   ok(campana.data?.enviados === 1 && eventoCampana?.destinatarios?.length === 1, 'La campaña llega solo a quien aceptó promociones');
+  ok((await call('PATCH', `/admin/pacientes/${nueva?.id}`, { token: sesionDoc, body: { promociones: true } })).status === 400, 'La doctora no puede dar consentimiento en nombre de la paciente');
+  await call('POST', '/n8n/baja', { secret: secreto, body: { telefono: cita.telefono } });
+  const trasBaja = await call('POST', '/admin/campanas', { token: sesionDoc, body: { mensaje: 'Otra promoción de prueba.' } });
+  ok(trasBaja.status === 400, 'Quien responde BAJA deja de recibir promociones');
 
   console.log('\nIntegración con n8n');
   ok((await call('GET', '/n8n/seguimiento')).status === 401, 'Las rutas de n8n exigen el secreto');
