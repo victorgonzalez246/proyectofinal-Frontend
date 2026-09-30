@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { PLANTILLAS } from './plantillas.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT_FILE = path.join(HERE, 'flujos', 'cerebro-maestro-clinica.json');
@@ -37,7 +38,25 @@ const HELPERS = bodyOf(() => {
   // Las variables de plantilla no admiten saltos de línea ni espacios repetidos
   const clean = (value) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 900);
   // boton: valor de la variable de un botón (URL dinámica o código de verificación); las URL fijas van en la plantilla
-  const msg = (to, template, params, boton) => ({ json: { to: toWa(to), template, params: params.map(clean), ...(boton ? { boton: clean(boton) } : {}) } });
+  // texto: el mismo mensaje ya rellenado, para el modo pruebas (texto libre mientras Meta revisa las plantillas)
+  const msg = (to, template, params, boton) => ({
+    json: { to: toWa(to), template, params: params.map(clean), ...(boton ? { boton: clean(boton) } : {}), texto: textoPrueba(template, params.map(clean)) },
+  });
+  // ── Modo pruebas (Configuración: modoPruebas = "si") ──
+  // PLANTILLAS se inserta al generar el flujo (n8n/plantillas.mjs)
+  const textoPrueba = (template, params) => {
+    const p = PLANTILLAS[template];
+    if (!p) return params.join(' · ');
+    const cuerpo = p.cuerpo.replace(/\{\{(\d+)\}\}/g, (_, n) => params[Number(n) - 1] ?? '');
+    return p.boton ? `${cuerpo}\n\n${p.boton.texto}: ${cfg.portalUrl}${p.boton.ruta}` : cuerpo;
+  };
+  const enPruebas = String(cfg.modoPruebas || '').trim().toLowerCase() === 'si';
+  // En pruebas solo se escribe a los números de la lista (con código de país): evita escribir a pacientes ficticias
+  const numerosPrueba = String(cfg.numerosPrueba || '').split(',').map((n) => toWa(n)).filter(Boolean);
+  const filtrarPruebas = (salida) =>
+    enPruebas && Array.isArray(salida)
+      ? salida.filter((item) => !item?.json?.to || numerosPrueba.includes(item.json.to))
+      : salida;
 });
 
 // ── Constructores ──
@@ -61,8 +80,13 @@ const link = (from, to, output = 0, kind = 'main') => {
   outs[output].push({ node: to, type: kind, index: 0 });
 };
 
+// Los nodos con HELPERS pasan su salida por filtrarPruebas (en modo pruebas solo quedan los números de la lista)
 const code = (name, position, fn, { helpers = true } = {}) =>
-  add(name, 'n8n-nodes-base.code', 2, position, { jsCode: helpers ? `${HELPERS}\n${bodyOf(fn)}` : bodyOf(fn) });
+  add(name, 'n8n-nodes-base.code', 2, position, {
+    jsCode: helpers
+      ? `const PLANTILLAS = ${JSON.stringify(PLANTILLAS)};\n${HELPERS}\nreturn filtrarPruebas(await (async () => {\n${bodyOf(fn)}\n})());`
+      : bodyOf(fn),
+  });
 
 const setAccion = (name, position, accion) =>
   add(name, 'n8n-nodes-base.set', 3.4, position, {
@@ -299,6 +323,10 @@ const CONFIG_FIELDS = [
   // Hoja de datos de la API (la misma de "Configuración API") y carpeta privada de Drive para su respaldo semanal
   ['datosSheetId', 'REEMPLAZAR_ID_DE_LA_HOJA_DE_DATOS'],
   ['respaldoCarpetaId', 'REEMPLAZAR_ID_DE_LA_CARPETA_DE_RESPALDOS'],
+  // "si": mientras Meta revisa las plantillas, los mensajes salen como texto libre (solo llegan a quien escribió
+  // a la clínica en las últimas 24 h) y únicamente a numerosPrueba (con código de país, separados por coma)
+  ['modoPruebas', 'no'],
+  ['numerosPrueba', ''],
 ];
 const CONFIG = add('Configuración', 'n8n-nodes-base.set', 3.4, [680, 520], {
   assignments: {
@@ -718,7 +746,8 @@ const ENVIAR = add('Enviar WhatsApp (plantilla)', 'n8n-nodes-base.httpRequest', 
   sendBody: true,
   specifyBody: 'json',
   jsonBody:
-    `={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.to, type: 'template', template: { name: $json.template, language: { code: ${CFG}.templateLanguage }, components: [...($json.params.length ? [{ type: 'body', parameters: $json.params.map(text => ({ type: 'text', text })) }] : []), ...($json.boton ? [{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: $json.boton }] }] : [])] } }) }}`,
+    // Modo pruebas: el mismo texto como mensaje libre (Meta lo entrega dentro de la ventana de 24 h)
+    `={{ JSON.stringify(String(${CFG}.modoPruebas || '').trim().toLowerCase() === 'si' ? { messaging_product: 'whatsapp', to: $json.to, type: 'text', text: { body: $json.texto, preview_url: true } } : { messaging_product: 'whatsapp', to: $json.to, type: 'template', template: { name: $json.template, language: { code: ${CFG}.templateLanguage }, components: [...($json.params.length ? [{ type: 'body', parameters: $json.params.map(text => ({ type: 'text', text })) }] : []), ...($json.boton ? [{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: $json.boton }] }] : [])] } }) }}`,
   options: {},
 }, RETRY);
 

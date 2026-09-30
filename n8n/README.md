@@ -188,6 +188,17 @@ Las versiones anteriores (`cita_recibida`, `cita_confirmada`, `seguimiento_trata
 
 Los mensajes a pacientes nunca nombran el tratamiento, porque una notificación puede verse en la pantalla bloqueada. Meta cobra las plantillas de marketing aparte.
 
+### Modo pruebas (mientras Meta revisa las plantillas)
+
+Los textos de todas las plantillas viven en [`plantillas.mjs`](plantillas.mjs). En el nodo *Configuración* del cerebro:
+
+| Campo | Valor |
+|---|---|
+| `modoPruebas` | `si` para probar sin plantillas aprobadas; `no` en producción |
+| `numerosPrueba` | Números que pueden recibir mensajes en pruebas, con código de país y separados por coma (p. ej. `50685758780,50662643156`) |
+
+Con `modoPruebas = si`, cada mensaje sale como **texto libre** con el mismo texto de su plantilla (el botón va como enlace al final) y **solo a los números de la lista**: las rutinas no escriben a pacientes que no estén en ella. Meta entrega el texto libre únicamente si ese número le escribió a la clínica en las últimas 24 h, así que antes de probar hay que enviar un "hola" desde cada teléfono al WhatsApp de la clínica. Cuando las plantillas estén aprobadas, se vuelve a `no` y todo sale con plantillas, sin cambiar nada más.
+
 ## 6. Cómo se prueba
 
 ```bash
