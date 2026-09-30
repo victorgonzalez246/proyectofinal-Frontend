@@ -92,7 +92,8 @@ export default function TreatmentsSection() {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
           <img
             src={perfil01}
-            alt="Perfil de armonización facial"
+            alt=""
+            aria-hidden="true"
             style={{
               width: '100%',
               maxWidth: '280px',

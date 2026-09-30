@@ -12,11 +12,14 @@ Landing pública, portal privado de pacientes y panel de la doctora para la clí
 | Capa | Herramienta |
 |---|---|
 | UI | React 19 + Vite, React Router 7, Tailwind CSS 4, framer-motion, lucide-react, sonner (avisos) |
+| Gráficos | Recharts (métricas del panel de la doctora) |
+| Asistente de IA | `@anthropic-ai/sdk` en el navegador, a través de un proxy del mismo origen que guarda la clave (`api/_asistente.mjs`) |
+| API externa | Open-Meteo (clima e índice UV de Escazú, sin clave) |
 | Formularios | react-hook-form (reglas nativas) |
 | HTTP | `fetch` con un cliente mínimo (`src/services/api.js`) |
 | API | `api/nucleo.mjs`: una sola implementación del contrato, sin dependencias. La usan `server.js` y el flujo API de n8n |
 | Backend y automatizaciones | n8n: flujo **API** + flujo **Cerebro** con dos agentes de IA (Claude). Ver [`n8n/README.md`](n8n/README.md) |
-| Pruebas | Vitest (unitarias), `npm run verificar` (contrato contra el simulador), `npm run probar:n8n` (flujos en n8n real) |
+| Pruebas | Vitest + Testing Library: carpeta [`testings/`](testings/README.md) (unitarias, componentes e integración) y pruebas junto al código; `npm run verificar` (contrato contra el simulador), `npm run probar:n8n` (flujos en n8n real) |
 
 ## Acceso: sin contraseñas
 
@@ -43,19 +46,27 @@ Pacientes y doctora entran igual: escriben su número en `/portal/acceso` y reci
 | **Pacientes** | Directorio y ficha: citas, check-ins y el **plan** que ve la paciente (mapa de belleza, cuidados, paquetes, productos con lote y vencimiento, videos) |
 | **Alertas** | SOS del portal y check-ins marcados; atender con una nota o reabrir |
 | **Campañas** | Promoción por WhatsApp solo a quienes la aceptaron. Pueden darse de baja respondiendo "BAJA" |
+| **Métricas** | Agenda (citas por mes y estado, canal web o Recepcionista IA, tratamientos, demanda por día, anticipación y franja horaria), evolución de las pacientes (curva de recuperación promedio a partir de sus check-ins, motivos de alertas) y pacientes (nuevas por mes, retorno, planes y consentimientos). Periodo de 3, 6 o 12 meses, tooltips y tabla equivalente para cada gráfico. En la ficha de cada paciente: evolución de su tratamiento |
+
+## Asistente virtual, clima y accesibilidad
+
+- **Asistente "Aura"** (landing y portal): chat flotante con respuestas en streaming de Claude. El navegador usa `@anthropic-ai/sdk` apuntando a `/api/asistente`; ese proxy (middleware de Vite en desarrollo, función de Vercel `api/asistente/v1/messages.js` en producción) agrega `ANTHROPIC_API_KEY` y fija el modelo, el prompt de sistema, el tope de tokens y un límite de 30 preguntas cada 10 minutos por IP. La clave nunca llega al navegador. No diagnostica ni da precios: orienta y guía para agendar.
+- **Clima y piel** (landing y `/portal/cuidados`): índice UV, temperatura y humedad de Escazú desde Open-Meteo, con recomendaciones de protección solar e hidratación. Estados de carga, error con reintento y datos.
+- **Accesibilidad**: selector visible (tamaño de texto, alto contraste, reducir animaciones) en la landing (botón flotante) y en la cabecera del panel; el portal ya lo tenía en "Apariencia y accesibilidad". Las preferencias son las mismas en todo el sitio. Además: enlace "Saltar al contenido", foco visible, `aria-expanded`/`aria-controls` en menús y paneles, errores del formulario enlazados con `aria-describedby` y `role="alert"`, y regiones `aria-live` en el chat.
 
 ## Cómo correrlo
 
 ```bash
 npm install
-cp .env.example .env     # completa N8N_SHARED_SECRET y SESSION_SECRET
+cp .env.example .env     # completa N8N_SHARED_SECRET, SESSION_SECRET y ANTHROPIC_API_KEY (asistente)
 npm run server           # simulador en :3001
 npm run dev              # sitio en :5173
 ```
 
 | Comando | Para qué |
 |---|---|
-| `npm test` | Pruebas unitarias (Vitest) |
+| `npm test` | Todas las pruebas (Vitest). Por tipo: `npm run test:unitarias`, `test:componentes`, `test:integracion` |
+| `npm run sembrar:demo` | Llena `db.json` con datos de demostración (pacientes, citas, check-ins y alertas con fechas relativas a hoy) |
 | `npm run verificar` | Contrato completo de la API contra el simulador (base temporal, no toca `db.json`) y estructura de los flujos de n8n |
 | `npm run probar:n8n` | Los dos flujos en un n8n real y local, con simuladores de Google Sheets y WhatsApp |
 | `npm run generar:n8n` | Regenera los flujos de n8n desde código (después de cambiar `api/` o `n8n/generar-*.mjs`) |

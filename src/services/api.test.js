@@ -19,7 +19,9 @@ describe('cliente HTTP (fetch)', () => {
     fetchMock.mockResolvedValue(respuesta(200, { ok: true }));
     const { data } = await api.patch('/admin/citas', { estado: 'confirmada' }, { params: { id: 'apt 1', vacio: '' } });
     const [url, opciones] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://localhost:3001/admin/citas?id=apt+1');
+    // En desarrollo el cliente usa rutas relativas ('/admin/citas?...') para que el proxy de Vite
+    // reenvíe a localhost:3001 sin problemas de CORS. En producción será la URL completa de n8n.
+    expect(url).toMatch(/\/admin\/citas\?id=apt\+1$/);
     expect(opciones.method).toBe('PATCH');
     expect(opciones.headers.Authorization).toBe('Bearer tok');
     expect(JSON.parse(opciones.body)).toEqual({ estado: 'confirmada' });

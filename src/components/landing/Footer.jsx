@@ -113,7 +113,7 @@ export default function Footer() {
             >
               Enlaces Rápidos
             </h4>
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <nav aria-label="Enlaces rápidos" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {quickLinks.map((link) => {
                 const Anchor = link.href.startsWith('/') ? Link : 'a'
                 const target = link.href.startsWith('/') ? { to: link.href } : { href: link.href }

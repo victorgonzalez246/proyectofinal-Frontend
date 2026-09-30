@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
+import { middlewareAsistente } from './api/_asistente.mjs'
 
 // Content-Security-Policy de index.html:
 // - inserta el origen real de la API (simulador local o webhooks de n8n) para que el navegador no bloquee otras URLs;
@@ -25,14 +26,42 @@ function cspPlugin(env, command) {
   }
 }
 
+// Asistente virtual: el servidor de desarrollo y el de preview atienden /api/asistente con la clave
+// ANTHROPIC_API_KEY de .env (sin prefijo VITE_, así nunca entra al paquete del navegador).
+// En producción lo atiende la función de Vercel api/asistente/v1/messages.js.
+function asistentePlugin(apiKey) {
+  return {
+    name: 'asistente',
+    configureServer: (server) => { server.middlewares.use(middlewareAsistente(apiKey)) },
+    configurePreviewServer: (server) => { server.middlewares.use(middlewareAsistente(apiKey)) },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode, command }) => {
   const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env }
+  const apiTarget = env.VITE_API_URL || 'http://localhost:3001'
   return {
     plugins: [
       react(),
       tailwindcss(),
       cspPlugin(env, command),
+      asistentePlugin(process.env.ANTHROPIC_API_KEY || loadEnv(mode, process.cwd(), 'ANTHROPIC_').ANTHROPIC_API_KEY),
     ],
+    // Desarrollo: src/services/api.js usa rutas relativas y este proxy las reenvía al simulador (sin CORS).
+    // Son las rutas reales del contrato (api/nucleo.mjs). /admin y /auth también son páginas de React:
+    // si el navegador pide HTML (navegación o recarga), se sirve la app en lugar de reenviar.
+    server: {
+      proxy: Object.fromEntries(
+        ['^/auth/', '^/appointments', '^/me(/|$|\\?)', '^/logout', '^/admin/', '^/n8n/'].map((ruta) => [
+          ruta,
+          {
+            target: apiTarget,
+            changeOrigin: true,
+            bypass: (req) => (req.headers.accept?.includes('text/html') ? '/index.html' : undefined),
+          },
+        ])
+      ),
+    },
   }
 })

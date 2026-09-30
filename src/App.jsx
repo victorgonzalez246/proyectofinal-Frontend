@@ -19,6 +19,7 @@ const PortalClinic = lazy(() => import('./portal/pages/PortalClinic.jsx'));
 const AdminLayout = lazy(() => import('./admin/AdminLayout.jsx'));
 const AdminHoy = lazy(() => import('./admin/pages/AdminHoy.jsx'));
 const AdminCitas = lazy(() => import('./admin/pages/AdminCitas.jsx'));
+const AdminMetricas = lazy(() => import('./admin/pages/AdminMetricas.jsx'));
 const AdminPacientes = lazy(() => import('./admin/pages/AdminPacientes.jsx'));
 const AdminPaciente = lazy(() => import('./admin/pages/AdminPaciente.jsx'));
 const AdminAlertas = lazy(() => import('./admin/pages/AdminAlertas.jsx'));
@@ -55,6 +56,7 @@ function App() {
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminHoy />} />
               <Route path="citas" element={<AdminCitas />} />
+              <Route path="metricas" element={<AdminMetricas />} />
               <Route path="pacientes" element={<AdminPacientes />} />
               <Route path="pacientes/:id" element={<AdminPaciente />} />
               <Route path="alertas" element={<AdminAlertas />} />

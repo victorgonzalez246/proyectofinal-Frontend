@@ -81,3 +81,9 @@ textarea.p-field { min-height: 5.5rem; resize: vertical; }
 }
 
 .a-counter { font-size: 0.78rem; color: var(--p-muted); text-align: right; }
+
+/* Barra inferior del móvil: el panel tiene seis secciones (el portal, cinco) */
+@media (max-width: 959px) {
+  .a-nav { grid-template-columns: repeat(6, 1fr); }
+  .a-nav .p-nav__link { font-size: 0.64rem; }
+}

@@ -9,6 +9,7 @@ import { useCarga } from '../useCarga.js';
 import { ESTADOS_CITA, ORIGENES, whatsappLink } from '../lib.js';
 import Estado from '../components/Estado.jsx';
 import PlanEditor from '../components/PlanEditor.jsx';
+import EvolucionPaciente from '../../components/analitica/EvolucionPaciente.jsx';
 
 const animo = (id) => MOODS.find((m) => m.id === id)?.label || id;
 
@@ -88,6 +89,16 @@ export default function AdminPaciente() {
                 )}
               </section>
             </div>
+
+            <section className="p-section" aria-labelledby="evolucion-title">
+              <h2 className="p-title" id="evolucion-title">Evolución del tratamiento</h2>
+              <p className="p-small" style={{ margin: '0.35rem 0 1.25rem' }}>
+                {data.plan?.lastTreatment
+                  ? `Recuperación de «${data.plan.lastTreatment.name}» según sus check-ins, cuidados y avance del plan.`
+                  : 'Aparecerá cuando la paciente tenga un tratamiento registrado en su plan.'}
+              </p>
+              {data.plan?.lastTreatment && <EvolucionPaciente plan={data.plan} checkins={data.checkins} vista="doctora" />}
+            </section>
 
             <section className="p-section" aria-labelledby="plan-title">
               <h2 className="p-title" id="plan-title">Plan de la paciente</h2>

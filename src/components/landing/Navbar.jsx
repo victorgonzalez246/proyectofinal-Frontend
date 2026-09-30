@@ -24,6 +24,14 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Escape cierra el menú móvil
+  useEffect(() => {
+    if (!mobileOpen) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setMobileOpen(false) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [mobileOpen])
+
   // Lock body scroll when mobile menu is open
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : ''
@@ -63,10 +71,10 @@ export default function Navbar() {
         }}
       >
         {/* Logo */}
-        <a href="#inicio" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <a href="#inicio" aria-label="Dra. Laura Jiménez, ir al inicio" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <img
             src={logoMain}
-            alt="Dra. Laura Jiménez"
+            alt=""
             style={{
               height: '44px',
               width: 'auto',
@@ -83,6 +91,7 @@ export default function Navbar() {
             gap: '2.25rem',
           }}
           className="desktop-nav"
+          aria-label="Navegación principal"
         >
           {navLinks.map((link) => (
             <a
@@ -123,15 +132,16 @@ export default function Navbar() {
             }}
             id="nav-club-desktop"
           >
-            <UserRound size={13} />
+            <UserRound size={13} aria-hidden="true" />
             <span>{portal.label}</span>
           </Link>
 
           <a href="#agendar" className="btn-primary" style={{ display: 'none' }} id="nav-cta-desktop">
-            <Calendar size={14} />
+            <Calendar size={14} aria-hidden="true" />
             <span>Agendar Cita</span>
           </a>
           <button
+            type="button"
             onClick={() => setMobileOpen(!mobileOpen)}
             style={{
               display: 'flex',
@@ -139,9 +149,11 @@ export default function Navbar() {
               color: 'var(--charcoal)',
             }}
             className="mobile-toggle"
-            aria-label="Abrir menú"
+            aria-label={mobileOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={mobileOpen}
+            aria-controls="menu-movil"
           >
-            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+            {mobileOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
           </button>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { PortalContext } from './usePortal.js';
 import { usePreferences } from './usePreferences.js';
 import SosButton from './components/SosButton.jsx';
 import SettingsSheet from './components/SettingsSheet.jsx';
+import AsistenteVirtual from '../components/asistente/AsistenteVirtual.jsx';
 import { RECOVERY_WINDOW_DAYS } from './config.js';
 import { daysBetween } from './lib/format.js';
 // Nota: los nombres de los archivos de marca están cruzados; logo-isotipo.png es el logo blanco con transparencia
@@ -172,6 +173,7 @@ export default function PortalLayout() {
         </div>
 
         <SosButton recent={inRecovery} />
+        <AsistenteVirtual variante="portal" />
 
         <AnimatePresence>
           {settingsOpen && (

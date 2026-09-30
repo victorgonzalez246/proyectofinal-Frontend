@@ -1,0 +1,123 @@
+/* ============================================================
+   SELECTOR DE ACCESIBILIDAD (landing: flotante · panel médico: en la cabecera)
+   ============================================================ */
+
+.a11y {
+  --a11y-bg: var(--p-surface, #FFFFFF);
+  --a11y-bg-soft: var(--p-bg, #F5F3EF);
+  --a11y-ink: var(--p-ink, #1C1B1A);
+  --a11y-ink-soft: var(--p-ink-soft, #4E453B);
+  --a11y-line: var(--p-line-strong, rgba(147, 130, 109, 0.30));
+  --a11y-accent: var(--p-olive, #5C6651);
+  font-family: var(--p-sans, 'Plus Jakarta Sans', 'Helvetica Neue', sans-serif);
+}
+.a11y--cabecera { position: relative; }
+
+.a11y-lanzador {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 50%;
+  background: var(--a11y-bg);
+  color: var(--a11y-ink);
+  border: 1px solid var(--a11y-line);
+  box-shadow: 0 10px 30px rgba(28, 27, 26, 0.16);
+}
+@media (min-width: 960px) {
+  .a11y-lanzador { left: 2rem; bottom: 2rem; }
+}
+.a11y-punto {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--a11y-accent);
+  border: 2px solid var(--a11y-bg);
+}
+.a11y--cabecera .p-icon-btn { position: relative; }
+
+.a11y-panel {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 5.25rem;
+  z-index: 46;
+  display: grid;
+  gap: 0.6rem;
+  width: min(19rem, calc(100vw - 2.5rem));
+  padding: 1.1rem 1.2rem 1.2rem;
+  border-radius: 1.25rem;
+  border: 1px solid var(--a11y-line);
+  background: var(--a11y-bg);
+  color: var(--a11y-ink);
+  box-shadow: 0 20px 50px rgba(28, 27, 26, 0.2);
+}
+.a11y-panel[hidden] { display: none; }
+@media (min-width: 960px) {
+  .a11y--flotante .a11y-panel { left: 2rem; bottom: 6rem; }
+}
+.a11y--cabecera .a11y-panel { position: absolute; left: auto; right: 0; bottom: auto; top: calc(100% + 0.5rem); }
+
+.a11y-panel__cabecera { display: flex; align-items: center; justify-content: space-between; }
+.a11y-panel__titulo {
+  font-family: var(--p-serif, 'Cormorant Garamond', Georgia, serif);
+  font-size: 1.35rem;
+  font-weight: 500;
+  color: var(--a11y-ink);
+}
+.a11y-cerrar { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 50%; color: var(--a11y-ink-soft); }
+.a11y-cerrar:hover { background: var(--a11y-bg-soft); color: var(--a11y-ink); }
+
+.a11y-etiqueta { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--a11y-ink-soft); margin-top: 0.25rem; }
+.a11y-segmentos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.25rem; padding: 0.25rem; border-radius: 999px; background: var(--a11y-bg-soft); }
+.a11y-segmentos button {
+  min-height: 2.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--a11y-ink-soft);
+}
+.a11y-segmentos button[aria-pressed='true'] { background: var(--a11y-bg); color: var(--a11y-ink); box-shadow: 0 1px 4px rgba(28, 27, 26, 0.15); }
+
+.a11y-fila { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0.4rem; }
+.a11y-fila label { font-size: 0.92rem; font-weight: 600; color: var(--a11y-ink); }
+.a11y-ayuda { font-size: 0.78rem; color: var(--a11y-ink-soft); margin-top: -0.35rem; }
+
+.a11y-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.9rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  background: var(--a11y-line);
+  transition: background-color 0.2s ease;
+}
+.a11y-switch::after {
+  content: '';
+  position: absolute;
+  top: 0.2rem;
+  left: 0.2rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease;
+}
+.a11y-switch[aria-checked='true'] { background: var(--a11y-accent); }
+.a11y-switch[aria-checked='true']::after { transform: translateX(1.2rem); }
+
+.a11y-restablecer { justify-self: start; margin-top: 0.4rem; font-size: 0.82rem; font-weight: 600; text-decoration: underline; color: var(--a11y-ink); }
+
+.a11y button:focus-visible { outline: 3px solid var(--a11y-accent); outline-offset: 2px; }
+
+@media (forced-colors: active) {
+  .a11y-switch { border: 1px solid CanvasText; }
+  .a11y-switch[aria-checked='true']::after { background: CanvasText; }
+}

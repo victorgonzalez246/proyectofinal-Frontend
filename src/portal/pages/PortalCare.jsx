@@ -2,6 +2,7 @@ import { usePortal } from '../usePortal.js';
 import CareList from '../components/CareList.jsx';
 import Sensitive from '../components/Sensitive.jsx';
 import { withWindows } from '../lib/care.js';
+import ClimaPiel from '../../components/clima/ClimaPiel.jsx';
 
 // Activos primero; lo que ya venció baja al final de la lista
 const byExpiry = (a, b) => Number(a.expired) - Number(b.expired);
@@ -16,6 +17,9 @@ export default function PortalCare() {
         <p className="p-empty" style={{ marginTop: '2rem' }}>
           Después de cada tratamiento aquí verás qué hacer y qué evitar, hora por hora.
         </p>
+        <section className="p-section">
+          <ClimaPiel titulo="El clima de hoy y tu piel" nivelTitulo="h2" />
+        </section>
       </>
     );
   }
@@ -44,6 +48,10 @@ export default function PortalCare() {
           Márcalo cuando lo hagas: {doneIds.filter((id) => dos.some((d) => d.id === id)).length} de {dos.length} marcados.
         </p>
         <CareList items={dos} doneIds={doneIds} onToggle={toggleCare} />
+      </section>
+
+      <section className="p-section">
+        <ClimaPiel titulo="El clima de hoy y tu piel" nivelTitulo="h2" />
       </section>
     </>
   );

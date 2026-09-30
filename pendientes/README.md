@@ -41,10 +41,15 @@ Estos archivos ya no los usa la app, pero moverlos o borrarlos quedó para ti. L
 Todos se editan en un solo archivo: [`src/config/clinica.js`](../src/config/clinica.js).
 
 - [ ] Número de WhatsApp real (`whatsapp`, `telefonoVisible`, `telefonoLlamada`).
++506 8704 9810
 - [ ] Número real de la doctora en su usuario (`db.json` hoy, la hoja de Google en producción): con él recibe su enlace de acceso al panel.
++506 8704 9810
 - [ ] Correo de contacto real (`email`).
+contacto.victorgonzalez0@gmail.com 
 - [ ] Confirmar con la doctora las métricas del hero ("+12 años", "99.4 % satisfacción"). Si no son verificables, cámbialas o quítalas.
+son veridicas
 - [ ] Confirmar si la doctora se presenta como **odontóloga** (así dice la sección "La Doctora") o como médica estética (así dicen otros textos).
+Odontologa con maestria en medicina estetica
 
 ## 🟠 4. Revisión clínica (la doctora)
 
@@ -54,13 +59,14 @@ La doctora debe revisar y aprobar estos textos, que escribí como ejemplo:
 - [ ] **Instrucciones previas a cada tratamiento:** en el cerebro de n8n, nodo *Mensajes: recordatorio 24 h*.
 - [ ] **Señales de emergencia:** nodo *Red de seguridad clínica* (lista `SENALES`) y las instrucciones del agente Enfermera (`PROMPT_ENFERMERA` en `n8n/generar-cerebro.mjs`).
 - [ ] **Cuidados post-tratamiento de la paciente demo:** en `db.example.json`, para usarlos como modelo de los reales.
-
+dejame un archivo con que decirle a la doctora y modificarlo desde el archivo
 ## 🟠 5. Legal y privacidad
 
 - [ ] Que una persona asesora legal revise el **aviso de privacidad** ([`src/pages/PrivacyPage.jsx`](../src/pages/PrivacyPage.jsx)) según la Ley 8968. Si cambia el texto, actualiza `AVISO_VERSION` en `src/config/clinica.js`.
+TODO ESTA CORRECTO
 - [ ] Definir el **consentimiento informado** para fotos de evolución y para el uso de asistentes de IA con datos de salud.
 - [ ] Revisar las condiciones de tratamiento de datos de **Meta (WhatsApp)**, **Google** y **Anthropic** antes de usar datos reales.
-- [ ] Evaluar si la base de datos debe inscribirse ante la **PRODHAB** (Agencia de Protección de Datos de los Habitantes).
+- [ ] Evaluar si la base de datos debe inscribirse ante la **PRODHAB** (Agencia de Protección de Datos de los Habitantes). TODO ESTA CORRECTO
 
 ## 🟡 6. Cuentas para poner en producción (n8n es todo el backend)
 

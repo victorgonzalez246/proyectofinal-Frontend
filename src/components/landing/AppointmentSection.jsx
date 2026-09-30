@@ -228,8 +228,10 @@ export default function AppointmentSection() {
                     className="form-input"
                     placeholder="Ej. María López Rodríguez"
                     {...register('nombre', REGLAS.nombre)}
+                    aria-invalid={errors.nombre ? 'true' : 'false'}
+                    aria-describedby={errors.nombre ? 'nombre-error' : undefined}
                   />
-                  {errors.nombre && <p className="form-error">{errors.nombre.message}</p>}
+                  {errors.nombre && <p className="form-error" id="nombre-error" role="alert">{errors.nombre.message}</p>}
                 </div>
 
                 {/* Teléfono */}
@@ -241,8 +243,10 @@ export default function AppointmentSection() {
                     className="form-input"
                     placeholder="Ej. +506 8888-8888"
                     {...register('telefono', REGLAS.telefono)}
+                    aria-invalid={errors.telefono ? 'true' : 'false'}
+                    aria-describedby={errors.telefono ? 'telefono-error' : undefined}
                   />
-                  {errors.telefono && <p className="form-error">{errors.telefono.message}</p>}
+                  {errors.telefono && <p className="form-error" id="telefono-error" role="alert">{errors.telefono.message}</p>}
                 </div>
 
                 {/* Email */}
@@ -254,8 +258,10 @@ export default function AppointmentSection() {
                     className="form-input"
                     placeholder="correo@ejemplo.com (opcional)"
                     {...register('email', REGLAS.email)}
+                    aria-invalid={errors.email ? 'true' : 'false'}
+                    aria-describedby={errors.email ? 'email-error' : undefined}
                   />
-                  {errors.email && <p className="form-error">{errors.email.message}</p>}
+                  {errors.email && <p className="form-error" id="email-error" role="alert">{errors.email.message}</p>}
                 </div>
 
                 {/* Tratamiento */}
@@ -265,13 +271,15 @@ export default function AppointmentSection() {
                     id="tratamiento"
                     className="form-select"
                     {...register('tratamiento', REGLAS.tratamiento)}
+                    aria-invalid={errors.tratamiento ? 'true' : 'false'}
+                    aria-describedby={errors.tratamiento ? 'tratamiento-error' : undefined}
                   >
                     <option value="">Selecciona un tratamiento</option>
                     {treatmentOptions.map((t) => (
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
-                  {errors.tratamiento && <p className="form-error">{errors.tratamiento.message}</p>}
+                  {errors.tratamiento && <p className="form-error" id="tratamiento-error" role="alert">{errors.tratamiento.message}</p>}
                 </div>
 
                 {/* Fecha */}
@@ -283,8 +291,10 @@ export default function AppointmentSection() {
                     min={todayISO()}
                     className="form-input"
                     {...register('fecha', REGLAS.fecha)}
+                    aria-invalid={errors.fecha ? 'true' : 'false'}
+                    aria-describedby={errors.fecha ? 'fecha-error' : undefined}
                   />
-                  {errors.fecha && <p className="form-error">{errors.fecha.message}</p>}
+                  {errors.fecha && <p className="form-error" id="fecha-error" role="alert">{errors.fecha.message}</p>}
                 </div>
 
                 {/* Mensaje */}
@@ -297,8 +307,10 @@ export default function AppointmentSection() {
                     placeholder="Cuéntanos si tienes alguna pregunta o preferencia especial (opcional)"
                     style={{ resize: 'vertical', minHeight: '80px' }}
                     {...register('mensaje', REGLAS.mensaje)}
+                    aria-invalid={errors.mensaje ? 'true' : 'false'}
+                    aria-describedby={errors.mensaje ? 'mensaje-error' : undefined}
                   />
-                  {errors.mensaje && <p className="form-error">{errors.mensaje.message}</p>}
+                  {errors.mensaje && <p className="form-error" id="mensaje-error" role="alert">{errors.mensaje.message}</p>}
                 </div>
               </div>
 
@@ -313,13 +325,15 @@ export default function AppointmentSection() {
                     type="checkbox"
                     style={{ marginTop: '0.3rem', width: '1rem', height: '1rem', accentColor: 'var(--olive-maison)', flexShrink: 0 }}
                     {...register('consentimiento', REGLAS.consentimiento)}
+                    aria-invalid={errors.consentimiento ? 'true' : 'false'}
+                    aria-describedby={errors.consentimiento ? 'consentimiento-error' : undefined}
                   />
                   <span>
                     Acepto el <Link to="/privacidad" style={{ textDecoration: 'underline', color: 'var(--charcoal)' }}>aviso de privacidad</Link> y
                     que la clínica use mis datos para gestionar mi cita y contactarme por WhatsApp.
                   </span>
                 </label>
-                {errors.consentimiento && <p className="form-error">{errors.consentimiento.message}</p>}
+                {errors.consentimiento && <p className="form-error" id="consentimiento-error" role="alert">{errors.consentimiento.message}</p>}
               </div>
 
               {/* Promociones: opcional e independiente de la cita */}

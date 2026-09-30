@@ -166,22 +166,24 @@ Cada petición lee las hojas, calcula y escribe solo las filas que cambió. Si d
 
 Las respuestas del chat son texto libre, permitido porque la paciente escribió primero (ventana de 24 h). Todo lo que inicia la clínica usa plantillas aprobadas:
 
-| Nombre | Categoría | Texto sugerido |
+| Nombre | Categoría | Texto |
 |---|---|---|
-| `cita_recibida` | Utilidad | Hola {{1}}, recibimos tu solicitud de cita para el {{2}}. Te escribimos por aquí para confirmar la hora. Tu portal privado ya está listo: {{3}} |
-| `nueva_solicitud_cita` | Utilidad | Nueva solicitud de cita: {{1}} ({{2}}) quiere {{3}} el {{4}}. |
-| `cita_confirmada` | Utilidad | Hola {{1}}, tu cita quedó confirmada para el {{2}} a las {{3}}. Te esperamos. Tu portal: {{4}} |
-| `cita_cancelada` | Utilidad | Hola {{1}}, tu cita del {{2}} fue cancelada. Si quieres reprogramarla, responde a este mensaje. |
-| `acceso_portal` | Autenticación | Hola {{1}}, este es tu acceso a tu portal privado con la Dra. Laura: {{2}}. Vale por 15 minutos y funciona una sola vez. |
-| `acceso_panel` | Autenticación | Tu acceso al panel médico: {{1}}. Vale por 15 minutos y funciona una sola vez. Si no lo pediste, ignora este mensaje. |
-| `alerta_clinica` | Utilidad | Alerta ({{1}}): {{2}}, {{3}}. {{4}} |
-| `sos_recibido` | Utilidad | {{1}}, la Dra. Laura ya recibió tu aviso y te escribe en minutos. Si es una emergencia médica, llama al 911. |
-| `resumen_consulta` | Utilidad | Consulta de hoy: {{1}} a las {{2}}. 1) {{3}} 2) {{4}} 3) {{5}} |
-| `recordatorio_cita` | Utilidad | Hola {{1}}, te esperamos mañana {{2}} a las {{3}}. Antes de tu cita: {{4}} |
-| `seguimiento_tratamiento` | Utilidad | Hola {{1}}, ¿cómo te sientes hoy? Cuéntanos en tu portal: {{2}} |
-| `proximo_paso_mapa` | Utilidad | Hola {{1}}, tu próximo paso en tu mapa de belleza es el {{2}}. Míralo aquí: {{3}} |
-| `resumen_semana_clinica` | Utilidad | Esta semana hay {{1}} paso(s) del mapa de belleza: {{2}} |
-| `promocion` | Marketing | Hola {{1}}, {{2}} Si no quieres recibir más promociones, responde BAJA. |
+| `cita_recibida` | Utilidad | Hola {{1}}, gracias por escribirnos. Recibimos tu solicitud de cita para el {{2}} y muy pronto te escribiremos por este medio para confirmar la hora. Mientras tanto, ya puedes entrar a tu portal privado desde {{3}} cuando gustes. |
+| `nueva_solicitud_cita` | Utilidad | Hola doctora, llegó una nueva solicitud de cita. La paciente {{1}}, con número {{2}}, desea agendar {{3}} para el {{4}}. Puede revisarla y confirmarla en el panel médico. |
+| `cita_confirmada` | Utilidad | Hola {{1}}, te confirmamos que tu cita quedó agendada para el {{2}} a las {{3}}. Puedes ver los detalles en tu portal privado {{4}} y con gusto te esperamos en la clínica. |
+| `cita_cancelada` | Utilidad | Hola {{1}}, te avisamos que tu cita del {{2}} fue cancelada. Si deseas elegir una nueva fecha, solo responde a este mensaje y con gusto te ayudamos. |
+| `acceso_portal` | Utilidad | Hola {{1}}, aquí tienes el enlace para entrar a tu portal privado con la Dra. Laura: {{2}} Por tu seguridad, el enlace vale por 15 minutos y funciona una sola vez. |
+| `acceso_panel` | Utilidad | Hola doctora, aquí tiene el enlace para entrar al panel médico: {{1}} Por seguridad, vale por 15 minutos y funciona una sola vez. Si usted no lo pidió, puede ignorar este mensaje. |
+| `alerta_clinica` | Utilidad | Hola doctora, hay una alerta de tipo {{1}} que necesita su atención. La paciente es {{2}} y su teléfono es {{3}}. Lo que ocurrió: {{4}}. Puede ver todos los detalles en el panel médico. |
+| `sos_recibido` | Utilidad | Hola {{1}}, la Dra. Laura ya recibió tu aviso y te escribirá en pocos minutos. Si se trata de una emergencia médica, por favor llama de inmediato al 911. |
+| `resumen_consulta` | Utilidad | Hola doctora, este es el resumen de la consulta de hoy con {{1}} a las {{2}}. Primer punto: {{3}}. Segundo punto: {{4}}. Tercer punto: {{5}}. Encontrará más detalles en el panel médico. |
+| `recordatorio_cita` | Utilidad | Hola {{1}}, te recordamos que te esperamos mañana {{2}} a las {{3}}. Para prepararte antes de tu cita: {{4}}. Si necesitas cambiar la hora, solo responde a este mensaje. |
+| `seguimiento_tratamiento` | Utilidad | Hola {{1}}, queremos saber cómo te sientes hoy después de tu visita. Puedes contarnos en tu portal privado {{2}} o simplemente responder a este mensaje. |
+| `proximo_paso_mapa` | Utilidad | Hola {{1}}, te recordamos que tu próximo paso en tu mapa de belleza está previsto para el {{2}}. Puedes ver tu plan completo en {{3}} cuando gustes. |
+| `resumen_semana_clinica` | Utilidad | Hola doctora, esta semana hay {{1}} pasos programados en los mapas de belleza de sus pacientes: {{2}}. Puede revisarlos con calma en el panel médico. |
+| `promocion` | Marketing | Hola {{1}}, en la clínica de la Dra. Laura tenemos una novedad especial para ti: {{2}} Si prefieres no recibir más promociones, solo responde BAJA. |
+
+Reglas de Meta que ya cumplen estos textos: están escritos en lenguaje natural (frases completas alrededor de cada variable), ninguna plantilla empieza ni termina con una variable, y los accesos van como **Utilidad** (la categoría *Autenticación* solo admite códigos de un solo uso con texto fijo, no enlaces). Idioma: *Spanish* (`es`). Al crearlas, Meta pide un valor de ejemplo por variable.
 
 Los mensajes a pacientes nunca nombran el tratamiento, porque una notificación puede verse en la pantalla bloqueada. Meta cobra las plantillas de marketing aparte.
 
