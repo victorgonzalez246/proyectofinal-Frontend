@@ -33,4 +33,4 @@ db.json
 datos-demo-sheets.xlsx
 
 .vercel
-.env*
+.env*.local
