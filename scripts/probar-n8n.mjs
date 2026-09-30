@@ -205,13 +205,17 @@ try {
     await fetch(`${API}/clinica/eventos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(e) });
   }
   const paciente = '50687776655';
-  ok(Boolean(await plantilla('cita_recibida', paciente, (t) => !t.join(' ').includes('Labios') && t[2].endsWith('/portal/acceso'))), 'Cita recibida: aviso a la paciente, sin nombrar el tratamiento');
+  ok(Boolean(await plantilla('cita_recibida_v2', paciente, (t) => t.length === 2 && !t.join(' ').includes('Labios'))), 'Cita recibida: aviso a la paciente, sin nombrar el tratamiento (el portal va en un botón fijo)');
   ok(Boolean(await plantilla('nueva_solicitud_cita', CLINICA)), 'Cita recibida: aviso a la doctora');
-  ok(Boolean(await plantilla('acceso_portal', '50688880001', (t) => t[1].includes('/portal/verificar#'))), 'Acceso: la paciente recibe su enlace');
-  ok(Boolean(await plantilla('acceso_panel', CLINICA, (t) => t[0].includes('/portal/verificar#'))), 'Acceso: la doctora recibe el suyo con su propia plantilla');
+  // Plantilla de Autenticación: el código va en el cuerpo y como parámetro del botón "Copiar código"
+  const codigoAcceso = (to) => esperarWhatsapp((m) => m.template?.name === 'codigo_acceso' && m.to === to
+    && /^\d{6}$/.test(textos(m)[0]) && m.template.components?.[1]?.sub_type === 'url'
+    && m.template.components[1].parameters?.[0]?.text === textos(m)[0]);
+  ok(Boolean(await codigoAcceso('50688880001')), 'Acceso: la paciente recibe su código (cuerpo y botón "Copiar código")');
+  ok(Boolean(await codigoAcceso(CLINICA)), 'Acceso: la doctora recibe el suyo');
   ok(Boolean(await plantilla('sos_recibido', '50688880001')) && Boolean(await plantilla('alerta_clinica', CLINICA, (t) => t[0] === 'Urgente')), 'SOS: contención a la paciente y alerta a la doctora');
   ok(Boolean(await plantilla('alerta_clinica', CLINICA, (t) => t[0] === 'Seguimiento urgente' && t[3].includes('regla'))), 'Check-in preocupante: sin IA disponible, escala por la regla fija');
-  ok(Boolean(await plantilla('cita_confirmada', paciente, (t) => t[2] === '15:30')), 'Cita confirmada desde el panel: aviso con fecha y hora');
+  ok(Boolean(await plantilla('cita_confirmada_v2', paciente, (t) => t.length === 3 && t[2] === '15:30')), 'Cita confirmada desde el panel: aviso con fecha y hora');
   ok(Boolean(await plantilla('cita_cancelada', paciente)), 'Cita cancelada desde el panel: aviso a la paciente');
   ok(Boolean(await plantilla('promocion', paciente, (t) => t[1].includes('skinboosters'))), 'Campaña: la promoción llega a quien la aceptó');
 

@@ -88,6 +88,15 @@ export async function probarContrato({ api, secreto, receptor, ok }) {
   ok(paciente.evento?.role === 'member' && Boolean(paciente.magicToken), 'La paciente demo recibe su enlace por el cerebro (WhatsApp)');
   ok(Boolean(paciente.sesion) && paciente.verificado.data.user.role === 'member' && !('password' in paciente.verificado.data.user), 'El enlace abre sesión y no expone datos de acceso');
   ok((await call('POST', '/auth/verify', { body: { token: paciente.magicToken } })).status === 401, 'El enlace no se puede usar dos veces');
+  console.log('\nAcceso con código de WhatsApp (plantilla de Autenticación)');
+  await call('POST', '/auth/magic-link', { body: { phone: '8888 0001' } });
+  const conCodigo = await receptor.esperar('auth.magic_link', (e) => /^\d{6}$/.test(e.codigo || '') && e.codigo !== paciente.evento?.codigo && e.phone.replace(/\D/g, '').endsWith('88880001'));
+  ok(Boolean(conCodigo), 'El cerebro recibe un código de 6 dígitos para enviarlo por WhatsApp');
+  const errado = conCodigo?.codigo === '000000' ? '111111' : '000000';
+  ok((await call('POST', '/auth/verify', { body: { phone: '8888 0001', code: errado } })).status === 401, 'Un código incorrecto no abre sesión');
+  const porCodigo = await call('POST', '/auth/verify', { body: { phone: '+506 8888-0001', code: conCodigo?.codigo } });
+  ok(porCodigo.status === 200 && porCodigo.data.user.role === 'member', 'El código correcto abre sesión');
+  ok((await call('POST', '/auth/verify', { body: { phone: '8888 0001', code: conCodigo?.codigo } })).status === 401, 'El código no se puede usar dos veces');
   const [uid, , exp, firma] = paciente.sesion.split('.');
   ok((await call('GET', '/admin/pacientes', { token: [uid, 'doctor', exp, firma].join('.') })).status === 401, 'Un token con el rol alterado se rechaza');
 

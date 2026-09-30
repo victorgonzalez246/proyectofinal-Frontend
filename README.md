@@ -23,12 +23,13 @@ Landing pública, portal privado de pacientes y panel de la doctora para la clí
 
 ## Acceso: sin contraseñas
 
-Pacientes y doctora entran igual: escriben su número en `/portal/acceso` y reciben por WhatsApp un **enlace mágico** de un solo uso (15 minutos). La paciente va a `/portal` y la doctora a `/admin`.
+Pacientes y doctora entran igual: escriben su número en `/portal/acceso` y reciben por WhatsApp un **código de 6 dígitos** de un solo uso (15 minutos), con la plantilla de Autenticación de Meta (`codigo_acceso`, con botón "Copiar código"). La paciente va a `/portal` y la doctora a `/admin`.
 
-- El token viaja en el fragmento `#` de la URL y solo se guarda su hash.
+- Solo se guarda el hash del código. Cada código se invalida al quinto intento fallido (fuerza bruta).
+- También se genera un enlace de un solo uso (token en el fragmento `#`), que se usa en desarrollo.
 - La respuesta es idéntica exista o no el número.
 - La sesión es un token firmado con HMAC que no se guarda en ninguna base: dura 8 h para pacientes y 4 h para la doctora. Vive en `sessionStorage`.
-- Sin n8n conectado (desarrollo), el enlace se muestra en pantalla y en la consola del simulador.
+- Sin n8n conectado (desarrollo), el código y el enlace se muestran en pantalla y en la consola del simulador.
 
 **Cuentas de prueba** (en `db.example.json`):
 
@@ -103,9 +104,13 @@ pendientes/         tareas manuales y plan de implementación
 
 ## Despliegue
 
-1. Configura n8n siguiendo [`n8n/README.md`](n8n/README.md).
-2. Compila el sitio con `VITE_API_URL=https://tu-n8n.com/webhook npm run build`.
-3. Publica `dist/` en Vercel (`vercel.json`) o Netlify (`public/_redirects`). Los dos ya envían todas las rutas a React Router.
+Publicado en **https://clinica-dra-laura.vercel.app** (Vercel, proyecto `clinica-dra-laura`).
+
+1. Configura n8n siguiendo [`n8n/README.md`](n8n/README.md). Genera los flujos con el dominio del sitio y el de desarrollo:
+   `ORIGEN_PERMITIDO="https://clinica-dra-laura.vercel.app,http://localhost:5173" npm run generar:n8n`.
+2. En Vercel, variables del proyecto: `VITE_API_URL=https://<tu-n8n>/webhook` y `ANTHROPIC_API_KEY` (la usa la función del asistente, `api/asistente/v1/messages.js`).
+3. `npx vercel deploy --prod`. `.vercelignore` deja fuera de la subida los secretos (`.env`) y los archivos de `api/` que no son funciones (núcleo y hojas, que viven en n8n).
+4. Para probar en local contra n8n: `npm run dev:n8n` y `npm run probar:produccion` (comprueba CORS, permisos y validaciones sin enviar WhatsApp).
 
 ## Documentación
 

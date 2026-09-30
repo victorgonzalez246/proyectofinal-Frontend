@@ -187,22 +187,46 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
         const user = db.users.find((u) => phoneKey(u.phone) === key);
         if (user) {
           const token = cripto.aleatorio(32);
-          guardar('accesos', { id: nuevoId('acc'), hash: cripto.sha256(token), userId: user.id, expira: ahora() + MAGIC_LINK_TTL_MS, usado: false });
+          // Código de 6 dígitos: viaja por WhatsApp en la plantilla de Autenticación de Meta.
+          // El enlace (token) sigue sirviendo en desarrollo. De ambos solo se guarda el hash.
+          const codigo = String(parseInt(cripto.aleatorio(4), 16) % 1000000).padStart(6, '0');
+          guardar('accesos', {
+            id: nuevoId('acc'), hash: cripto.sha256(token), codigo: cripto.sha256(`${user.id}:${codigo}`), intentos: 0,
+            userId: user.id, expira: ahora() + MAGIC_LINK_TTL_MS, usado: false,
+          });
           const link = `${portalUrl}/portal/verificar#${token}`;
-          if (modoDesarrollo) respuesta.devLink = link;
-          else emitir('auth.magic_link', { phone: user.phone, name: user.name, role: user.role, link });
+          if (modoDesarrollo) Object.assign(respuesta, { devLink: link, devCodigo: codigo });
+          else emitir('auth.magic_link', { phone: user.phone, name: user.name, role: user.role, link, codigo });
         }
         return [200, respuesta];
       }],
 
+      // Canjea el enlace ({ token }) o el código de WhatsApp ({ phone, code }) por una sesión
       ['POST', '/auth/verify', 'publico', () => {
         const token = typeof body.token === 'string' ? body.token : '';
-        const hash = token ? cripto.sha256(token) : '';
-        const acceso = hash && db.accesos.find((a) => a.hash === hash);
-        const user = acceso && !acceso.usado && acceso.expira > ahora() && usuario(acceso.userId);
-        if (acceso && !acceso.usado) guardar('accesos', { ...acceso, usado: true }); // un solo uso, aunque haya expirado
-        if (!user) falla(401, 'El enlace expiró o ya fue usado. Pide uno nuevo.');
-        return [200, { token: firmarSesion(user), user: usuarioPublico(user) }];
+        if (token) {
+          const acceso = db.accesos.find((a) => a.hash === cripto.sha256(token));
+          const user = acceso && !acceso.usado && acceso.expira > ahora() && usuario(acceso.userId);
+          if (acceso && !acceso.usado) guardar('accesos', { ...acceso, usado: true }); // un solo uso, aunque haya expirado
+          if (!user) falla(401, 'El enlace expiró o ya fue usado. Pide uno nuevo.');
+          return [200, { token: firmarSesion(user), user: usuarioPublico(user) }];
+        }
+        const codigo = str(body.code, 6);
+        const candidato = /^\d{6}$/.test(codigo) && db.users.find((u) => phoneKey(u.phone) === phoneKey(body.phone));
+        const vigentes = candidato
+          ? db.accesos.filter((a) => a.userId === candidato.id && a.codigo && !a.usado && a.expira > ahora())
+          : [];
+        const acceso = vigentes.find((a) => cripto.igual(a.codigo, cripto.sha256(`${candidato.id}:${codigo}`)));
+        if (acceso) {
+          guardar('accesos', { ...acceso, usado: true });
+          return [200, { token: firmarSesion(candidato), user: usuarioPublico(candidato) }];
+        }
+        // Fuerza bruta: cada código vigente se invalida al quinto intento fallido
+        for (const a of vigentes) {
+          const intentos = (Number(a.intentos) || 0) + 1;
+          guardar('accesos', { ...a, intentos, ...(intentos >= 5 ? { usado: true } : {}) });
+        }
+        return falla(401, 'El código no es válido o ya venció. Pide uno nuevo.');
       }],
 
       // n8n (servidor a servidor, con X-N8N-Secret)

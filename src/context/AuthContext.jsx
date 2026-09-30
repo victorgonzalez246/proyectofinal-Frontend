@@ -13,6 +13,12 @@ export const AuthProvider = ({ children }) => {
     return { user: verifiedUser, token };
   };
 
+  const loginWithCode = async (phone, code) => {
+    const { user: verifiedUser, token } = await authService.verifyCode(phone, code);
+    setUser(verifiedUser);
+    return { user: verifiedUser, token };
+  };
+
   const logout = () => {
     authService.logout();
     setUser(null);
@@ -26,6 +32,7 @@ export const AuthProvider = ({ children }) => {
     isMember: user?.role === 'member',
     loading,
     loginWithMagicLink,
+    loginWithCode,
     logout
   };
 

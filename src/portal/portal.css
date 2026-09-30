@@ -842,3 +842,12 @@
     text-shadow: 0 2px 20px rgba(0, 0, 0, 0.35);
   }
 }
+
+/* Código de acceso de 6 dígitos (plantilla de Autenticación de WhatsApp) */
+.p-code {
+  font-size: 1.6rem;
+  letter-spacing: 0.5em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  padding-left: 0.5em;
+}

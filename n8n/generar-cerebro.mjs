@@ -36,7 +36,8 @@ const HELPERS = bodyOf(() => {
     });
   // Las variables de plantilla no admiten saltos de línea ni espacios repetidos
   const clean = (value) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 900);
-  const msg = (to, template, params) => ({ json: { to: toWa(to), template, params: params.map(clean) } });
+  // boton: valor de la variable de un botón (URL dinámica o código de verificación); las URL fijas van en la plantilla
+  const msg = (to, template, params, boton) => ({ json: { to: toWa(to), template, params: params.map(clean), ...(boton ? { boton: clean(boton) } : {}) } });
 });
 
 // ── Constructores ──
@@ -534,7 +535,8 @@ const MSG_CITA = code('Mensajes: cita recibida', [1140, 860], () => {
   if (!cita.telefono) return [];
   const mensajes = [
     // A la paciente: sin nombrar el tratamiento (discreción) y con acceso a su portal
-    msg(cita.telefono, 'cita_recibida', [firstName(cita.nombre), fechaLarga(cita.fecha), cfg.portalUrl + '/portal/acceso']),
+    // El enlace al portal es un botón con URL fija en la plantilla (Meta no aprueba enlaces como variable)
+    msg(cita.telefono, 'cita_recibida_v2', [firstName(cita.nombre), fechaLarga(cita.fecha)]),
   ];
   if (cfg.clinicWhatsapp) {
     mensajes.push(msg(cfg.clinicWhatsapp, 'nueva_solicitud_cita', [cita.nombre, cita.telefono, cita.tratamiento, fechaLarga(cita.fecha)]));
@@ -544,10 +546,10 @@ const MSG_CITA = code('Mensajes: cita recibida', [1140, 860], () => {
 
 const MSG_ACCESO = code('Mensajes: acceso al portal', [1140, 1020], () => {
   const evento = $input.first().json.payload;
-  if (!evento.phone || !evento.link) return [];
-  // La doctora entra al panel médico con su propia plantilla
-  if (evento.role === 'doctor') return [msg(evento.phone, 'acceso_panel', [evento.link])];
-  return [msg(evento.phone, 'acceso_portal', [firstName(evento.name), evento.link])];
+  if (!evento.phone || !evento.codigo) return [];
+  // Plantilla de Autenticación de Meta: el código va en el cuerpo y en el botón "Copiar código".
+  // Es la misma para pacientes y doctora (Meta no aprueba accesos de un solo uso en otra categoría).
+  return [msg(evento.phone, 'codigo_acceso', [evento.codigo], evento.codigo)];
 });
 
 // ════════════════════ Rama 6 · Preparar consultas (Recepcionista: resumen ejecutivo) ════════════════════
@@ -650,7 +652,7 @@ const MSG_SEGUIMIENTO = code('Mensajes: seguimiento', [1360, 1500], () => {
   const pacientes = $input.first().json.items || [];
   return pacientes
     .filter((p) => DIAS.includes(p.diasDesdeTratamiento))
-    .map((p) => msg(p.phone, 'seguimiento_tratamiento', [firstName(p.name), cfg.portalUrl + '/portal']));
+    .map((p) => msg(p.phone, 'seguimiento_tratamiento_v2', [firstName(p.name)]));
 });
 
 // Cada lunes: pasos de los próximos 7 días (hoy + 6), así cada paso se avisa una sola vez
@@ -658,7 +660,7 @@ const API_PASOS = apiGet('API: pasos de esta semana', [1140, 1660], '/n8n/retoqu
 const MSG_PASOS = code('Mensajes: próximos pasos', [1360, 1660], () => {
   const pasos = $input.first().json.items || [];
   const mensajes = pasos.map((p) =>
-    msg(p.phone, 'proximo_paso_mapa', [firstName(p.name), fechaLarga(p.fecha), cfg.portalUrl + '/portal/mapa'])
+    msg(p.phone, 'proximo_paso_mapa_v2', [firstName(p.name), fechaLarga(p.fecha)])
   );
   if (pasos.length && cfg.clinicWhatsapp) {
     const resumen = pasos.map((p) => p.name + ' (' + p.titulo + ', ' + p.fecha + ')').join('; ');
@@ -672,7 +674,7 @@ const MSG_CONFIRMADA = code('Mensajes: cita confirmada', [1140, 1820], () => {
   const { patient = {}, cita = {} } = $input.first().json.payload;
   if (!patient.phone) return [];
   // Sin nombrar el tratamiento (discreción); sirve también para una cita reprogramada
-  return [msg(patient.phone, 'cita_confirmada', [firstName(patient.name), fechaLarga(cita.fecha), cita.hora, cfg.portalUrl + '/portal'])];
+  return [msg(patient.phone, 'cita_confirmada_v2', [firstName(patient.name), fechaLarga(cita.fecha), cita.hora])];
 });
 const MSG_CANCELADA = code('Mensajes: cita cancelada', [1140, 1980], () => {
   const { patient = {}, cita = {} } = $input.first().json.payload;
@@ -716,7 +718,7 @@ const ENVIAR = add('Enviar WhatsApp (plantilla)', 'n8n-nodes-base.httpRequest', 
   sendBody: true,
   specifyBody: 'json',
   jsonBody:
-    `={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.to, type: 'template', template: { name: $json.template, language: { code: ${CFG}.templateLanguage }, components: [{ type: 'body', parameters: $json.params.map(text => ({ type: 'text', text })) }] } }) }}`,
+    `={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.to, type: 'template', template: { name: $json.template, language: { code: ${CFG}.templateLanguage }, components: [...($json.params.length ? [{ type: 'body', parameters: $json.params.map(text => ({ type: 'text', text })) }] : []), ...($json.boton ? [{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: $json.boton }] }] : [])] } }) }}`,
   options: {},
 }, RETRY);
 

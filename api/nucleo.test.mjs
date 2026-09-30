@@ -123,3 +123,49 @@ describe('núcleo: reglas del panel', () => {
     expect(llamar(db, 'GET', '/n8n/seguimiento', { headers: { 'X-N8N-Secret': 'n8n-de-test' } }).status).toBe(200);
   });
 });
+
+describe('núcleo: acceso con código de WhatsApp (plantilla de Autenticación)', () => {
+  const pedirCodigo = (db, telefono) => llamar(db, 'POST', '/auth/magic-link', { body: { phone: telefono } }).body.devCodigo;
+  const conCodigo = (db, telefono, code) => llamar(db, 'POST', '/auth/verify', { body: { phone: telefono, code } });
+
+  it('entrega un código de 6 dígitos y solo guarda su hash', () => {
+    const db = nuevaDb();
+    const codigo = pedirCodigo(db, '8888 0001');
+    expect(codigo).toMatch(/^\d{6}$/);
+    expect(JSON.stringify(db.accesos)).not.toContain(codigo);
+  });
+
+  it('el código abre sesión una sola vez, con el rol de quien lo pidió', () => {
+    const db = nuevaDb();
+    const codigo = pedirCodigo(db, '8888 8888');
+    const r = conCodigo(db, '+506 8888-8888', codigo);
+    expect(r.status).toBe(200);
+    expect(r.body.user.role).toBe('doctor');
+    expect(conCodigo(db, '8888 8888', codigo).status).toBe(401);
+  });
+
+  it('un código no sirve con otro número ni después de 15 minutos', () => {
+    const db = nuevaDb();
+    const codigo = pedirCodigo(db, '8888 0001');
+    expect(conCodigo(db, '8888 8888', codigo).status).toBe(401);
+    reloj += 16 * 60 * 1000;
+    expect(conCodigo(db, '8888 0001', codigo).status).toBe(401);
+  });
+
+  it('se invalida al quinto intento fallido (fuerza bruta)', () => {
+    const db = nuevaDb();
+    const codigo = pedirCodigo(db, '8888 0001');
+    const incorrecto = codigo === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 5; i += 1) expect(conCodigo(db, '8888 0001', incorrecto).status).toBe(401);
+    expect(conCodigo(db, '8888 0001', codigo).status).toBe(401);
+    expect(db.accesos[0].usado).toBe(true);
+  });
+
+  it('rechaza formatos inválidos sin tocar los accesos', () => {
+    const db = nuevaDb();
+    pedirCodigo(db, '8888 0001');
+    expect(conCodigo(db, '8888 0001', '12ab56').status).toBe(401);
+    expect(conCodigo(db, '8888 0001', '').status).toBe(401);
+    expect(db.accesos[0].intentos).toBe(0);
+  });
+});

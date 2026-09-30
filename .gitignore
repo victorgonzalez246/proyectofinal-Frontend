@@ -31,3 +31,6 @@ db.json
 
 # Datos de demostración exportados para Google Sheets (npm run exportar:sheets)
 datos-demo-sheets.xlsx
+
+.vercel
+.env*

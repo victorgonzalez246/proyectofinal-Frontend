@@ -1,0 +1,19 @@
+# Vercel publica como función todo archivo de api/. Solo el asistente es una función:
+# el núcleo y la conversión de hojas se usan dentro de n8n y en el simulador local.
+api/nucleo.mjs
+api/hojas.mjs
+api/*.test.mjs
+# No se necesitan en el despliegue
+testings/
+n8n/
+scripts/
+docs/
+pendientes/
+db.json
+db.example.json
+datos-demo-sheets.xlsx
+
+# Nunca subir secretos: en Vercel las variables se configuran en el proyecto
+.env
+.env.local
+.env.*.local

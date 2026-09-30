@@ -37,6 +37,19 @@ export const authService = {
   },
 
   /**
+   * Canjea el código de 6 dígitos que llega por WhatsApp (plantilla de Autenticación) por una sesión.
+   */
+  async verifyCode(phone, code) {
+    try {
+      const { data } = await api.post('/auth/verify', { phone: phone.trim(), code: code.replace(/\D/g, '') });
+      saveSession(data);
+      return { user: data.user, token: data.token };
+    } catch (err) {
+      throw new Error(err.response?.data?.error || 'El código no es válido o ya venció. Pide uno nuevo.');
+    }
+  },
+
+  /**
    * Cierre de sesión
    */
   logout() {
