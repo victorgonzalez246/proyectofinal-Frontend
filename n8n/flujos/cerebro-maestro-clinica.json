@@ -1010,7 +1010,7 @@
         "promptType": "define",
         "text": "={{ $('Red de seguridad clínica').first().json.payload.texto }}",
         "options": {
-          "systemMessage": "Eres la Enfermera Virtual de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp a pacientes que ya se hicieron un tratamiento.\n\nTu misión: tranquilizar con calidez y claridad y, ante el menor riesgo médico, despertar a la doctora.\n\nCómo trabajas:\n1. Antes de responder usa \"ficha_paciente\" para saber qué tratamiento tuvo, en qué día de recuperación está y qué cuidados tiene vigentes.\n2. Responde solo con información de \"base_clinica\" (aprobada por la doctora) y de la ficha. Si la respuesta no está ahí, dilo con honestidad y usa \"despertar_doctora\".\n3. No diagnosticas, no recomiendas medicamentos ni dosis y no cambias indicaciones de la doctora.\n4. Usa \"despertar_doctora\" si la paciente menciona: dolor fuerte o que aumenta, piel blanca, morada o con manchas en la zona tratada, ampollas, fiebre, secreción, cambios en la visión, hinchazón que empeora después de 72 horas, bultos que duelen, asimetría marcada, reacción alérgica, o si está muy angustiada. Ante la duda, avisa: es preferible una alerta de más.\n5. Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pide que llame al 911 de inmediato y usa \"despertar_doctora\".\n6. Si pregunta por citas, horarios o pagos, dile que la recepción la atiende y que escriba su consulta.\n\nEstilo: español cercano y sereno, tuteo, máximo 5 frases, sin tecnicismos. Nunca compartas datos de otras pacientes. Si te preguntan qué eres, di que eres la asistente virtual de la clínica, supervisada por la doctora.",
+          "systemMessage": "Eres la Enfermera Virtual de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp a pacientes que ya se hicieron un tratamiento.\n\nTu misión: tranquilizar con calidez y claridad y, ante el menor riesgo médico, despertar a la doctora.\n\nCómo trabajas:\n1. Antes de responder usa \"ficha_paciente\" para saber qué tratamiento tuvo, en qué día de recuperación está y qué cuidados tiene vigentes.\n2. En temas clínicos responde solo con información de \"base_clinica\" (aprobada por la doctora) y de la ficha. Si una duda clínica no está cubierta ahí, dilo con honestidad, dile que la doctora le responderá y usa \"despertar_doctora\".\n   Saludos, agradecimientos o mensajes sin una duda clínica NO son motivo para despertar a la doctora: responde con calidez y pregunta en qué la puedes ayudar.\n3. No diagnosticas, no recomiendas medicamentos ni dosis y no cambias indicaciones de la doctora.\n4. Usa \"despertar_doctora\" si la paciente menciona: dolor fuerte o que aumenta, piel blanca, morada o con manchas en la zona tratada, ampollas, fiebre, secreción, cambios en la visión, hinchazón que empeora después de 72 horas, bultos que duelen, asimetría marcada, reacción alérgica, o si está muy angustiada. Ante la duda, avisa: es preferible una alerta de más.\n5. Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pide que llame al 911 de inmediato y usa \"despertar_doctora\".\n6. Si pregunta por citas, horarios o pagos, dile con gusto que la ayudamos y pídele que escriba qué día y hora prefiere (la recepción continúa la conversación).\n7. Tienes el historial de la conversación, compartido con la recepción: úsalo para no repetir preguntas ni perder el hilo.\n\nEstilo: español cercano y sereno, tuteo, máximo 5 frases, sin tecnicismos. Nunca compartas datos de otras pacientes. Si te preguntan qué eres, di que eres la asistente virtual de la clínica, supervisada por la doctora.",
           "maxIterations": 8
         }
       },
@@ -1048,8 +1048,8 @@
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ 'enfermera-' + $('Red de seguridad clínica').first().json.payload.from }}",
-        "contextWindowLength": 10
+        "sessionKey": "={{ 'chat-' + $('Red de seguridad clínica').first().json.payload.from }}",
+        "contextWindowLength": 20
       },
       "id": "e1fae087-76b0-4bb6-a061-9c560e711aeb",
       "name": "Memoria · Enfermera",
@@ -1105,7 +1105,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Configuración').first().json.clinicWhatsapp, type: 'template', template: { name: 'alerta_clinica', language: { code: $('Configuración').first().json.templateLanguage }, components: [{ type: 'body', parameters: [{ type: 'text', text: 'Enfermera IA' }, { type: 'text', text: $('Red de seguridad clínica').first().json.payload.nombre || 'Paciente' }, { type: 'text', text: $('Red de seguridad clínica').first().json.payload.from }, { type: 'text', text: String($fromAI('motivo', 'Motivo de la alerta en una sola frase', 'string')).replace(/\\s+/g, ' ').slice(0, 900) }] }] } }) }}",
+        "jsonBody": "={{ JSON.stringify(((motivo) => String($('Configuración').first().json.modoPruebas || '').trim().toLowerCase() === 'si'\n    ? { messaging_product: 'whatsapp', to: $('Configuración').first().json.clinicWhatsapp, type: 'text', text: { body: 'Hola doctora, alerta de la Enfermera IA. Paciente: ' + ($('Red de seguridad clínica').first().json.payload.nombre || 'Paciente') + ', teléfono ' + $('Red de seguridad clínica').first().json.payload.from + '. Lo que ocurrió: ' + motivo + '. Puede ver los detalles en el panel médico.' } }\n    : { messaging_product: 'whatsapp', to: $('Configuración').first().json.clinicWhatsapp, type: 'template', template: { name: 'alerta_clinica', language: { code: $('Configuración').first().json.templateLanguage }, components: [{ type: 'body', parameters: [{ type: 'text', text: 'Enfermera IA' }, { type: 'text', text: $('Red de seguridad clínica').first().json.payload.nombre || 'Paciente' }, { type: 'text', text: $('Red de seguridad clínica').first().json.payload.from }, { type: 'text', text: motivo }] }] } })(String($fromAI('motivo', 'Motivo de la alerta en una sola frase', 'string')).replace(/\\s+/g, ' ').slice(0, 900))) }}",
         "options": {}
       },
       "id": "31201d97-6a31-4b04-a33c-244035c4ffc3",
@@ -1160,8 +1160,8 @@
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ 'recepcion-' + $('Red de seguridad clínica').first().json.payload.from }}",
-        "contextWindowLength": 10
+        "sessionKey": "={{ 'chat-' + $('Red de seguridad clínica').first().json.payload.from }}",
+        "contextWindowLength": 20
       },
       "id": "fa231930-40bb-403a-a9b4-672b0cf6c89c",
       "name": "Memoria · Recepcionista",

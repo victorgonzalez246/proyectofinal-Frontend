@@ -139,11 +139,13 @@ const modelo = (name, position, model, target, temperature = 0.3) => {
   link(name, target, 0, 'ai_languageModel');
 };
 
-const memoria = (name, position, prefijo, target) => {
+// Una sola conversación por paciente: la Enfermera y la Recepcionista comparten el historial
+// (el clasificador puede mandar cada mensaje a un agente distinto sin que se pierda el contexto)
+const memoria = (name, position, target) => {
   add(name, '@n8n/n8n-nodes-langchain.memoryBufferWindow', 1.3, position, {
     sessionIdType: 'customKey',
-    sessionKey: `={{ '${prefijo}-' + ${CHAT}.from }}`,
-    contextWindowLength: 10,
+    sessionKey: `={{ 'chat-' + ${CHAT}.from }}`,
+    contextWindowLength: 20,
   });
   link(name, target, 0, 'ai_memory');
 };
@@ -182,11 +184,13 @@ Tu misión: tranquilizar con calidez y claridad y, ante el menor riesgo médico,
 
 Cómo trabajas:
 1. Antes de responder usa "ficha_paciente" para saber qué tratamiento tuvo, en qué día de recuperación está y qué cuidados tiene vigentes.
-2. Responde solo con información de "base_clinica" (aprobada por la doctora) y de la ficha. Si la respuesta no está ahí, dilo con honestidad y usa "despertar_doctora".
+2. En temas clínicos responde solo con información de "base_clinica" (aprobada por la doctora) y de la ficha. Si una duda clínica no está cubierta ahí, dilo con honestidad, dile que la doctora le responderá y usa "despertar_doctora".
+   Saludos, agradecimientos o mensajes sin una duda clínica NO son motivo para despertar a la doctora: responde con calidez y pregunta en qué la puedes ayudar.
 3. No diagnosticas, no recomiendas medicamentos ni dosis y no cambias indicaciones de la doctora.
 4. Usa "despertar_doctora" si la paciente menciona: dolor fuerte o que aumenta, piel blanca, morada o con manchas en la zona tratada, ampollas, fiebre, secreción, cambios en la visión, hinchazón que empeora después de 72 horas, bultos que duelen, asimetría marcada, reacción alérgica, o si está muy angustiada. Ante la duda, avisa: es preferible una alerta de más.
 5. Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pide que llame al 911 de inmediato y usa "despertar_doctora".
-6. Si pregunta por citas, horarios o pagos, dile que la recepción la atiende y que escriba su consulta.
+6. Si pregunta por citas, horarios o pagos, dile con gusto que la ayudamos y pídele que escriba qué día y hora prefiere (la recepción continúa la conversación).
+7. Tienes el historial de la conversación, compartido con la recepción: úsalo para no repetir preguntas ni perder el hilo.
 
 Estilo: español cercano y sereno, tuteo, máximo 5 frases, sin tecnicismos. Nunca compartas datos de otras pacientes. Si te preguntan qué eres, di que eres la asistente virtual de la clínica, supervisada por la doctora.`;
 
@@ -423,7 +427,7 @@ const ENFERMERA = add('Agente IA 1 · Enfermera Virtual', '@n8n/n8n-nodes-langch
   options: { systemMessage: PROMPT_ENFERMERA, maxIterations: 8 },
 }, { onError: 'continueRegularOutput' });
 modelo('Modelo · Enfermera', [1780, Y_CHAT + 260], MODELO_PRINCIPAL, ENFERMERA, 0.2);
-memoria('Memoria · Enfermera', [1900, Y_CHAT + 260], 'enfermera', ENFERMERA);
+memoria('Memoria · Enfermera', [1900, Y_CHAT + 260], ENFERMERA);
 herramienta('ficha_paciente', [2020, Y_CHAT + 260], ENFERMERA, {
   descripcion: 'Ficha clínica mínima de la paciente que escribe: nombre, último tratamiento, día de recuperación, cuidados vigentes y últimos check-ins.',
   url: `={{ ${CFG}.apiUrl }}/n8n/paciente?perfil=clinico&telefono={{ encodeURIComponent(${CHAT}.from) }}`,
@@ -439,7 +443,10 @@ herramienta('despertar_doctora', [2260, Y_CHAT + 260], ENFERMERA, {
   method: 'POST',
   url: `=https://graph.facebook.com/{{ ${CFG}.graphApiVersion }}/{{ ${CFG}.whatsappPhoneNumberId }}/messages`,
   auth: AUTH_API,
-  body: `{ messaging_product: 'whatsapp', to: ${CFG}.clinicWhatsapp, type: 'template', template: { name: 'alerta_clinica', language: { code: ${CFG}.templateLanguage }, components: [{ type: 'body', parameters: [{ type: 'text', text: 'Enfermera IA' }, { type: 'text', text: ${CHAT}.nombre || 'Paciente' }, { type: 'text', text: ${CHAT}.from }, { type: 'text', text: String(${ia('motivo', 'Motivo de la alerta en una sola frase')}).replace(/\\s+/g, ' ').slice(0, 900) }] }] } }`,
+  // En modo pruebas la alerta sale como texto libre (la plantilla alerta_clinica aún no está aprobada)
+  body: `((motivo) => String(${CFG}.modoPruebas || '').trim().toLowerCase() === 'si'
+    ? { messaging_product: 'whatsapp', to: ${CFG}.clinicWhatsapp, type: 'text', text: { body: 'Hola doctora, alerta de la Enfermera IA. Paciente: ' + (${CHAT}.nombre || 'Paciente') + ', teléfono ' + ${CHAT}.from + '. Lo que ocurrió: ' + motivo + '. Puede ver los detalles en el panel médico.' } }
+    : { messaging_product: 'whatsapp', to: ${CFG}.clinicWhatsapp, type: 'template', template: { name: 'alerta_clinica', language: { code: ${CFG}.templateLanguage }, components: [{ type: 'body', parameters: [{ type: 'text', text: 'Enfermera IA' }, { type: 'text', text: ${CHAT}.nombre || 'Paciente' }, { type: 'text', text: ${CHAT}.from }, { type: 'text', text: motivo }] }] } })(String(${ia('motivo', 'Motivo de la alerta en una sola frase')}).replace(/\\s+/g, ' ').slice(0, 900))`,
 });
 
 // Agente IA 2 · Recepcionista VIP
@@ -449,7 +456,7 @@ const RECEPCIONISTA = add('Agente IA 2 · Recepcionista VIP', '@n8n/n8n-nodes-la
   options: { systemMessage: `=${PROMPT_RECEPCIONISTA}`, maxIterations: 10 },
 }, { onError: 'continueRegularOutput' });
 modelo('Modelo · Recepcionista', [1780, Y_CHAT + 700], MODELO_PRINCIPAL, RECEPCIONISTA, 0.4);
-memoria('Memoria · Recepcionista', [1900, Y_CHAT + 700], 'recepcion', RECEPCIONISTA);
+memoria('Memoria · Recepcionista', [1900, Y_CHAT + 700], RECEPCIONISTA);
 herramienta('ficha_recepcion', [2020, Y_CHAT + 700], RECEPCIONISTA, {
   descripcion: 'Datos administrativos de la paciente que escribe: nombre, próxima cita y paquetes. No incluye información clínica.',
   url: `={{ ${CFG}.apiUrl }}/n8n/paciente?perfil=recepcion&telefono={{ encodeURIComponent(${CHAT}.from) }}`,

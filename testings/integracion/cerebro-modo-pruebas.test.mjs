@@ -84,3 +84,37 @@ describe('cerebro de n8n: plantillas y modo pruebas', () => {
     expect(campos.numerosPrueba).toBe('');
   });
 });
+
+describe('cerebro de n8n: chat por WhatsApp', () => {
+  const CFG = "$('Configuración').first().json";
+  const CHAT = "$('Red de seguridad clínica').first().json.payload";
+
+  it('la Enfermera y la Recepcionista comparten la memoria de cada paciente', () => {
+    const enfermera = nodo('Memoria · Enfermera').parameters;
+    const recepcion = nodo('Memoria · Recepcionista').parameters;
+    expect(enfermera.sessionKey).toBe(recepcion.sessionKey);
+    expect(enfermera.sessionKey).toContain("'chat-'");
+    expect(enfermera.contextWindowLength).toBeGreaterThanOrEqual(20);
+  });
+
+  it('la Enfermera no despierta a la doctora por un saludo, pero conserva las reglas de riesgo', () => {
+    const prompt = nodo('Agente IA 1 · Enfermera Virtual').parameters.options.systemMessage;
+    expect(prompt).toContain('NO son motivo para despertar a la doctora');
+    expect(prompt).toContain('llame al 911');
+    expect(prompt).toContain('historial de la conversación');
+  });
+
+  it('despertar_doctora manda texto libre en modo pruebas y la plantilla alerta_clinica si no', () => {
+    const cuerpo = nodo('despertar_doctora').parameters.jsonBody;
+    const expresion = cuerpo.slice(cuerpo.indexOf('{{') + 2, cuerpo.lastIndexOf('}}')).replaceAll(CFG, 'cfg').replaceAll(CHAT, 'chat');
+    const armar = (cfg) =>
+      JSON.parse(new Function('cfg', 'chat', '$fromAI', `return ${expresion};`)(cfg, { nombre: 'Valeria', from: '50688880001' }, () => 'Dolor   fuerte\nen la zona'));
+    const libre = armar({ ...CONFIG, modoPruebas: 'si' });
+    expect(libre.type).toBe('text');
+    expect(libre.to).toBe('50662643156');
+    expect(libre.text.body).toContain('Lo que ocurrió: Dolor fuerte en la zona');
+    const plantilla = armar({ ...CONFIG });
+    expect(plantilla.template.name).toBe('alerta_clinica');
+    expect(plantilla.template.components[0].parameters[3].text).toBe('Dolor fuerte en la zona');
+  });
+});
