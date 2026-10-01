@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Phone } from 'lucide-react';
+import { ArrowLeft, Phone, ReceiptText } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminService } from '../../services/adminService.js';
 import { formatDate, formatDateTime } from '../../portal/lib/format.js';
@@ -48,6 +48,7 @@ export default function AdminPaciente() {
                 {p.email && <span>{p.email}</span>}
                 <span>{ORIGENES[p.source] || 'Registro manual'}</span>
                 {p.dateJoined && <span>Desde el {formatDate(p.dateJoined)}</span>}
+                <Link to={`/admin/facturas?paciente=${p.id}`} className="p-link"><ReceiptText size={14} aria-hidden="true" /> Facturar</Link>
               </div>
               {p.promociones && (
                 <p className="p-small" style={{ marginTop: '0.75rem' }}>

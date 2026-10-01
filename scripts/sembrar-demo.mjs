@@ -260,6 +260,63 @@ const sosAlerts = [
   { id: 'sos_demo_002', userId: pacientes[6].id, reason: 'duda', note: '¿Puedo tomar ibuprofeno después del tratamiento?', status: 'atendida', respuesta: 'Se le indicó acetaminofén y se confirmó por WhatsApp.', createdAt: new Date(Date.now() - 5 * DIA).toISOString() },
 ];
 
+// ── Facturas de demostración: una por cada cita ya atendida (precios de ejemplo en colones) ──
+const PRECIOS = {
+  'Armonización Facial': 350000,
+  'Bioestimuladores de Colágeno': 280000,
+  'Rejuvenecimiento de Mirada': 160000,
+  'Labios de Alta Definición': 185000,
+  'Skinbooster & Mesoterapia': 95000,
+  'Rinomodelación Sin Cirugía': 250000,
+  'Valoración General': 35000,
+};
+const METODOS = [['sinpe', 55], ['efectivo', 25], ['tarjeta', 15], ['transferencia', 5]];
+const metodoAlAzar = () => {
+  let r = azar() * 100;
+  for (const [m, peso] of METODOS) { r -= peso; if (r <= 0) return m; }
+  return 'sinpe';
+};
+const atendidas = citas
+  .filter((c) => c.estado === 'confirmada' && c.fecha < hoy && PRECIOS[c.tratamiento])
+  .sort((a, b) => a.fecha.localeCompare(b.fecha));
+const facturas = atendidas.map((c, i) => {
+  const paciente = todas.find((t) => t.id === c.userId);
+  const precio = PRECIOS[c.tratamiento];
+  const items = [{ descripcion: c.tratamiento, cantidad: 1, precio }];
+  if (azar() < 0.25) items.push({ descripcion: 'Control post-tratamiento', cantidad: 1, precio: 0 });
+  const descuento = azar() < 0.15 ? Math.round(precio * 0.1) : 0;
+  const metodoPago = metodoAlAzar();
+  // Las de los últimos días pueden seguir pendientes de pago
+  const estado = diasDesde(c.fecha) <= 14 && azar() < 0.5 ? 'pendiente' : 'pagada';
+  const subtotal = items.reduce((t, it) => t + it.cantidad * it.precio, 0);
+  const creadaEn = `${c.fecha}T${c.hora || '15:00'}:00-06:00`;
+  return {
+    id: `fac_demo_${String(i + 1).padStart(3, '0')}`,
+    numero: `FAC-${String(i + 1).padStart(4, '0')}`,
+    fecha: c.fecha,
+    idPaciente: c.userId,
+    cliente: { nombre: paciente?.name || c.nombre, identificacion: '', telefono: paciente?.phone || '', email: paciente?.email || '' },
+    items,
+    subtotal,
+    descuento,
+    impuesto: 0,
+    impuestoMonto: 0,
+    total: subtotal - descuento,
+    metodoPago,
+    referencia: metodoPago === 'sinpe' && estado === 'pagada' ? `${c.fecha.replace(/-/g, '')}${String(entre(10000, 99999))}` : '',
+    estado,
+    notas: '',
+    creadaEn: new Date(creadaEn).toISOString(),
+    ...(estado === 'pagada' ? { pagadaEn: new Date(creadaEn).toISOString() } : {}),
+  };
+});
+// Una anulada, para mostrar cómo se ve (conserva su número)
+if (facturas.length > 10) {
+  const f = facturas[facturas.length - 10];
+  Object.assign(f, { estado: 'anulada', anuladaEn: f.creadaEn, motivoAnulacion: 'Monto registrado por error; se emitió una nueva factura.', referencia: f.referencia });
+  delete f.pagadaEn;
+}
+
 const db = {
   users: [doctora, ...todas],
   appointments: citas.sort((a, b) => b.fecha.localeCompare(a.fecha)),
@@ -267,10 +324,12 @@ const db = {
   checkins,
   sosAlerts,
   accesos: [],
+  facturas,
+  tratamientos: [],
 };
 
 fs.writeFileSync(DB_FILE, `${JSON.stringify(db, null, 2)}\n`);
 const cuenta = (estado) => citas.filter((c) => c.estado === estado).length;
-console.log(`✓ ${DB_FILE}: ${todas.length} pacientes, ${citas.length} citas (${cuenta('confirmada')} confirmadas, ${cuenta('pendiente')} por confirmar, ${cuenta('cancelada')} canceladas), ${checkins.length} check-ins y ${sosAlerts.length} alertas SOS.`);
+console.log(`✓ ${DB_FILE}: ${todas.length} pacientes, ${citas.length} citas (${cuenta('confirmada')} confirmadas, ${cuenta('pendiente')} por confirmar, ${cuenta('cancelada')} canceladas), ${checkins.length} check-ins, ${sosAlerts.length} alertas SOS y ${facturas.length} facturas (${facturas.filter((f) => f.estado === 'pendiente').length} pendientes).`);
 console.log(`  Hoy (${hoy}): ${citas.filter((c) => c.fecha === hoy).length} consultas confirmadas.`);
 console.log('  Doctora: 8888 8888 · Paciente con portal completo: 8888 0001 (Valeria Rojas)');

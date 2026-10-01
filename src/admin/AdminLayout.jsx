@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { CalendarCheck, CalendarDays, ChartColumn, Users, BellRing, Megaphone, LogOut, Moon, Sun } from 'lucide-react';
+import { CalendarCheck, CalendarDays, ChartColumn, Users, BellRing, Megaphone, BarChart3, ReceiptText, LogOut, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { usePreferences } from '../portal/usePreferences.js';
 import ControlAccesibilidad from '../components/ui/ControlAccesibilidad.jsx';
@@ -17,6 +17,8 @@ const NAV = [
   { to: '/admin/pacientes', label: 'Pacientes', Icon: Users },
   { to: '/admin/alertas', label: 'Alertas', Icon: BellRing },
   { to: '/admin/campanas', label: 'Campañas', Icon: Megaphone },
+  { to: '/admin/estadisticas', label: 'Estadísticas', Icon: BarChart3 },
+  { to: '/admin/facturas', label: 'Facturas', Icon: ReceiptText },
 ];
 
 // Panel de la doctora: mismo sistema visual que el portal de pacientes (tokens, tema claro/oscuro)

@@ -14,6 +14,8 @@ const PortalMap = lazy(() => import('./portal/pages/PortalMap.jsx'));
 const PortalCare = lazy(() => import('./portal/pages/PortalCare.jsx'));
 const PortalEvolution = lazy(() => import('./portal/pages/PortalEvolution.jsx'));
 const PortalClinic = lazy(() => import('./portal/pages/PortalClinic.jsx'));
+const PortalFacturas = lazy(() => import('./portal/pages/PortalFacturas.jsx'));
+const PortalTratamientos = lazy(() => import('./portal/pages/PortalTratamientos.jsx'));
 
 // Panel de la doctora: también bajo demanda
 const AdminLayout = lazy(() => import('./admin/AdminLayout.jsx'));
@@ -24,6 +26,8 @@ const AdminPacientes = lazy(() => import('./admin/pages/AdminPacientes.jsx'));
 const AdminPaciente = lazy(() => import('./admin/pages/AdminPaciente.jsx'));
 const AdminAlertas = lazy(() => import('./admin/pages/AdminAlertas.jsx'));
 const AdminCampanas = lazy(() => import('./admin/pages/AdminCampanas.jsx'));
+const AdminEstadisticas = lazy(() => import('./admin/pages/AdminEstadisticas.jsx'));
+const AdminFacturas = lazy(() => import('./admin/pages/AdminFacturas.jsx'));
 
 function App() {
   return (
@@ -47,6 +51,9 @@ function App() {
               <Route path="cuidados" element={<PortalCare />} />
               <Route path="evolucion" element={<PortalEvolution />} />
               <Route path="clinica" element={<PortalClinic />} />
+              <Route path="facturas" element={<PortalFacturas />} />
+              <Route path="pagos" element={<Navigate to="/portal/facturas" replace />} />
+              <Route path="tratamientos" element={<PortalTratamientos />} />
             </Route>
           </Route>
           <Route path="/mi-cuenta" element={<Navigate to="/portal" replace />} />
@@ -61,6 +68,8 @@ function App() {
               <Route path="pacientes/:id" element={<AdminPaciente />} />
               <Route path="alertas" element={<AdminAlertas />} />
               <Route path="campanas" element={<AdminCampanas />} />
+              <Route path="estadisticas" element={<AdminEstadisticas />} />
+              <Route path="facturas" element={<AdminFacturas />} />
             </Route>
           </Route>
         </Routes>

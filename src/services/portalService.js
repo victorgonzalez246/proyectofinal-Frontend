@@ -37,4 +37,14 @@ export const portalService = {
       throw new Error(errorMessage(err, 'No pudimos avisar a la clínica. Llámanos directamente.'));
     }
   },
+
+  async getFacturas() {
+    const { data } = await api.get('/me/facturas');
+    return data;
+  },
+
+  async getTratamientos() {
+    const { data } = await api.get('/me/tratamientos');
+    return data;
+  },
 };

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
-import { House, Route, Images, ListChecks, Gem, Eye, EyeOff, Moon, Sun, Accessibility } from 'lucide-react';
+import { House, Route, Images, ListChecks, Gem, Receipt, Pill, Eye, EyeOff, Moon, Sun, Accessibility } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { portalService } from '../services/portalService.js';
 import { PortalContext } from './usePortal.js';
@@ -22,6 +22,8 @@ const NAV = [
   { to: '/portal/cuidados', label: 'Cuidados', Icon: ListChecks },
   { to: '/portal/evolucion', label: 'Evolución', Icon: Images },
   { to: '/portal/clinica', label: 'Mi clínica', Icon: Gem },
+  { to: '/portal/facturas', label: 'Facturas', Icon: Receipt },
+  { to: '/portal/tratamientos', label: 'Tratamientos', Icon: Pill },
 ];
 
 const fetchPortalState = async () => {

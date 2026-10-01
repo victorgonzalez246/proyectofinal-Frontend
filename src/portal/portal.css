@@ -173,7 +173,7 @@
   bottom: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   height: calc(var(--p-nav-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   background: var(--p-surface);
@@ -186,7 +186,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.2rem;
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   font-weight: 500;
   color: var(--p-muted);
   position: relative;
@@ -850,4 +850,191 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
   padding-left: 0.5em;
+}
+
+/* ============================================================
+   PORTAL DE PAGOS (pp-*)
+   ============================================================ */
+.pp-resumen {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  margin-bottom: 1.5rem;
+}
+
+.pp-kpi {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.pp-kpi__icon {
+  flex-shrink: 0;
+  padding: 0.5rem;
+  border-radius: var(--p-radius-md);
+}
+
+.pp-kpi__icon--ok {
+  background: color-mix(in srgb, var(--p-olive) 15%, transparent);
+  color: var(--p-olive);
+}
+
+.pp-kpi__icon--warn {
+  background: color-mix(in srgb, var(--p-alert) 12%, transparent);
+  color: var(--p-alert);
+}
+
+.pp-kpi__valor {
+  font-family: var(--p-serif);
+  font-size: 1.65rem;
+  line-height: 1;
+  color: var(--p-ink);
+}
+
+.pp-kpi__valor[data-warn] {
+  color: var(--p-alert);
+}
+
+.pp-lista {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.pp-pago {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.pp-pago__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.pp-pago__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.pp-pago__monto {
+  font-family: var(--p-serif);
+  font-size: 1.35rem;
+  color: var(--p-ink);
+}
+
+.pp-pago__recibo {
+  font-size: 0.82rem !important;
+  padding: 0.35rem 0.75rem !important;
+  gap: 0.3rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.p-chip--olive {
+  background: color-mix(in srgb, var(--p-olive) 15%, transparent);
+  color: var(--p-olive);
+}
+
+.p-chip--alert {
+  background: color-mix(in srgb, var(--p-alert) 12%, transparent);
+  color: var(--p-alert);
+}
+
+/* ============================================================
+   PORTAL DE TRATAMIENTOS (pt-*)
+   ============================================================ */
+.pt-seccion {
+  margin-bottom: 2rem;
+}
+
+.pt-lista {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.pt-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.pt-card--activo {
+  border-left: 3px solid var(--p-rose-ink);
+}
+
+.pt-card--fin {
+  opacity: 0.7;
+}
+
+.pt-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.pt-card__icono {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: var(--p-radius-md);
+  background: color-mix(in srgb, var(--p-rose) 12%, transparent);
+  color: var(--p-rose-ink);
+}
+
+.pt-card__icono--muted {
+  background: color-mix(in srgb, var(--p-ink) 8%, transparent);
+  color: var(--p-muted);
+}
+
+.pt-card__icono--done {
+  background: color-mix(in srgb, var(--p-olive) 15%, transparent);
+  color: var(--p-olive);
+}
+
+.pt-card__notas {
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--p-radius-sm);
+  background: color-mix(in srgb, var(--p-olive) 6%, var(--p-bg));
+  border-left: 2px solid var(--p-olive);
+}
+
+.pt-progreso {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.pt-progreso__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pt-progreso__pista {
+  width: 100%;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--p-line);
+  overflow: hidden;
+}
+
+.pt-progreso__pista > span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--p-rose-ink);
+  transition: width 0.4s ease;
+}
+
+/* Gráfico de pastel (override para que quepa) */
+.an-lienzo--pie {
+  height: 16rem;
 }

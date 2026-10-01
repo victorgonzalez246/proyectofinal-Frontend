@@ -48,6 +48,7 @@ Pacientes y doctora entran igual: escriben su número en `/portal/acceso` y reci
 | **Alertas** | SOS del portal y check-ins marcados; atender con una nota o reabrir |
 | **Campañas** | Promoción por WhatsApp solo a quienes la aceptaron. Pueden darse de baja respondiendo "BAJA" |
 | **Métricas** | Agenda (citas por mes y estado, canal web o Recepcionista IA, tratamientos, demanda por día, anticipación y franja horaria), evolución de las pacientes (curva de recuperación promedio a partir de sus check-ins, motivos de alertas) y pacientes (nuevas por mes, retorno, planes y consentimientos). Periodo de 3, 6 o 12 meses, tooltips y tabla equivalente para cada gráfico. En la ficha de cada paciente: evolución de su tratamiento |
+| **Facturas** | Registrar el cobro de cada cliente (SINPE con su comprobante, efectivo, tarjeta o transferencia), con servicios, descuento e IVA (0/1/2/4/13 %). Número consecutivo `FAC-0001`, estados pagada / pendiente / anulada (con motivo) y **PDF listo para entregar**. La paciente ve las suyas en `/portal/facturas`. El PDF es un comprobante interno: no sustituye la factura electrónica de Hacienda |
 
 ## Asistente virtual, clima y accesibilidad
 

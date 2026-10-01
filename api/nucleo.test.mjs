@@ -169,3 +169,85 @@ describe('núcleo: acceso con código de WhatsApp (plantilla de Autenticación)'
     expect(db.accesos[0].intentos).toBe(0);
   });
 });
+
+describe('núcleo: facturas', () => {
+  const sesion = (db, tel) => entrar(db, tel).body.token;
+  const factura = (extra = {}) => ({
+    idPaciente: 'pac',
+    items: [{ descripcion: 'Perfilado labial', cantidad: 1, precio: 185000 }, { descripcion: 'Skinbooster', cantidad: 2, precio: 65000 }],
+    descuento: 15000,
+    impuesto: 13,
+    metodoPago: 'sinpe',
+    referencia: '202610010012345',
+    ...extra,
+  });
+
+  it('la doctora emite facturas con consecutivo y totales calculados por el servidor', () => {
+    const db = nuevaDb();
+    const doctora = sesion(db, '8888 8888');
+    const r = llamar(db, 'POST', '/admin/facturas', { token: doctora, body: factura({ total: 1, subtotal: 1 }) });
+    expect(r.status).toBe(201);
+    expect(r.body).toMatchObject({ numero: 'FAC-0001', subtotal: 315000, descuento: 15000, impuesto: 13, impuestoMonto: 39000, total: 339000, estado: 'pagada' });
+    expect(r.body.cliente).toMatchObject({ nombre: 'Paciente Uno', telefono: '+506 8888 0001' }); // datos tomados de la paciente
+    expect(llamar(db, 'POST', '/admin/facturas', { token: doctora, body: factura() }).body.numero).toBe('FAC-0002');
+  });
+
+  it('valida cliente, servicios, método de pago y el comprobante del SINPE', () => {
+    const db = nuevaDb();
+    const doctora = sesion(db, '8888 8888');
+    const post = (body) => llamar(db, 'POST', '/admin/facturas', { token: doctora, body }).status;
+    expect(post(factura({ referencia: '' }))).toBe(400); // SINPE pagado sin comprobante
+    expect(post(factura({ referencia: '', estado: 'pendiente' }))).toBe(201); // pendiente: el comprobante llega al cobrar
+    expect(post(factura({ metodoPago: 'efectivo', referencia: '' }))).toBe(201);
+    expect(post(factura({ metodoPago: 'cripto' }))).toBe(400);
+    expect(post(factura({ items: [] }))).toBe(400);
+    expect(post(factura({ items: [{ descripcion: 'x', cantidad: 0, precio: 100 }] }))).toBe(400);
+    expect(post(factura({ idPaciente: '', cliente: { nombre: 'Al' } }))).toBe(400);
+    expect(post(factura({ idPaciente: '', cliente: { nombre: 'Cliente sin registro' } }))).toBe(201);
+    expect(post(factura({ idPaciente: 'no-existe' }))).toBe(404);
+    expect(post(factura({ items: [{ descripcion: 'Cortesía', cantidad: 1, precio: 0 }], descuento: 0 }))).toBe(400); // total 0
+  });
+
+  it('cobra una pendiente y anula sin borrar; una anulada ya no cambia', () => {
+    const db = nuevaDb();
+    const doctora = sesion(db, '8888 8888');
+    const { id } = llamar(db, 'POST', '/admin/facturas', { token: doctora, body: factura({ estado: 'pendiente', referencia: '' }) }).body;
+    const patch = (body) => llamar(db, 'PATCH', `/admin/facturas?id=${id}`, { token: doctora, body });
+    expect(patch({ estado: 'pagada' }).status).toBe(400); // SINPE sin comprobante
+    const pagada = patch({ estado: 'pagada', referencia: '99887766' });
+    expect(pagada.status).toBe(200);
+    expect(pagada.body.pagadaEn).toBeTruthy();
+    const anulada = patch({ estado: 'anulada', motivo: 'Monto incorrecto' });
+    expect(anulada.body).toMatchObject({ estado: 'anulada', motivoAnulacion: 'Monto incorrecto', numero: 'FAC-0001' });
+    expect(patch({ estado: 'pagada' }).status).toBe(400);
+    expect(db.facturas).toHaveLength(1);
+  });
+
+  it('la paciente solo ve sus facturas no anuladas, y no puede usar las rutas de la doctora', () => {
+    const db = nuevaDb();
+    db.users.push({ id: 'otra', name: 'Otra Paciente', phone: '+506 8888 0002', role: 'member' });
+    const doctora = sesion(db, '8888 8888');
+    llamar(db, 'POST', '/admin/facturas', { token: doctora, body: factura() });
+    llamar(db, 'POST', '/admin/facturas', { token: doctora, body: factura({ idPaciente: 'otra' }) });
+    const { id } = llamar(db, 'POST', '/admin/facturas', { token: doctora, body: factura() }).body;
+    llamar(db, 'PATCH', `/admin/facturas?id=${id}`, { token: doctora, body: { estado: 'anulada', motivo: 'x' } });
+    const paciente = sesion(db, '8888 0001');
+    const mias = llamar(db, 'GET', '/me/facturas', { token: paciente });
+    expect(mias.body.map((f) => f.numero)).toEqual(['FAC-0001']);
+    expect(llamar(db, 'GET', '/admin/facturas', { token: paciente }).status).toBe(403);
+    expect(llamar(db, 'POST', '/admin/facturas', { token: paciente, body: factura() }).status).toBe(403);
+  });
+
+  it('las estadísticas suman solo las facturas pagadas del mes', () => {
+    const db = nuevaDb();
+    const doctora = sesion(db, '8888 8888');
+    const hoy = new Date(reloj - 6 * 3600000).toISOString().slice(0, 10);
+    llamar(db, 'POST', '/admin/facturas', { token: doctora, body: factura({ fecha: hoy }) }); // 339 000 pagada
+    llamar(db, 'POST', '/admin/facturas', { token: doctora, body: factura({ fecha: hoy, estado: 'pendiente', referencia: '' }) });
+    const { resumen, ingresosPorMes } = llamar(db, 'GET', '/admin/estadisticas', { token: doctora }).body;
+    expect(resumen.ingresosDelMes).toBe(339000);
+    expect(resumen.pendientesMes).toBe(339000);
+    expect(ingresosPorMes).toHaveLength(6);
+    expect(ingresosPorMes.at(-1)).toMatchObject({ mes: hoy.slice(0, 7), total: 339000 });
+  });
+});

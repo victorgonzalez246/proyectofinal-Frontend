@@ -44,4 +44,25 @@ export const adminService = {
 
   sendCampana: (mensaje) =>
     call(() => api.post('/admin/campanas', { mensaje: mensaje.trim() }), 'No pudimos enviar la promoción.'),
+
+  // Facturas (SINPE Móvil, efectivo, tarjeta o transferencia)
+  getFacturas: () => call(() => api.get('/admin/facturas'), 'No pudimos cargar las facturas.'),
+
+  crearFactura: (factura) =>
+    call(() => api.post('/admin/facturas', factura), 'No pudimos registrar la factura.'),
+
+  // { estado: 'pagada' | 'pendiente' | 'anulada', metodoPago?, referencia?, motivo? }
+  actualizarFactura: (id, cambios) =>
+    call(() => api.patch('/admin/facturas', cambios, { params: { id } }), 'No pudimos actualizar la factura.'),
+
+  // Tratamientos
+  getTratamientos: () =>
+    call(() => api.get('/admin/tratamientos'), 'No pudimos cargar los tratamientos.'),
+
+  crearTratamiento: (tratamiento) =>
+    call(() => api.post('/admin/tratamientos', tratamiento), 'No pudimos registrar el tratamiento.'),
+
+  // Estadísticas avanzadas
+  getEstadisticas: () =>
+    call(() => api.get('/admin/estadisticas'), 'No pudimos cargar las estadísticas.'),
 };

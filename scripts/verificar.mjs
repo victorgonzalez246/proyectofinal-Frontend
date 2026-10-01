@@ -87,6 +87,10 @@ try {
   const webhooks = apiWf.wf.nodes.filter((n) => n.type === 'n8n-nodes-base.webhook').map((n) => n.name).sort();
   const { RUTAS } = await import('../n8n/generar-api.mjs');
   ok(webhooks.join() === RUTAS.map(([m, r]) => `${m} ${r}`).sort().join(), `API: un Webhook por cada una de las ${RUTAS.length} rutas del contrato`);
+  // Toda ruta que define el núcleo debe tener su Webhook en n8n (si no, en producción no existe)
+  const rutasNucleo = [...codigo('api/nucleo.mjs').matchAll(/\['(GET|POST|PUT|PATCH|DELETE)', '(\/[^']+)'/g)].map(([, m, r]) => `${m} ${r}`);
+  const sinWebhook = rutasNucleo.filter((r) => !RUTAS.some(([m, ruta]) => `${m} ${ruta}` === r));
+  ok(sinWebhook.length === 0, `API: todas las rutas del núcleo tienen Webhook${sinWebhook.length ? ` (faltan: ${sinWebhook.join(', ')})` : ''}`);
 } catch (err) {
   ok(false, `No se pudieron leer los flujos: ${err.message}`);
 }

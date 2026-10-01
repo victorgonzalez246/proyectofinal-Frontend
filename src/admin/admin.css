@@ -82,8 +82,44 @@ textarea.p-field { min-height: 5.5rem; resize: vertical; }
 
 .a-counter { font-size: 0.78rem; color: var(--p-muted); text-align: right; }
 
-/* Barra inferior del móvil: el panel tiene seis secciones (el portal, cinco) */
+/* Barra inferior del móvil: el panel tiene ocho secciones, así que la barra se desplaza de lado
+   (cada botón conserva un tamaño cómodo para el dedo en vez de apretarse) */
 @media (max-width: 959px) {
-  .a-nav { grid-template-columns: repeat(6, 1fr); }
-  .a-nav .p-nav__link { font-size: 0.64rem; }
+  .a-nav {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .a-nav::-webkit-scrollbar { display: none; }
+  .a-nav .p-nav__link { flex: 0 0 4.6rem; scroll-snap-align: start; font-size: 0.64rem; }
 }
+
+/* ── Facturas ── */
+.f-form { gap: 1.1rem; }
+.f-seg { flex-wrap: wrap; }
+.f-seg button { flex: 1 1 7rem; }
+.f-item { display: grid; gap: 0.6rem; grid-template-columns: minmax(0, 1fr) 4.5rem 7.5rem auto; align-items: end; }
+@media (max-width: 640px) {
+  .f-item { grid-template-columns: 4.5rem minmax(0, 1fr) auto; }
+  .f-item__desc { grid-column: 1 / -1; }
+}
+.f-item__quitar {
+  display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 50%;
+  color: var(--p-alert); border: 1px solid var(--p-line);
+}
+.f-item__quitar:disabled { opacity: 0.35; cursor: not-allowed; }
+.f-totales { display: grid; gap: 0.35rem; margin-left: auto; width: min(100%, 22rem); font-variant-numeric: tabular-nums; }
+.f-totales div { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.92rem; color: var(--p-ink-soft); }
+.f-totales dd { color: var(--p-ink); }
+.f-totales__total {
+  margin-top: 0.35rem; padding: 0.7rem 0.9rem; border-radius: var(--p-radius-md);
+  background: var(--p-olive); font-weight: 700;
+}
+.f-totales .f-totales__total, .f-totales .f-totales__total dd { color: var(--p-on-strong); font-size: 1.05rem; }
+.f-buscar { position: relative; display: flex; align-items: center; margin: 1.25rem 0 1rem; max-width: 28rem; }
+.f-buscar svg { position: absolute; left: 0.85rem; color: var(--p-muted); pointer-events: none; }
+.f-buscar .p-field { width: 100%; min-height: 2.75rem; padding-left: 2.5rem; }
+.f-monto { display: flex; align-items: center; gap: 0.75rem; }
+.f-monto strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; color: var(--p-ink); }
+.f-anular { color: var(--p-alert); }

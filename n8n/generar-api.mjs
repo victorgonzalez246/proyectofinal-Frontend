@@ -9,6 +9,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+// Las pestañas de la hoja salen del propio núcleo: una tabla nueva allí es una pestaña más aquí
+import { TABLAS } from '../api/nucleo.mjs';
 
 const ESTE_ARCHIVO = fileURLToPath(import.meta.url);
 const HERE = path.dirname(ESTE_ARCHIVO);
@@ -40,6 +42,14 @@ export const RUTAS = [
   ['GET', '/admin/alertas'],
   ['PATCH', '/admin/alertas'],
   ['POST', '/admin/campanas'],
+  ['GET', '/admin/facturas'],
+  ['POST', '/admin/facturas'],
+  ['PATCH', '/admin/facturas'],
+  ['GET', '/me/facturas'],
+  ['GET', '/admin/tratamientos'],
+  ['POST', '/admin/tratamientos'],
+  ['GET', '/me/tratamientos'],
+  ['GET', '/admin/estadisticas'],
   ['GET', '/n8n/citas'],
   ['POST', '/n8n/citas'],
   ['GET', '/n8n/seguimiento'],
@@ -50,7 +60,6 @@ export const RUTAS = [
   ['POST', '/n8n/baja'],
 ];
 
-const TABLAS = ['users', 'appointments', 'portal', 'checkins', 'sosAlerts', 'accesos'];
 
 const bodyOf = (fn) => fn.toString().replace(/\r\n/g, '\n').replace(/^[^{]*\{\n?/, '').replace(/\}\s*$/, '').replace(/^ {2}/gm, '');
 

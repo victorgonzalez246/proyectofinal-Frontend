@@ -181,5 +181,25 @@ export async function probarContrato({ api, secreto, receptor, ok }) {
   const conResumen = await call('GET', '/admin/citas?estado=confirmada', { token: sesionDoc });
   ok(resumen.status === 200 && conResumen.data?.find?.((c) => c.id === reservada.data?.id)?.resumen?.puntos?.length === 3, 'El resumen de 3 puntos queda en el panel');
 
+  console.log('\nFacturas');
+  const nuevaFactura = {
+    idPaciente: 'pac-demo-1',
+    items: [{ descripcion: 'Control de labios', cantidad: 1, precio: 45000 }],
+    impuesto: 13,
+    metodoPago: 'sinpe',
+    referencia: '202610010099',
+  };
+  ok((await call('POST', '/admin/facturas', { token: sesion, body: nuevaFactura })).status === 403, 'Una paciente no puede emitir facturas');
+  ok((await call('POST', '/admin/facturas', { token: sesionDoc, body: { ...nuevaFactura, referencia: '' } })).status === 400, 'Un SINPE pagado exige el número de comprobante');
+  const emitida = await call('POST', '/admin/facturas', { token: sesionDoc, body: { ...nuevaFactura, total: 1 } });
+  ok(emitida.status === 201 && /^FAC-\d{4}$/.test(emitida.data?.numero) && emitida.data.total === 50850, 'La doctora emite la factura con consecutivo y el servidor calcula el total (IVA incluido)');
+  const pendiente = await call('POST', '/admin/facturas', { token: sesionDoc, body: { ...nuevaFactura, estado: 'pendiente', referencia: '' } });
+  const cobrada = await call('PATCH', `/admin/facturas?id=${pendiente.data?.id}`, { token: sesionDoc, body: { estado: 'pagada', metodoPago: 'efectivo' } });
+  ok(cobrada.status === 200 && cobrada.data.estado === 'pagada' && Boolean(cobrada.data.pagadaEn), 'Una factura pendiente se cobra después');
+  const anulada = await call('PATCH', `/admin/facturas?id=${emitida.data?.id}`, { token: sesionDoc, body: { estado: 'anulada', motivo: 'Prueba' } });
+  ok(anulada.data?.estado === 'anulada' && anulada.data.numero === emitida.data?.numero, 'Anular conserva el número (no se borra)');
+  const mias = await call('GET', '/me/facturas', { token: sesion });
+  ok(mias.status === 200 && mias.data.some((f) => f.id === pendiente.data?.id) && !mias.data.some((f) => f.id === emitida.data?.id), 'La paciente ve sus facturas, sin las anuladas');
+
   return { sesion, sesionDoc };
 }

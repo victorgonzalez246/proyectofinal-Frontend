@@ -9,7 +9,7 @@
 // y devuelve qué filas cambiaron para que cada adaptador las guarde.
 // ============================================================
 
-export const TABLAS = ['users', 'appointments', 'portal', 'checkins', 'sosAlerts', 'accesos'];
+export const TABLAS = ['users', 'appointments', 'portal', 'checkins', 'sosAlerts', 'accesos', 'facturas', 'tratamientos'];
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutos, un solo uso
 const SESION_TTL_MS = { member: 8 * 60 * 60 * 1000, doctor: 4 * 60 * 60 * 1000 };
@@ -23,6 +23,22 @@ const TIPOS_PASO = ['valoracion', 'tratamiento', 'control', 'retoque', 'sugerenc
 const ESTADOS_PASO = ['done', 'current', 'next', 'future'];
 const POSTERS = ['scrubs', 'editorial', 'clinica'];
 const MAX_ITEMS = 50;
+
+// ── Facturas ──
+export const METODOS_PAGO = ['sinpe', 'efectivo', 'tarjeta', 'transferencia'];
+export const ESTADOS_FACTURA = ['pagada', 'pendiente', 'anulada'];
+export const TARIFAS_IVA = [0, 1, 2, 4, 13]; // tarifas de IVA vigentes en Costa Rica (%)
+const MAX_ITEMS_FACTURA = 20;
+const redondear = (n) => Math.round(n * 100) / 100;
+
+// Totales de una factura: el servidor los calcula siempre (no se confía en los del navegador)
+export function totalesFactura(items = [], descuento = 0, impuesto = 0) {
+  const subtotal = redondear(items.reduce((s, i) => s + i.cantidad * i.precio, 0));
+  const desc = redondear(Math.min(Math.max(Number(descuento) || 0, 0), subtotal));
+  const tasa = TARIFAS_IVA.includes(Number(impuesto)) ? Number(impuesto) : 0;
+  const impuestoMonto = redondear(((subtotal - desc) * tasa) / 100);
+  return { subtotal, descuento: desc, impuesto: tasa, impuestoMonto, total: redondear(subtotal - desc + impuestoMonto) };
+}
 
 // ── Utilidades ─────────────────────────────────────────────
 const str = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
@@ -539,7 +555,200 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
         emitir('campaign.sent', { mensaje, destinatarios });
         return [200, { enviados: destinatarios.length }];
       }],
+
+      // ── Facturas: la doctora registra cada cobro (SINPE Móvil, efectivo, tarjeta o transferencia) ──
+      ['GET', '/admin/facturas', 'doctora', () => [200, [...db.facturas].sort(porFecha('creadaEn', true))]],
+
+      ['POST', '/admin/facturas', 'doctora', () => {
+        const idPaciente = str(body.idPaciente, 80);
+        const paciente = idPaciente ? usuario(idPaciente) : null;
+        if (idPaciente && (!paciente || paciente.role !== 'member')) falla(404, 'Paciente no encontrada.');
+        const c = body.cliente && typeof body.cliente === 'object' ? body.cliente : {};
+        const cliente = {
+          nombre: str(c.nombre, 120) || paciente?.name || '',
+          identificacion: str(c.identificacion, 30),
+          telefono: str(c.telefono, 20) || paciente?.phone || '',
+          email: str(c.email, 120) || paciente?.email || '',
+        };
+        if (cliente.nombre.length < 3) falla(400, 'Indica el nombre del cliente.');
+        const items = (Array.isArray(body.items) ? body.items : []).slice(0, MAX_ITEMS_FACTURA).map((i) => ({
+          descripcion: str(i?.descripcion, 160),
+          cantidad: Number(i?.cantidad),
+          precio: redondear(Number(i?.precio)),
+        }));
+        const itemInvalido = (i) => !i.descripcion || !Number.isInteger(i.cantidad) || i.cantidad < 1 || i.cantidad > 99
+          || !Number.isFinite(i.precio) || i.precio < 0 || i.precio > 50000000;
+        if (items.length === 0 || items.some(itemInvalido)) {
+          falla(400, 'Agrega al menos un servicio con descripción, cantidad (1 a 99) y precio válido.');
+        }
+        if (!METODOS_PAGO.includes(body.metodoPago)) falla(400, 'Indica el método de pago.');
+        const estado = body.estado === 'pendiente' ? 'pendiente' : 'pagada';
+        const referencia = str(body.referencia, 60);
+        if (body.metodoPago === 'sinpe' && estado === 'pagada' && !referencia) falla(400, 'Indica el número de comprobante del SINPE Móvil.');
+        const fecha = str(body.fecha, 10) || hoyCR();
+        if (!esFecha(fecha)) falla(400, 'La fecha debe tener el formato AAAA-MM-DD.');
+        const totales = totalesFactura(items, body.descuento, body.impuesto);
+        if (totales.total <= 0) falla(400, 'El total de la factura debe ser mayor a cero.');
+        // Consecutivo: FAC-0001, FAC-0002… (las anuladas conservan su número)
+        const ultimo = db.facturas.reduce((m, f) => Math.max(m, Number(String(f.numero || '').replace(/\D/g, '')) || 0), 0);
+        const creada = new Date(ahora()).toISOString();
+        const factura = guardar('facturas', {
+          id: nuevoId('fac'),
+          numero: `FAC-${String(ultimo + 1).padStart(4, '0')}`,
+          fecha,
+          idPaciente: paciente?.id || '',
+          cliente,
+          items,
+          ...totales,
+          metodoPago: body.metodoPago,
+          referencia,
+          estado,
+          notas: str(body.notas, 400),
+          creadaEn: creada,
+          ...(estado === 'pagada' ? { pagadaEn: creada } : {}),
+        });
+        return [201, factura];
+      }],
+
+      // Cobrar una pendiente, corregir el método o anular (nunca se borra: el consecutivo no puede tener huecos)
+      ['PATCH', '/admin/facturas', 'doctora', () => {
+        const factura = db.facturas.find((f) => f.id === idConsulta);
+        if (!factura) falla(404, 'Factura no encontrada.');
+        if (factura.estado === 'anulada') falla(400, 'La factura está anulada y ya no se puede modificar.');
+        const estado = body.estado === undefined ? factura.estado : body.estado;
+        if (!ESTADOS_FACTURA.includes(estado)) falla(400, 'Estado de factura inválido.');
+        const metodoPago = body.metodoPago === undefined ? factura.metodoPago : body.metodoPago;
+        if (!METODOS_PAGO.includes(metodoPago)) falla(400, 'Método de pago inválido.');
+        const referencia = body.referencia === undefined ? factura.referencia : str(body.referencia, 60);
+        if (estado === 'pagada' && metodoPago === 'sinpe' && !referencia) falla(400, 'Indica el número de comprobante del SINPE Móvil.');
+        const cuando = new Date(ahora()).toISOString();
+        const actualizada = guardar('facturas', {
+          ...factura,
+          estado,
+          metodoPago,
+          referencia,
+          ...(estado === 'pagada' && factura.estado !== 'pagada' ? { pagadaEn: cuando } : {}),
+          ...(estado === 'anulada' ? { anuladaEn: cuando, motivoAnulacion: str(body.motivo, 200) } : {}),
+          actualizadaEn: cuando,
+        });
+        return [200, actualizada];
+      }],
+
+      ['GET', '/me/facturas', 'paciente', (s) => [200, db.facturas
+        .filter((f) => f.idPaciente === s.userId && f.estado !== 'anulada')
+        .sort(porFecha('creadaEn', true))]],
+
+      // ── Tratamientos activos ──
+      ['GET', '/admin/tratamientos', 'doctora', () => {
+        return [200, db.tratamientos.sort(porFecha('fechaInicio', true))];
+      }],
+
+      ['POST', '/admin/tratamientos', 'doctora', () => {
+        const idPaciente = str(body.idPaciente, 80);
+        const user = usuario(idPaciente);
+        if (!user || user.role !== 'member') falla(404, 'Paciente no encontrada.');
+        const medicamento = str(body.medicamento, 120);
+        const dosis = str(body.dosis, 80);
+        const frecuencia = str(body.frecuencia, 80);
+        const fechaInicio = str(body.fechaInicio, 10);
+        const fechaFin = str(body.fechaFin, 10);
+        const notas = str(body.notas, 400);
+        if (!medicamento || !dosis || !frecuencia || !esFecha(fechaInicio) || !esFecha(fechaFin)) {
+          falla(400, 'Completa todos los campos: medicamento, dosis, frecuencia, fecha inicio y fin.');
+        }
+        const tratamiento = guardar('tratamientos', {
+          id: nuevoId('trat'),
+          idPaciente,
+          nombrePaciente: user.name,
+          medicamento,
+          dosis,
+          frecuencia,
+          fechaInicio,
+          fechaFin,
+          notas,
+          creadoEn: new Date(ahora()).toISOString(),
+        });
+        return [201, tratamiento];
+      }],
+
+      ['GET', '/me/tratamientos', 'paciente', (s) => {
+        const items = db.tratamientos
+          .filter((t) => t.idPaciente === s.userId)
+          .sort(porFecha('fechaInicio', true));
+        return [200, items];
+      }],
+
+      // ── Estadísticas avanzadas (panel de la doctora) ──
+      ['GET', '/admin/estadisticas', 'doctora', () => {
+        const hoy = hoyCR();
+        const mesActual = hoy.slice(0, 7);
+        const haceSeisMeses = new Date(Date.parse(hoy) - 180 * DAY_MS).toISOString().slice(0, 7);
+
+        // Ingresos: facturas pagadas y pendientes del mes (las anuladas no cuentan)
+        const sumar = (lista) => redondear(lista.reduce((s, f) => s + (Number(f.total) || 0), 0));
+        const facturasMes = db.facturas.filter((f) => f.fecha?.slice(0, 7) === mesActual);
+        const ingresosDelMes = sumar(facturasMes.filter((f) => f.estado === 'pagada'));
+        const pendientesMes = sumar(facturasMes.filter((f) => f.estado === 'pendiente'));
+
+        // Ingresos por mes (últimos 6 meses)
+        // Ingresos por mes de calendario (últimos 6 meses)
+        const ingresosPorMes = [];
+        const [anio, mesNum] = hoy.split('-').map(Number);
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(Date.UTC(anio, mesNum - 1 - i, 15));
+          const mes = d.toISOString().slice(0, 7);
+          const etiqueta = new Intl.DateTimeFormat('es-CR', { month: 'short', timeZone: 'UTC' }).format(d);
+          ingresosPorMes.push({ etiqueta, mes, total: sumar(db.facturas.filter((f) => f.fecha?.slice(0, 7) === mes && f.estado === 'pagada')) });
+        }
+
+        // Citas del mes
+        const citasMes = db.appointments.filter((a) => a.fecha?.slice(0, 7) === mesActual);
+        const citasHoy = db.appointments.filter((a) => a.fecha === hoy && a.estado === 'confirmada').length;
+        const completadas = citasMes.filter((a) => a.estado === 'confirmada').length;
+        const canceladas = citasMes.filter((a) => a.estado === 'cancelada').length;
+        const pendientes = citasMes.filter((a) => a.estado === 'pendiente').length;
+
+        // Pacientes nuevas este mes
+        const pacientesNuevasMes = db.users.filter((u) => u.role === 'member' && u.dateJoined?.slice(0, 7) === mesActual).length;
+        const totalPacientes = db.users.filter((u) => u.role === 'member').length;
+
+        // Tratamientos activos
+        const tratamientosActivos = db.tratamientos.filter((t) => t.fechaInicio <= hoy && t.fechaFin >= hoy).length;
+
+        // Top tratamientos solicitados
+        const conteo = {};
+        db.appointments.filter((a) => a.estado !== 'cancelada' && a.fecha?.slice(0, 7) >= haceSeisMeses).forEach((a) => {
+          const nombre = a.tratamiento || 'Sin especificar';
+          conteo[nombre] = (conteo[nombre] || 0) + 1;
+        });
+        const topTratamientos = Object.entries(conteo)
+          .map(([nombre, total]) => ({ nombre, total }))
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 8);
+
+        return [200, {
+          resumen: {
+            ingresosDelMes,
+            pendientesMes,
+            citasHoy,
+            pacientesNuevasMes,
+            totalPacientes,
+            tratamientosActivos,
+            completadas,
+            canceladas,
+            pendientes,
+          },
+          ingresosPorMes,
+          distribucionCitas: [
+            { nombre: 'Completadas', valor: completadas },
+            { nombre: 'Canceladas', valor: canceladas },
+            { nombre: 'Pendientes', valor: pendientes },
+          ],
+          topTratamientos,
+        }];
+      }],
     ];
+
 
     const responder = (status, cuerpo) => ({
       status,
