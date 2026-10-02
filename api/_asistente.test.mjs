@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dentroDelLimite, limpiarMensajes, MODELO_ASISTENTE, responderAsistente } from './_asistente.mjs';
+import { dentroDelLimite, esDoctora, limpiarMensajes, MODELO_ASISTENTE, responderAsistente } from './_asistente.mjs';
 
 const conversacion = [
   { role: 'user', content: 'Hola' },
@@ -59,5 +59,57 @@ describe('asistente virtual: proxy hacia Claude', () => {
     for (let i = 0; i < 30; i += 1) expect(dentroDelLimite('1.2.3.4', t)).toBe(true);
     expect(dentroDelLimite('1.2.3.4', t)).toBe(false);
     expect(dentroDelLimite('1.2.3.4', t + 11 * 60 * 1000)).toBe(true);
+  });
+
+  describe('Aura en el panel de la doctora', () => {
+    const API = 'https://n8n.test/webhook';
+    // Simula la API (/me) y a Anthropic en el mismo fetch
+    const crearFetch = (rol) => {
+      const llamadas = [];
+      const fetchImpl = async (url, init) => {
+        llamadas.push({ url, init });
+        if (url === `${API}/me`) {
+          return rol ? new Response(JSON.stringify({ role: rol }), { status: 200 }) : new Response('{}', { status: 401 });
+        }
+        return new Response('event: message_stop\ndata: {}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } });
+      };
+      return { fetchImpl, llamadas };
+    };
+    const pregunta = { messages: [{ role: 'user', content: '¿Qué tengo hoy?' }], contexto_panel: '{"hoy":{"consultas":3}}' };
+
+    it('sin sesión de doctora responde 403 y no llama a la IA', async () => {
+      for (const [rol, token] of [[null, 'token-vencido'], ['member', 'token-paciente'], ['doctor', '']]) {
+        const { fetchImpl, llamadas } = crearFetch(rol);
+        const res = await responderAsistente(pregunta, 'clave', fetchImpl, { perfil: 'doctora', token, apiUrl: API });
+        expect(res.status).toBe(403);
+        expect(llamadas.some((l) => l.url.includes('anthropic'))).toBe(false);
+      }
+    });
+
+    it('con sesión de doctora, la IA recibe sus instrucciones y la foto del panel', async () => {
+      const { fetchImpl, llamadas } = crearFetch('doctor');
+      const res = await responderAsistente(pregunta, 'clave', fetchImpl, { perfil: 'doctora', token: 'token-doctora', apiUrl: API });
+      expect(res.status).toBe(200);
+      expect(llamadas[0].init.headers.Authorization).toBe('Bearer token-doctora');
+      const body = JSON.parse(llamadas.find((l) => l.url.includes('anthropic')).init.body);
+      expect(body.system[0].text).toContain('panel médico');
+      expect(body.system[0].text).toContain('{"hoy":{"consultas":3}}');
+      expect(body.contexto_panel).toBeUndefined(); // no viaja como campo de la API
+    });
+
+    it('el perfil de pacientes ignora la foto del panel aunque la envíen', async () => {
+      const { fetchImpl, llamadas } = crearFetch('doctor');
+      await responderAsistente(pregunta, 'clave', fetchImpl);
+      const body = JSON.parse(llamadas.at(-1).init.body);
+      expect(body.system[0].text).not.toContain('consultas');
+      expect(llamadas.some((l) => l.url.endsWith('/me'))).toBe(false);
+    });
+
+    it('recuerda una sesión verificada para no consultar /me en cada pregunta', async () => {
+      const { fetchImpl, llamadas } = crearFetch('doctor');
+      expect(await esDoctora('token-recordado', API, fetchImpl, 1000)).toBe(true);
+      expect(await esDoctora('token-recordado', API, fetchImpl, 2000)).toBe(true);
+      expect(llamadas.filter((l) => l.url.endsWith('/me'))).toHaveLength(1);
+    });
   });
 });

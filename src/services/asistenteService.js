@@ -2,6 +2,7 @@
 // El SDK apunta al proxy del mismo origen (/api/asistente), que agrega la clave y fija modelo,
 // prompt de sistema y límites (api/_asistente.mjs). El navegador nunca ve la clave de Anthropic.
 // El SDK se descarga solo cuando la persona envía su primera pregunta.
+import { TOKEN_KEY } from './session.js';
 
 // Debe coincidir con MODELO_ASISTENTE de api/_asistente.mjs (el proxy lo impone de todos modos)
 const MODELO = 'claude-opus-5-5';
@@ -27,6 +28,7 @@ const mensajeDeError = (Anthropic, err) => {
   if (err instanceof Anthropic.RateLimitError) return err.error?.error?.message || 'Hiciste muchas preguntas seguidas. Espera unos minutos.';
   if (err instanceof Anthropic.BadRequestError) return 'No pudimos procesar la conversación. Empieza una nueva e intenta otra vez.';
   if (err instanceof Anthropic.APIConnectionError) return 'Sin conexión con el asistente. Revisa tu internet e intenta de nuevo.';
+  if (err instanceof Anthropic.PermissionDeniedError) return err.error?.error?.message || 'Vuelva a iniciar sesión para usar Aura.';
   if (err instanceof Anthropic.APIError && err.status === 503) return 'El asistente no está disponible en este momento. Escríbenos por WhatsApp.';
   return 'El asistente tuvo un problema. Intenta de nuevo o escríbenos por WhatsApp.';
 };
@@ -36,14 +38,22 @@ const mensajeDeError = (Anthropic, err) => {
  * @param {{ role: 'user' | 'assistant', content: string }[]} mensajes  empieza y termina en 'user'
  * @param {(texto: string) => void} alRecibir  recibe cada fragmento de texto
  * @param {AbortSignal} [signal]
+ * @param {{ perfil?: 'paciente' | 'doctora', contexto?: string }} [opciones]  la doctora envía su sesión y la foto del panel
  * @returns {Promise<{ aviso: string }>} aviso: nota si la respuesta quedó incompleta o fue declinada
  */
-export async function preguntarAlAsistente(mensajes, alRecibir, signal) {
+export async function preguntarAlAsistente(mensajes, alRecibir, signal, { perfil = 'paciente', contexto = '' } = {}) {
   const { Anthropic, client } = await cargarSdk();
+  const doctora = perfil === 'doctora';
   try {
     const stream = client.messages.stream(
-      { model: MODELO, max_tokens: MAX_TOKENS, messages: mensajes },
-      { signal }
+      // contexto_panel no es un campo de la API de Anthropic: lo lee y lo quita el proxy (api/_asistente.mjs)
+      { model: MODELO, max_tokens: MAX_TOKENS, messages: mensajes, ...(doctora ? { contexto_panel: contexto } : {}) },
+      {
+        signal,
+        headers: doctora
+          ? { 'x-aura-perfil': 'doctora', 'x-aura-sesion': sessionStorage.getItem(TOKEN_KEY) || '' }
+          : undefined,
+      }
     );
     for await (const event of stream) {
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {

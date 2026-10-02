@@ -1,5 +1,5 @@
 /* ============================================================
-   ASISTENTE VIRTUAL — widget flotante (landing y portal)
+   ASISTENTE VIRTUAL — widget flotante (landing, portal y panel de la doctora)
    Dentro del portal hereda sus tokens (claro/oscuro/alto contraste);
    en la landing usa los valores de respaldo de la marca.
    ============================================================ */
@@ -26,9 +26,15 @@
   --asis-bottom: calc(var(--p-nav-h, 4.25rem) + env(safe-area-inset-bottom) + 5rem);
   --asis-right: 1rem;
 }
+/* En el panel de la doctora, sobre la barra de navegación inferior del móvil */
+.asis--admin {
+  --asis-bottom: calc(var(--p-nav-h, 4.25rem) + env(safe-area-inset-bottom) + 1rem);
+  --asis-right: 1rem;
+}
 @media (min-width: 960px) {
   .asis--landing { --asis-bottom: 2rem; --asis-right: 2rem; }
   .asis--portal { --asis-bottom: 6.25rem; --asis-right: 2rem; }
+  .asis--admin { --asis-bottom: 2rem; --asis-right: 2rem; }
 }
 
 .asis-lanzador {

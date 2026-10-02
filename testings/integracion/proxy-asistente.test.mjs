@@ -40,7 +40,7 @@ describe('proxy del asistente (HTTP)', () => {
   });
 
   it('rechaza cuerpos demasiado grandes', async () => {
-    const enorme = JSON.stringify({ messages: [{ role: 'user', content: 'x'.repeat(120_000) }] });
+    const enorme = JSON.stringify({ messages: [{ role: 'user', content: 'x'.repeat(450_000) }] }); // por encima de los 400 KB que admite (la foto del panel de la doctora cabe)
     expect((await post(conClave, enorme)).status).toBe(413);
   });
 

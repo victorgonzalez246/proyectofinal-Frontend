@@ -50,6 +50,50 @@ Límites (obligatorios):
 
 Formato: respuestas de 2 a 5 frases o una lista breve. Sin tablas ni encabezados. Puedes usar **negritas** para resaltar una idea.`;
 
+// Aura dentro del panel de la doctora (/admin): recibe una foto de los datos del panel (solo con sesión de doctora)
+const SISTEMA_DOCTORA = `Eres "Aura", la asistente de la ${CLINICA.nombre} dentro de su panel médico. Le hablas a la doctora (odontóloga con maestría en medicina estética), de "usted", con calidez, respeto y precisión. Español de Costa Rica.
+
+Cómo la ayudas:
+- Consultar los datos del panel: con cada pregunta recibes una foto actual (más abajo, "Datos del panel") con las consultas de hoy, citas, pacientes, alertas, facturas, tratamientos y estadísticas, y la ficha completa (plan, productos con lote y vencimiento, citas y check-ins) de las pacientes que la doctora menciona. Búscale lo que pida, cruza datos, haz cuentas y resúmenes, y señale lo que requiera su atención (alertas abiertas, citas por confirmar, facturas pendientes, productos por vencer).
+- Redactar mensajes para sus pacientes (WhatsApp o correo): recordatorios, seguimiento después de un tratamiento, respuestas a dudas, reprogramaciones o campañas. Escríbelos cálidos, claros y listos para copiar. En campañas, recuerda incluir que pueden responder "BAJA" para no recibir más promociones.
+- Explicar cómo usar el panel: Hoy (consultas del día, solicitudes por confirmar y alertas), Citas (confirmar con hora activa el recordatorio de 24 h; reprogramar, cancelar y reactivar avisan a la paciente por WhatsApp), Pacientes (ficha, check-ins y el plan que ve la paciente: mapa de belleza, cuidados, paquetes, productos y videos), Alertas (SOS y check-ins marcados; se atienden con una nota), Campañas (solo a quienes aceptaron promociones), Métricas y Estadísticas, y Facturas (cobros con SINPE, efectivo, tarjeta o transferencia, IVA y PDF para la paciente; no sustituye la factura electrónica de Hacienda).
+- Organizar ideas: textos de cuidados para el plan de una paciente, contenido educativo, guiones para videos o publicaciones, listas de pendientes.
+- Conversar sobre medicina estética como lo haría una colega bien informada, dejando siempre el criterio clínico a la doctora.
+
+Límites:
+- Responde solo con los datos que recibiste. Si algo no está en la foto (por ejemplo, la ficha de una paciente que no nombró), dígaselo y pídale el nombre o indíquele dónde verlo en el panel. Nunca inventes datos.
+- Solo lees: no puedes confirmar citas, enviar mensajes ni cambiar nada. Si quiere hacer un cambio, explícale en qué sección y con qué botón.
+- La decisión clínica es de la doctora: puedes aportar información general, pero no indicas tratamientos ni dosis para una paciente específica como si fuera una orden.
+- Son datos de salud confidenciales: muestra solo lo necesario para lo que pidió.
+
+Formato: claro y breve. Cuando redactes un mensaje, entrégalo listo para copiar. Sin tablas ni encabezados. Puedes usar **negritas** y listas cortas.`;
+
+// Perfil que pide el cliente (encabezado x-aura-perfil). Cualquier otro valor usa el de pacientes.
+// El perfil "doctora" exige su sesión (encabezado x-aura-sesion), verificada contra la API (GET /me).
+export const ENCABEZADO_PERFIL = 'x-aura-perfil';
+export const ENCABEZADO_SESION = 'x-aura-sesion';
+const MAX_CONTEXTO = 120_000; // caracteres de la foto del panel
+const MAX_CARACTERES_DOCTORA = 6000; // la doctora puede pegar textos largos
+
+const sesionesVerificadas = new Map(); // token → vence (ms): evita llamar a /me en cada pregunta
+const VERIFICACION_MS = 10 * 60 * 1000;
+
+/** true si el token es de una sesión de doctora vigente (la API decide: GET /me). */
+export async function esDoctora(token, apiUrl, fetchImpl = fetch, ahora = Date.now()) {
+  if (!token || !apiUrl || token.length > 2000) return false;
+  if ((sesionesVerificadas.get(token) || 0) > ahora) return true;
+  try {
+    const res = await fetchImpl(`${apiUrl.replace(/\/$/, '')}/me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return false;
+    const usuario = await res.json();
+    if (usuario?.role !== 'doctor') return false;
+    sesionesVerificadas.set(token, ahora + VERIFICACION_MS);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Respuestas de error con la misma forma que la API de Anthropic, para que el SDK las entienda
 const errorJson = (status, type, message) =>
   new Response(JSON.stringify({ type: 'error', error: { type, message } }), {
@@ -58,7 +102,7 @@ const errorJson = (status, type, message) =>
   });
 
 // Acepta solo texto plano, alternando paciente → asistente, empezando y terminando en la paciente
-export function limpiarMensajes(body) {
+export function limpiarMensajes(body, maxCaracteres = MAX_CARACTERES) {
   const mensajes = body?.messages;
   if (!Array.isArray(mensajes) || mensajes.length === 0 || mensajes.length > MAX_MENSAJES) return null;
   const limpios = [];
@@ -66,14 +110,26 @@ export function limpiarMensajes(body) {
     const rol = i % 2 === 0 ? 'user' : 'assistant';
     if (m?.role !== rol || typeof m.content !== 'string') return null;
     const texto = m.content.trim();
-    if (!texto || texto.length > MAX_CARACTERES * (rol === 'assistant' ? 4 : 1)) return null;
+    if (!texto || texto.length > maxCaracteres * (rol === 'assistant' ? 4 : 1)) return null;
     limpios.push({ role: rol, content: texto });
   }
   return limpios.at(-1).role === 'user' ? limpios : null;
 }
 
 // Reenvía la conversación a Claude o Gemini y devuelve la respuesta en streaming compatible
-export async function responderAsistente(body, apiKey, fetchImpl = fetch) {
+// opciones.perfil: 'paciente' (por defecto) o 'doctora'; esta última necesita token y apiUrl para verificar la sesión
+export async function responderAsistente(body, apiKey, fetchImpl = fetch, { perfil = 'paciente', token = '', apiUrl = '' } = {}) {
+  const doctora = perfil === 'doctora';
+  if (doctora && !(await esDoctora(token, apiUrl, fetchImpl))) {
+    return errorJson(403, 'permission_error', 'Aura del panel solo está disponible con la sesión de la doctora. Vuelva a iniciar sesión.');
+  }
+  const contexto = doctora && typeof body?.contexto_panel === 'string' ? body.contexto_panel.slice(0, MAX_CONTEXTO) : '';
+  const sistema = doctora
+    ? `${SISTEMA_DOCTORA}
+
+Datos del panel (foto de este momento, JSON):
+${contexto || '(no llegaron datos)'}`
+    : SISTEMA;
   const cleanKey = apiKey ? apiKey.trim() : '';
   const isGemini = Boolean(process.env.GEMINI_API_KEY || cleanKey.startsWith('AIzaSy') || cleanKey.startsWith('AQ.'));
   const geminiKey = process.env.GEMINI_API_KEY || (isGemini ? cleanKey : null);
@@ -82,7 +138,7 @@ export async function responderAsistente(body, apiKey, fetchImpl = fetch) {
   if (!effectiveKey) {
     return errorJson(503, 'api_error', 'El asistente no está configurado (falta GEMINI_API_KEY o ANTHROPIC_API_KEY en el servidor).');
   }
-  const messages = limpiarMensajes(body);
+  const messages = limpiarMensajes(body, doctora ? MAX_CARACTERES_DOCTORA : MAX_CARACTERES);
   if (!messages) return errorJson(400, 'invalid_request_error', 'Conversación inválida.');
 
   // Si tenemos clave de Gemini, usamos la API gratuita de Gemini de Google
@@ -97,7 +153,7 @@ export async function responderAsistente(body, apiKey, fetchImpl = fetch) {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SISTEMA }] },
+        systemInstruction: { parts: [{ text: sistema }] },
         contents,
         generationConfig: { maxOutputTokens: MAX_TOKENS, temperature: 0.7 }
       })
@@ -188,7 +244,7 @@ export async function responderAsistente(body, apiKey, fetchImpl = fetch) {
       model: MODELO_ASISTENTE,
       max_tokens: MAX_TOKENS,
       stream: true,
-      system: [{ type: 'text', text: SISTEMA, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: sistema, cache_control: { type: 'ephemeral' } }],
       output_config: { effort: 'low' }, // chat de preguntas frecuentes: respuestas rápidas
       fallbacks: 'default',
       messages,
@@ -223,7 +279,7 @@ export const demasiadasSolicitudes = () =>
   errorJson(429, 'rate_limit_error', 'Hiciste muchas preguntas seguidas. Espera unos minutos e intenta de nuevo.');
 
 // Adaptador para servidores Node (middleware de Vite): http.IncomingMessage → Response → http.ServerResponse
-export function middlewareAsistente(apiKey) {
+export function middlewareAsistente(apiKey, apiUrl = '') {
   return async (req, res, next) => {
     if (req.url.split('?')[0] !== RUTA_ASISTENTE) return next();
     const enviar = async (response) => {
@@ -239,11 +295,15 @@ export function middlewareAsistente(apiKey) {
       let raw = '';
       for await (const trozo of req) {
         raw += trozo;
-        if (raw.length > 100_000) return enviar(errorJson(413, 'invalid_request_error', 'Conversación demasiado larga.'));
+        if (raw.length > 400_000) return enviar(errorJson(413, 'invalid_request_error', 'Conversación demasiado larga.'));
       }
       let body = null;
       try { body = JSON.parse(raw); } catch { /* cuerpo inválido: lo rechaza limpiarMensajes */ }
-      await enviar(await responderAsistente(body, apiKey));
+      await enviar(await responderAsistente(body, apiKey, fetch, {
+        perfil: req.headers[ENCABEZADO_PERFIL],
+        token: req.headers[ENCABEZADO_SESION],
+        apiUrl,
+      }));
     } catch (err) {
       console.error('[asistente]', err);
       if (!res.headersSent) await enviar(errorJson(502, 'api_error', 'No pudimos contactar al asistente.'));

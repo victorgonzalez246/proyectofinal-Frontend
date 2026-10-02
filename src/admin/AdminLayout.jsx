@@ -3,6 +3,8 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { CalendarCheck, CalendarDays, ChartColumn, Users, BellRing, Megaphone, BarChart3, ReceiptText, LogOut, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { usePreferences } from '../portal/usePreferences.js';
+import AsistenteVirtual from '../components/asistente/AsistenteVirtual.jsx';
+import { contextoParaAura } from './contextoAura.js';
 import ControlAccesibilidad from '../components/ui/ControlAccesibilidad.jsx';
 // Nota: los nombres de los archivos de marca están cruzados; logo-isotipo.png es el logo blanco con transparencia
 import logoColor from '../assets/brand/logo-main.png';
@@ -83,6 +85,9 @@ export default function AdminLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Aura con los datos del panel (solo lectura; el servidor exige la sesión de la doctora) */}
+      <AsistenteVirtual variante="admin" obtenerContexto={contextoParaAura} />
     </div>
   );
 }

@@ -5,15 +5,35 @@ import { preguntarAlAsistente } from '../../services/asistenteService.js';
 import { CLINICA } from '../../config/clinica.js';
 import './asistente.css';
 
-const BIENVENIDA =
-  'Hola, soy **Aura**, la asistente virtual de la clínica. Puedo contarte sobre nuestros tratamientos, los cuidados antes y después, y guiarte para agendar tu valoración. ¿En qué te ayudo?';
-
-const SUGERENCIAS = [
-  '¿Qué tratamiento me ayuda con las ojeras?',
-  '¿Cómo es la primera valoración?',
-  'Cuidados después del ácido hialurónico',
-  '¿Cómo agendo una cita?',
-];
+// Textos por perfil: pacientes (landing y portal) y la doctora (panel, con los datos del panel como contexto)
+const TEXTOS = {
+  paciente: {
+    bienvenida:
+      'Hola, soy **Aura**, la asistente virtual de la clínica. Puedo contarte sobre nuestros tratamientos, los cuidados antes y después, y guiarte para agendar tu valoración. ¿En qué te ayudo?',
+    sugerencias: [
+      '¿Qué tratamiento me ayuda con las ojeras?',
+      '¿Cómo es la primera valoración?',
+      'Cuidados después del ácido hialurónico',
+      '¿Cómo agendo una cita?',
+    ],
+    lanzador: '¿Dudas? Pregúntale a Aura',
+    subtitulo: 'Orientación general con IA · no reemplaza la valoración médica',
+    placeholder: 'Escribe tu pregunta…',
+  },
+  doctora: {
+    bienvenida:
+      'Hola, doctora. Soy **Aura** y veo los datos de su panel: consultas, citas, pacientes, alertas, facturas y estadísticas. Pregúnteme lo que necesite; si nombra a una paciente, reviso su ficha, su plan y sus productos.',
+    sugerencias: [
+      '¿Qué tengo pendiente hoy?',
+      '¿Qué alertas siguen abiertas?',
+      '¿Qué productos vencen en los próximos 60 días?',
+      'Resumen de facturación de este mes',
+    ],
+    lanzador: 'Aura · Asistente IA',
+    subtitulo: 'Lee los datos del panel · solo consulta, no hace cambios',
+    placeholder: 'Pregúntele a Aura sobre su panel…',
+  },
+};
 
 // Formato mínimo y seguro (sin innerHTML): **negritas**, listas con "- " y párrafos
 function Negritas({ texto }) {
@@ -46,10 +66,14 @@ function TextoFormateado({ texto }) {
 }
 
 /**
- * Asistente virtual flotante para pacientes (landing y portal).
- * @param {{ variante?: 'landing' | 'portal' }} props  en el portal se ubica sobre la Línea de tranquilidad
+ * Asistente virtual flotante: pacientes (landing y portal) y doctora (panel).
+ * @param {{ variante?: 'landing' | 'portal' | 'admin', obtenerContexto?: (pregunta: string, anteriores: string[]) => Promise<string> }} props
+ *   variante: en el portal se ubica sobre la Línea de tranquilidad; 'admin' usa el perfil de la doctora
+ *   obtenerContexto: solo en el panel; arma la foto de los datos que Aura lee en cada pregunta
  */
-export default function AsistenteVirtual({ variante = 'landing' }) {
+export default function AsistenteVirtual({ variante = 'landing', obtenerContexto }) {
+  const perfil = variante === 'admin' ? 'doctora' : 'paciente';
+  const textos = TEXTOS[perfil];
   const [abierto, setAbierto] = useState(false);
   const [mensajes, setMensajes] = useState([]); // { role, content } de la conversación real
   const [borrador, setBorrador] = useState('');
@@ -111,7 +135,10 @@ export default function AsistenteVirtual({ variante = 'landing' }) {
       });
 
     try {
-      const { aviso: nota } = await preguntarAlAsistente(historial, agregar, controller.signal);
+      const contexto = obtenerContexto
+        ? await obtenerContexto(pregunta, mensajes.filter((m) => m.role === 'user').map((m) => m.content))
+        : '';
+      const { aviso: nota } = await preguntarAlAsistente(historial, agregar, controller.signal, { perfil, contexto });
       setAviso(nota);
     } catch (err) {
       setError(err.message);
@@ -164,7 +191,7 @@ export default function AsistenteVirtual({ variante = 'landing' }) {
         onClick={() => (abierto ? cerrar() : setAbierto(true))}
       >
         {abierto ? <X size={22} aria-hidden="true" /> : <Sparkles size={22} aria-hidden="true" />}
-        <span className="asis-lanzador__texto" aria-hidden="true">{abierto ? 'Cerrar' : '¿Dudas? Pregúntale a Aura'}</span>
+        <span className="asis-lanzador__texto" aria-hidden="true">{abierto ? 'Cerrar' : textos.lanzador}</span>
       </button>
 
       <section
@@ -179,7 +206,7 @@ export default function AsistenteVirtual({ variante = 'landing' }) {
           <span className="asis-avatar" aria-hidden="true"><Sparkles size={18} /></span>
           <div>
             <h2 id={tituloId} className="asis-titulo">Aura · Asistente virtual</h2>
-            <p className="asis-subtitulo">Orientación general con IA · no reemplaza la valoración médica</p>
+            <p className="asis-subtitulo">{textos.subtitulo}</p>
           </div>
           <div className="asis-cabecera__acciones">
             {mensajes.length > 0 && (
@@ -195,12 +222,12 @@ export default function AsistenteVirtual({ variante = 'landing' }) {
 
         <div className="asis-mensajes" role="log" aria-live="polite" aria-relevant="additions text" aria-busy={enviando}>
           <div className="asis-msg asis-msg--asistente">
-            <TextoFormateado texto={BIENVENIDA} />
+            <TextoFormateado texto={textos.bienvenida} />
           </div>
 
           {mensajes.length === 0 && (
             <ul className="asis-sugerencias" aria-label="Preguntas sugeridas">
-              {SUGERENCIAS.map((s) => (
+              {textos.sugerencias.map((s) => (
                 <li key={s}>
                   <button type="button" onClick={() => enviar(s)} disabled={enviando}>{s}</button>
                 </li>
@@ -229,9 +256,11 @@ export default function AsistenteVirtual({ variante = 'landing' }) {
           {error && (
             <div className="asis-error" role="alert">
               <p>{error}</p>
-              <a href={`https://wa.me/${CLINICA.whatsapp}`} target="_blank" rel="noopener noreferrer">
-                <MessageCircle size={15} aria-hidden="true" /> Escribir por WhatsApp
-              </a>
+              {perfil === 'paciente' && (
+                <a href={`https://wa.me/${CLINICA.whatsapp}`} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle size={15} aria-hidden="true" /> Escribir por WhatsApp
+                </a>
+              )}
             </div>
           )}
           <div ref={finRef} />
@@ -243,8 +272,8 @@ export default function AsistenteVirtual({ variante = 'landing' }) {
             id={campoId}
             ref={campoRef}
             rows={1}
-            maxLength={1500}
-            placeholder="Escribe tu pregunta…"
+            maxLength={perfil === 'doctora' ? 6000 : 1500}
+            placeholder={textos.placeholder}
             value={borrador}
             onChange={(e) => setBorrador(e.target.value)}
             onKeyDown={onKeyDown}
@@ -259,10 +288,14 @@ export default function AsistenteVirtual({ variante = 'landing' }) {
             </button>
           )}
         </form>
-        <p className="asis-legal">
-          No compartas datos personales ni de salud en este chat. {variante === 'landing' && <>Consulta el <Link to="/privacidad">aviso de privacidad</Link>.</>}
-          {' '}Emergencias: 911.
-        </p>
+        {perfil === 'doctora' ? (
+          <p className="asis-legal">Aura puede equivocarse: verifique en el panel antes de decidir. Los datos se envían al proveedor de IA para responder.</p>
+        ) : (
+          <p className="asis-legal">
+            No compartas datos personales ni de salud en este chat. {variante === 'landing' && <>Consulta el <Link to="/privacidad">aviso de privacidad</Link>.</>}
+            {' '}Emergencias: 911.
+          </p>
+        )}
       </section>
     </div>
   );

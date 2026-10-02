@@ -29,11 +29,12 @@ function cspPlugin(env, command) {
 // Asistente virtual: el servidor de desarrollo y el de preview atienden /api/asistente con la clave
 // ANTHROPIC_API_KEY de .env (sin prefijo VITE_, así nunca entra al paquete del navegador).
 // En producción lo atiende la función de Vercel api/asistente/v1/messages.js.
-function asistentePlugin(apiKey) {
+// apiUrl: backend contra el que se verifica la sesión de la doctora (Aura del panel)
+function asistentePlugin(apiKey, apiUrl) {
   return {
     name: 'asistente',
-    configureServer: (server) => { server.middlewares.use(middlewareAsistente(apiKey)) },
-    configurePreviewServer: (server) => { server.middlewares.use(middlewareAsistente(apiKey)) },
+    configureServer: (server) => { server.middlewares.use(middlewareAsistente(apiKey, apiUrl)) },
+    configurePreviewServer: (server) => { server.middlewares.use(middlewareAsistente(apiKey, apiUrl)) },
   }
 }
 
@@ -46,7 +47,7 @@ export default defineConfig(({ mode, command }) => {
       react(),
       tailwindcss(),
       cspPlugin(env, command),
-      asistentePlugin(process.env.ANTHROPIC_API_KEY || loadEnv(mode, process.cwd(), 'ANTHROPIC_').ANTHROPIC_API_KEY),
+      asistentePlugin(process.env.ANTHROPIC_API_KEY || loadEnv(mode, process.cwd(), 'ANTHROPIC_').ANTHROPIC_API_KEY, apiTarget),
     ],
     // Desarrollo: src/services/api.js usa rutas relativas y este proxy las reenvía al simulador (sin CORS).
     // Son las rutas reales del contrato (api/nucleo.mjs). /admin y /auth también son páginas de React:
