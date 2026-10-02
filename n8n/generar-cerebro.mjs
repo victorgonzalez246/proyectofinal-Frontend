@@ -138,11 +138,16 @@ const router = (name, position, campo, rutas, fallback) =>
   });
 
 // ── Piezas de IA ──
-const MODELO_PRINCIPAL = { __rl: true, mode: 'list', value: 'claude-sonnet-5', cachedResultName: 'Claude Sonnet 5' };
+// Opus 5.5 razona antes de responder (pensamiento adaptativo, siempre activo) y NO admite temperature:
+// enviarla devuelve 400 y el chat caía a la respuesta de respaldo. Solo Haiku (clasificador) la lleva.
+const MODELO_PRINCIPAL = { __rl: true, mode: 'id', value: 'claude-opus-5-5' };
 const MODELO_RAPIDO = { __rl: true, mode: 'id', value: 'claude-haiku-4-5-20251001' };
 
-const modelo = (name, position, model, target, temperature = 0.3) => {
-  add(name, '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, position, { model, options: { temperature } });
+const modelo = (name, position, model, target, temperature) => {
+  add(name, '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, position, {
+    model,
+    options: temperature === undefined ? {} : { temperature },
+  });
   link(name, target, 0, 'ai_languageModel');
 };
 
@@ -185,21 +190,28 @@ const AUTH_API = { authentication: 'genericCredentialType', genericAuthType: 'ht
 const AUTH_GOOGLE = (tipo) => ({ authentication: 'predefinedCredentialType', nodeCredentialType: tipo });
 
 // ── Prompts de los perfiles ──
-const PROMPT_ENFERMERA = `Eres la Enfermera Virtual de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp a pacientes que ya se hicieron un tratamiento.
+const PROMPT_ENFERMERA = `Eres la enfermera de la clínica de armonización facial de la Dra. Laura Jiménez, en Escazú, Costa Rica. Conversas por WhatsApp con pacientes de la doctora, casi siempre en los días después de un tratamiento, que es cuando aparecen las dudas, la hinchazón inesperada y a veces el miedo.
 
-Tu misión: tranquilizar con calidez y claridad y, ante el menor riesgo médico, despertar a la doctora.
+Quién eres en esta conversación
+No eres un menú de respuestas. Eres alguien que escucha de verdad: lees lo que la paciente dice y también lo que no dice (el susto detrás de un "¿es normal?", el cansancio, la vergüenza de preguntar algo "tonto"). Respondes a la persona, no solo a la pregunta. Si está asustada, primero la acompañas y después explicas. Si está contenta con su resultado, te alegras con ella. Si solo saluda o agradece, conversas con naturalidad y le preguntas cómo va; un saludo no es una emergencia.
 
-Cómo trabajas:
-1. Antes de responder usa "ficha_paciente" para saber qué tratamiento tuvo, en qué día de recuperación está y qué cuidados tiene vigentes.
-2. En temas clínicos responde solo con información de "base_clinica" (aprobada por la doctora) y de la ficha. Si una duda clínica no está cubierta ahí, dilo con honestidad, dile que la doctora le responderá y usa "despertar_doctora".
-   Saludos, agradecimientos o mensajes sin una duda clínica NO son motivo para despertar a la doctora: responde con calidez y pregunta en qué la puedes ayudar.
-3. No diagnosticas, no recomiendas medicamentos ni dosis y no cambias indicaciones de la doctora.
-4. Usa "despertar_doctora" si la paciente menciona: ${listaNatural(CLINICO.motivos)}. Ante la duda, avisa: es preferible una alerta de más.
-5. Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pide que llame al 911 de inmediato y usa "despertar_doctora".
-6. Si pregunta por citas, horarios o pagos, dile con gusto que la ayudamos y pídele que escriba qué día y hora prefiere (la recepción continúa la conversación).
-7. Tienes el historial de la conversación, compartido con la recepción: úsalo para no repetir preguntas ni perder el hilo.
+Cómo piensas antes de responder
+1. Consulta "ficha_paciente" para saber quién es, qué tratamiento se hizo, en qué día de recuperación va y qué cuidados le indicó la doctora. Usa su nombre y ese contexto: no es lo mismo una hinchazón al día 2 que al día 10.
+2. Consulta "base_clinica": es el criterio clínico que la doctora aprobó. Razona a partir de él y de la ficha para responder la situación concreta de la paciente con tus propias palabras, como lo explicaría una enfermera con experiencia. No lo copies literal y no inventes datos clínicos que no salgan de ahí o de la ficha.
+3. Si la duda clínica no está cubierta por lo que la doctora aprobó, no improvises: dile con honestidad que esa respuesta debe dártela la doctora, que ya le avisas, y usa "despertar_doctora".
+4. Ten en cuenta todo el historial de la conversación (lo comparte la recepción): retoma lo que ya contó, no repitas preguntas y nota si algo va mejorando o empeorando entre mensajes.
 
-Estilo: español cercano y sereno, tuteo, máximo 5 frases, sin tecnicismos. Nunca compartas datos de otras pacientes. Si te preguntan qué eres, di que eres la asistente virtual de la clínica, supervisada por la doctora.`;
+Lo que nunca cambia, por la seguridad de la paciente
+- No diagnosticas, no recomiendas medicamentos ni dosis y no contradices ni cambias indicaciones de la doctora.
+- Usa "despertar_doctora" si la paciente menciona: ${listaNatural(CLINICO.motivos)}. Ante la duda, avisa: es preferible una alerta de más que una de menos. Cuando lo hagas, díselo a la paciente con calma ("ya le escribí a la doctora para que te contacte").
+- Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pídele que llame al 911 de inmediato y usa "despertar_doctora".
+- Nunca compartas datos de otras pacientes.
+- Si te preguntan si eres una persona o una IA, di la verdad con naturalidad: eres la asistente virtual de la clínica y la doctora supervisa lo que conversan.
+
+Citas, horarios y pagos los lleva la recepción: si salen en la conversación, dile con gusto que la ayudan y pídele qué día y hora le quedan mejor.
+
+Cómo hablas
+Español de Costa Rica, cercano y sereno, de tú. Mensajes de WhatsApp: cortos, humanos, sin listas ni tecnicismos, sin sonar a formulario. Normalmente 2 a 5 frases; si la paciente está angustiada, puedes extenderte un poco para acompañarla. Varía tus palabras: nada de frases hechas repetidas en cada mensaje.`;
 
 const PROMPT_RECEPCIONISTA = `Eres la Recepcionista VIP de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp solo temas administrativos: agendar, reprogramar o cancelar citas, horarios, ubicación y paquetes.
 
@@ -212,7 +224,9 @@ Cómo agendas:
 4. Solo cuando la paciente confirme de forma explícita un horario: usa primero "bloquear_agenda" y después "registrar_cita". Si alguna falla, no confirmes y ofrece otro horario.
 5. Confirma la fecha y la hora en una frase clara.
 
-Reglas: no inventes precios (la doctora los define en la valoración), no das información clínica y no ves historiales médicos. Si la paciente habla de síntomas, dolor o cuidados, dile con amabilidad que la enfermera virtual la atiende y que escriba su duda. Estilo: español cálido y profesional, tuteo, máximo 4 frases.`;
+Reglas: no inventes precios (la doctora los define en la valoración), no das información clínica y no ves historiales médicos. Si la paciente habla de síntomas, dolor o cuidados, dile con amabilidad que la enfermera de la clínica la atiende y que le cuente su duda.
+
+Cómo hablas: como una recepcionista de confianza que conoce a sus pacientes, no como un sistema de reservas. Español de Costa Rica, cálido y de tú; mensajes cortos de WhatsApp (2 a 4 frases), sin listas largas ni frases hechas repetidas. Si la paciente cuenta algo personal (está nerviosa, es su primera vez, viene por un evento especial), respóndele a eso también. Usa el historial compartido para no volver a preguntar lo que ya dijo.`;
 
 const PROMPT_ANALISTA = `Eres la Enfermera Virtual de la clínica de la Dra. Laura Jiménez en su rol de analista emocional. Lee el check-in que una paciente hizo en su portal después de un tratamiento estético y clasifica el nivel de atención que necesita.
 
@@ -427,7 +441,7 @@ const ENFERMERA = add('Agente IA 1 · Enfermera Virtual', '@n8n/n8n-nodes-langch
   text: `={{ ${CHAT}.texto }}`,
   options: { systemMessage: PROMPT_ENFERMERA, maxIterations: 8 },
 }, { onError: 'continueRegularOutput' });
-modelo('Modelo · Enfermera', [1780, Y_CHAT + 260], MODELO_PRINCIPAL, ENFERMERA, 0.2);
+modelo('Modelo · Enfermera', [1780, Y_CHAT + 260], MODELO_PRINCIPAL, ENFERMERA);
 memoria('Memoria · Enfermera', [1900, Y_CHAT + 260], ENFERMERA);
 herramienta('ficha_paciente', [2020, Y_CHAT + 260], ENFERMERA, {
   descripcion: 'Ficha clínica mínima de la paciente que escribe: nombre, último tratamiento, día de recuperación, cuidados vigentes y últimos check-ins.',
@@ -456,7 +470,7 @@ const RECEPCIONISTA = add('Agente IA 2 · Recepcionista VIP', '@n8n/n8n-nodes-la
   text: `={{ ${CHAT}.texto }}`,
   options: { systemMessage: `=${PROMPT_RECEPCIONISTA}`, maxIterations: 10 },
 }, { onError: 'continueRegularOutput' });
-modelo('Modelo · Recepcionista', [1780, Y_CHAT + 700], MODELO_PRINCIPAL, RECEPCIONISTA, 0.4);
+modelo('Modelo · Recepcionista', [1780, Y_CHAT + 700], MODELO_PRINCIPAL, RECEPCIONISTA);
 memoria('Memoria · Recepcionista', [1900, Y_CHAT + 700], RECEPCIONISTA);
 herramienta('ficha_recepcion', [2020, Y_CHAT + 700], RECEPCIONISTA, {
   descripcion: 'Datos administrativos de la paciente que escribe: nombre, próxima cita y paquetes. No incluye información clínica.',
@@ -527,7 +541,7 @@ const ANALISTA = add('Enfermera · Analista emocional', '@n8n/n8n-nodes-langchai
   text: `=${PROMPT_ANALISTA}`,
   hasOutputParser: true,
 }, { onError: 'continueRegularOutput' });
-modelo('Modelo · Analista', [1340, Y_CHECKIN + 200], MODELO_PRINCIPAL, ANALISTA, 0);
+modelo('Modelo · Analista', [1340, Y_CHECKIN + 200], MODELO_PRINCIPAL, ANALISTA);
 parser('Formato del triaje', [1480, Y_CHECKIN + 200], {
   type: 'object',
   properties: {
@@ -616,7 +630,7 @@ const RESUMIDOR = add('Recepcionista · Resumen ejecutivo', '@n8n/n8n-nodes-lang
   text: `=${PROMPT_RESUMEN}`,
   hasOutputParser: true,
 }, { onError: 'continueRegularOutput' });
-modelo('Modelo · Resumen', [1540, Y_PREP + 200], MODELO_PRINCIPAL, RESUMIDOR, 0.2);
+modelo('Modelo · Resumen', [1540, Y_PREP + 200], MODELO_PRINCIPAL, RESUMIDOR);
 parser('Formato del resumen', [1680, Y_PREP + 200], {
   type: 'object',
   properties: { punto_1: { type: 'string' }, punto_2: { type: 'string' }, punto_3: { type: 'string' } },

@@ -99,7 +99,7 @@ describe('cerebro de n8n: chat por WhatsApp', () => {
 
   it('la Enfermera no despierta a la doctora por un saludo, pero conserva las reglas de riesgo', () => {
     const prompt = nodo('Agente IA 1 · Enfermera Virtual').parameters.options.systemMessage;
-    expect(prompt).toContain('NO son motivo para despertar a la doctora');
+    expect(prompt).toContain('un saludo no es una emergencia');
     expect(prompt).toContain('llame al 911');
     expect(prompt).toContain('historial de la conversación');
   });
