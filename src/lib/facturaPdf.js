@@ -185,6 +185,8 @@ export async function crearFacturaPdf(factura, { clinica, logo = null, generado 
   filaTotal('Subtotal', monto(factura.subtotal));
   if (Number(factura.descuento) > 0) filaTotal('Descuento', `- ${monto(factura.descuento)}`);
   if (Number(factura.impuesto) > 0) filaTotal(`IVA (${factura.impuesto} %)`, monto(factura.impuestoMonto));
+
+  y -= 8; // Espacio extra para que el recuadro verde no tape el texto de arriba
   rect(xEtiqueta - 12, y - 10, COLS.total + 10 - (xEtiqueta - 12), 28, COLOR.oliva);
   texto('TOTAL', xEtiqueta, y, { size: 11, font: negrita, color: COLOR.blanco });
   texto(monto(factura.total), COLS.total, y, { size: 13, font: negrita, color: COLOR.blanco, alinear: 'der' });
