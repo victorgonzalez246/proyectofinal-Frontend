@@ -53,13 +53,14 @@ Odontologa con maestria en medicina estetica
 
 ## 🟠 4. Revisión clínica (la doctora)
 
-La doctora debe revisar y aprobar estos textos, que escribí como ejemplo:
+Todo está en un solo archivo para entregarle a la doctora: [`REVISION-DOCTORA.md`](../REVISION-DOCTORA.md). Explica qué revisar y ella edita ahí mismo los textos; el sistema los toma de ese archivo.
 
-- [ ] **Base clínica de la Enfermera Virtual:** [`n8n/base-clinica-ejemplo.csv`](../n8n/base-clinica-ejemplo.csv). La Enfermera responde **solo** con lo que diga esta hoja.
-- [ ] **Instrucciones previas a cada tratamiento:** en el cerebro de n8n, nodo *Mensajes: recordatorio 24 h*.
-- [ ] **Señales de emergencia:** nodo *Red de seguridad clínica* (lista `SENALES`) y las instrucciones del agente Enfermera (`PROMPT_ENFERMERA` en `n8n/generar-cerebro.mjs`).
-- [ ] **Cuidados post-tratamiento de la paciente demo:** en `db.example.json`, para usarlos como modelo de los reales.
-dejame un archivo con que decirle a la doctora y modificarlo desde el archivo
+- [ ] Enviarle `REVISION-DOCTORA.md` (o imprimirlo / exportarlo a PDF) y recibir sus correcciones.
+- [ ] Aplicar los cambios en el archivo y cambiar la última línea a **Aprobado por la doctora: sí**.
+- [ ] `npm run generar:n8n` (valida el archivo y dice qué línea corregir si algo está mal).
+- [ ] Reimportar el cerebro en n8n y copiar `n8n/base-clinica-ejemplo.csv` a la pestaña `BaseClinica` de la hoja de Google.
+
+El archivo cubre: instrucciones previas a cada tratamiento, señales de emergencia, cuándo la Enfermera avisa a la doctora y la Base clínica. Los cuidados de cada paciente los escribe la doctora en el panel (ficha → Plan).
 ## 🟠 5. Legal y privacidad
 
 - [ ] Que una persona asesora legal revise el **aviso de privacidad** ([`src/pages/PrivacyPage.jsx`](../src/pages/PrivacyPage.jsx)) según la Ley 8968. Si cambia el texto, actualiza `AVISO_VERSION` en `src/config/clinica.js`.
@@ -75,7 +76,9 @@ La guía paso a paso está en [`n8n/README.md`](../n8n/README.md).
 - [ ] **n8n 2.x publicado por HTTPS** (n8n Cloud o un servidor), con `NODE_FUNCTION_ALLOW_BUILTIN=crypto`.
 - [ ] **Meta / WhatsApp Business:**
   - [ ] Crear la app, conectar el número y generar un token permanente.
-  - [ ] Crear y hacer aprobar las **14 plantillas** (nombres, categorías y textos en la guía).
+  - [x] Plantillas de Utilidad y Marketing: las 12 están aprobadas (cuenta "Dr.Laura Jimenez", 2 oct 2026).
+  - [ ] **Verificar el negocio** (Meta Business Suite → Configuración → Centro de seguridad → Verificación del negocio). Sin eso Meta no deja crear `codigo_acceso` (Autenticación): responde "Esta cuenta de WhatsApp Business no tiene permiso para crear una plantilla de mensaje".
+  - [ ] Con el negocio verificado: crear `codigo_acceso` (Autenticación → Código de acceso de un solo uso → *Copiar código*, idioma *Spanish*, recomendación de seguridad, vence en 15 minutos) y pasar `modoPruebas` a `no`. Mientras tanto, el cerebro sigue en `modoPruebas = si` y el código llega como texto a los `numerosPrueba` que escribieron a la clínica en las últimas 24 h.
 - [ ] **Anthropic:** crear una API key (console.anthropic.com).
 - [ ] **Google:**
   - [ ] Crear la **hoja de datos** con sus 6 pestañas y la fila de la doctora (con su número real).

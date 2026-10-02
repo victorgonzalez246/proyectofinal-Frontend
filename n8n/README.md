@@ -98,7 +98,7 @@ Con ese número la doctora recibe su enlace para entrar al panel.
 
 > **Edita los datos desde el panel, no en la hoja.** Google Sheets convierte lo que se escribe a mano (por ejemplo, fechas en números) y las listas se guardan como JSON en una celda.
 
-Además, la hoja **Base clínica** (pestaña `BaseClinica`) se crea desde [`base-clinica-ejemplo.csv`](base-clinica-ejemplo.csv). La Enfermera solo responde con lo que diga esa hoja, y **la doctora debe revisarla**.
+Además, la hoja **Base clínica** (pestaña `BaseClinica`) se crea desde [`base-clinica-ejemplo.csv`](base-clinica-ejemplo.csv). La Enfermera solo responde con lo que diga esa hoja, y **la doctora debe revisarla**. Ese CSV se genera desde [`REVISION-DOCTORA.md`](../REVISION-DOCTORA.md): no lo edites a mano.
 
 ## 3. Credenciales
 
@@ -218,5 +218,5 @@ npm run probar:n8n    # los dos flujos en un n8n real y local (necesita n8n inst
 ## 7. Mantenimiento
 
 - **Recordatorio de 24 h:** toma las citas `confirmada` con hora. La doctora las confirma en el panel; las reservas de la Recepcionista ya entran confirmadas.
-- **Instrucciones previas:** en el nodo *Mensajes: recordatorio 24 h* del cerebro. Son textos de ejemplo que la doctora debe validar.
+- **Textos clínicos** (instrucciones previas, señales de emergencia, cuándo la Enfermera avisa a la doctora y Base clínica): se editan en [`REVISION-DOCTORA.md`](../REVISION-DOCTORA.md), que la doctora revisa y aprueba. `npm run generar:n8n` lo valida y lo lleva a los nodos *Mensajes: recordatorio 24 h*, *Red de seguridad clínica*, *Agente IA 1 · Enfermera Virtual* y al CSV de la Base clínica.
 - **Editar los flujos:** cambia `n8n/generar-*.mjs` o `api/`, ejecuta `npm run generar:n8n` y vuelve a importar. Si editas directo en n8n, el próximo `generar:n8n` sobrescribe esos cambios.

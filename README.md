@@ -117,5 +117,6 @@ Publicado en **https://clinica-dra-laura.vercel.app** (Vercel, proyecto `clinica
 
 - [`docs/ARQUITECTURA-PORTAL.md`](docs/ARQUITECTURA-PORTAL.md): arquitectura y contrato de la API.
 - [`n8n/README.md`](n8n/README.md): instalar, configurar y probar los flujos de n8n.
+- [`REVISION-DOCTORA.md`](REVISION-DOCTORA.md): textos clínicos que la doctora revisa y edita (fuente única para el cerebro de n8n y la Base clínica).
 - [`pendientes/README.md`](pendientes/README.md): lo que requiere tus cuentas, datos reales o decisiones.
 - [`pendientes/proximos-desarrollos.md`](pendientes/proximos-desarrollos.md): plan por fases y su estado.

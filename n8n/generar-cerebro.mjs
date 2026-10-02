@@ -7,6 +7,10 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PLANTILLAS } from './plantillas.mjs';
+import { cargarContenidoClinico, baseClinicaCsv, listaNatural, ARCHIVO_CSV } from './contenido-clinico.mjs';
+
+// Textos clínicos aprobados por la doctora: REVISION-DOCTORA.md (si tiene un error de formato, se detiene aquí)
+const CLINICO = cargarContenidoClinico();
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT_FILE = path.join(HERE, 'flujos', 'cerebro-maestro-clinica.json');
@@ -81,12 +85,15 @@ const link = (from, to, output = 0, kind = 'main') => {
 };
 
 // Los nodos con HELPERS pasan su salida por filtrarPruebas (en modo pruebas solo quedan los números de la lista)
-const code = (name, position, fn, { helpers = true } = {}) =>
-  add(name, 'n8n-nodes-base.code', 2, position, {
+// vars: constantes que se insertan al inicio del nodo (p. ej. los textos de REVISION-DOCTORA.md)
+const code = (name, position, fn, { helpers = true, vars = {} } = {}) => {
+  const consts = Object.entries(vars).map(([k, v]) => `const ${k} = ${JSON.stringify(v)};\n`).join('');
+  return add(name, 'n8n-nodes-base.code', 2, position, {
     jsCode: helpers
-      ? `const PLANTILLAS = ${JSON.stringify(PLANTILLAS)};\n${HELPERS}\nreturn filtrarPruebas(await (async () => {\n${bodyOf(fn)}\n})());`
-      : bodyOf(fn),
+      ? `${consts}const PLANTILLAS = ${JSON.stringify(PLANTILLAS)};\n${HELPERS}\nreturn filtrarPruebas(await (async () => {\n${bodyOf(fn)}\n})());`
+      : consts + bodyOf(fn),
   });
+};
 
 const setAccion = (name, position, accion) =>
   add(name, 'n8n-nodes-base.set', 3.4, position, {
@@ -187,7 +194,7 @@ Cómo trabajas:
 2. En temas clínicos responde solo con información de "base_clinica" (aprobada por la doctora) y de la ficha. Si una duda clínica no está cubierta ahí, dilo con honestidad, dile que la doctora le responderá y usa "despertar_doctora".
    Saludos, agradecimientos o mensajes sin una duda clínica NO son motivo para despertar a la doctora: responde con calidez y pregunta en qué la puedes ayudar.
 3. No diagnosticas, no recomiendas medicamentos ni dosis y no cambias indicaciones de la doctora.
-4. Usa "despertar_doctora" si la paciente menciona: dolor fuerte o que aumenta, piel blanca, morada o con manchas en la zona tratada, ampollas, fiebre, secreción, cambios en la visión, hinchazón que empeora después de 72 horas, bultos que duelen, asimetría marcada, reacción alérgica, o si está muy angustiada. Ante la duda, avisa: es preferible una alerta de más.
+4. Usa "despertar_doctora" si la paciente menciona: ${listaNatural(CLINICO.motivos)}. Ante la duda, avisa: es preferible una alerta de más.
 5. Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pide que llame al 911 de inmediato y usa "despertar_doctora".
 6. Si pregunta por citas, horarios o pagos, dile con gusto que la ayudamos y pídele que escriba qué día y hora prefiere (la recepción continúa la conversación).
 7. Tienes el historial de la conversación, compartido con la recepción: úsalo para no repetir preguntas ni perder el hilo.
@@ -364,18 +371,12 @@ const SEGURIDAD = code('Red de seguridad clínica', [1140, Y_CHAT], () => {
   // Regla fija, sin IA: una emergencia nunca depende de un modelo de lenguaje
   const item = $input.first().json;
   const texto = String(item.payload.texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const SENALES = [
-    'no puedo respirar', 'me ahogo', 'me falta el aire', 'dificultad para respirar',
-    'se me cierra la garganta', 'garganta hinchada', 'lengua hinchada', 'dolor en el pecho',
-    'no veo', 'perdi la vista', 'vision borrosa', 'veo borroso', 'veo doble',
-    'piel morada', 'se puso morad', 'piel blanca', 'se puso blanc', 'desmay', 'convuls',
-    'sangra mucho', 'sangrado abundante', 'fiebre alta',
-  ];
+  // SENALES: REVISION-DOCTORA.md, sección 2 (se inserta al generar, ya sin tildes)
   const senal = SENALES.find((s) => texto.includes(s));
   // "BAJA" (solo esa palabra) deja de enviar promociones; una emergencia siempre tiene prioridad
   const baja = !senal && /^\s*(baja|stop)\s*[.!]*\s*$/.test(texto);
   return [{ json: { ...item, ruta: senal ? 'emergencia' : baja ? 'baja' : 'conversacion', senal: senal || '' } }];
-}, { helpers: false });
+}, { helpers: false, vars: { SENALES: CLINICO.senales } });
 
 const RUTA_CHAT = router('¿Emergencia?', [1360, Y_CHAT], 'ruta', [['emergencia', 'Emergencia'], ['conversacion', 'Conversación'], ['baja', 'Baja de promociones']]);
 
@@ -659,16 +660,7 @@ const API_RESUMEN = add('API: guardar resumen', 'n8n-nodes-base.httpRequest', 4.
 const API_CITAS = apiGet('API: citas confirmadas de mañana', [1140, 1340],
   "/n8n/citas?estado=confirmada&fecha={{ $now.setZone('America/Costa_Rica').plus({ days: 1 }).toFormat('yyyy-MM-dd') }}");
 const MSG_RECORDATORIO = code('Mensajes: recordatorio 24 h', [1360, 1340], () => {
-  // Textos de ejemplo: la doctora debe validarlos antes de activar el flujo
-  const INSTRUCCIONES = {
-    'Armonización Facial': 'Evita aspirina, ibuprofeno y alcohol 48 h antes y llega con el rostro limpio.',
-    'Bioestimuladores de Colágeno': 'Evita aspirina, ibuprofeno y alcohol 48 h antes. Avísanos si tomas anticoagulantes.',
-    'Rejuvenecimiento de Mirada': 'Llega sin maquillaje en ojos y frente y evita el ejercicio intenso ese día.',
-    'Labios de Alta Definición': 'Evita aspirina, ibuprofeno y alcohol 48 h antes. Avísanos si has tenido herpes labial.',
-    'Skinbooster & Mesoterapia': 'Llega con la piel limpia y no te exfolies en las 48 h previas.',
-    'Rinomodelación Sin Cirugía': 'Evita aspirina, ibuprofeno y alcohol 48 h antes.',
-  };
-  const GENERAL = 'Llega 10 minutos antes y con el rostro limpio.';
+  // INSTRUCCIONES y GENERAL: REVISION-DOCTORA.md, sección 1 (se insertan al generar)
   const citas = $input.first().json.items || [];
   return citas.map((cita) =>
     msg(cita.telefono, 'recordatorio_cita', [
@@ -678,7 +670,7 @@ const MSG_RECORDATORIO = code('Mensajes: recordatorio 24 h', [1360, 1340], () =>
       INSTRUCCIONES[cita.tratamiento] || GENERAL,
     ])
   );
-});
+}, { vars: { INSTRUCCIONES: CLINICO.instrucciones, GENERAL: CLINICO.general } });
 
 const API_SEGUIMIENTO = apiGet('API: pacientes en recuperación', [1140, 1500], '/n8n/seguimiento');
 const MSG_SEGUIMIENTO = code('Mensajes: seguimiento', [1360, 1500], () => {
@@ -852,3 +844,7 @@ const workflow = {
 
 fs.writeFileSync(OUT_FILE, JSON.stringify(workflow, null, 2) + '\n');
 console.log(`✓ ${path.relative(process.cwd(), OUT_FILE)}: ${nodes.length} nodos`);
+
+// Base clínica para la hoja de Google (pestaña BaseClinica), desde REVISION-DOCTORA.md
+fs.writeFileSync(ARCHIVO_CSV, baseClinicaCsv(CLINICO));
+console.log(`✓ ${path.relative(process.cwd(), ARCHIVO_CSV)}: ${CLINICO.base.length} filas${CLINICO.aprobado ? '' : ' (borrador: la doctora aún no la aprueba)'}`);
