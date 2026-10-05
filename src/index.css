@@ -373,6 +373,15 @@ h4 {
   box-shadow: var(--shadow-glass);
   transition: var(--transition-base);
 }
+/* En celular el desenfoque del fondo cuesta demasiado (hay muchas tarjetas): se cambia por un
+   blanco algo más opaco, que sobre el fondo liso de las secciones se ve prácticamente igual */
+@media (max-width: 768px), (hover: none) {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
 
 .glass-card:hover {
   box-shadow: var(--shadow-lg);
