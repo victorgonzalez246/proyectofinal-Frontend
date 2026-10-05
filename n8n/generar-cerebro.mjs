@@ -76,12 +76,13 @@ const add = (name, type, typeVersion, position, parameters, extra = {}) => {
 };
 
 // Conecta from -> to. `output` es la salida del nodo origen; `kind` distingue las conexiones de IA
-const link = (from, to, output = 0, kind = 'main') => {
+// `index` es la entrada del nodo destino (p. ej. 1 = "Fallback Model" de un agente)
+const link = (from, to, output = 0, kind = 'main', index = 0) => {
   connections[from] ??= {};
   connections[from][kind] ??= [];
   const outs = connections[from][kind];
   while (outs.length <= output) outs.push([]);
-  outs[output].push({ node: to, type: kind, index: 0 });
+  outs[output].push({ node: to, type: kind, index });
 };
 
 // Los nodos con HELPERS pasan su salida por filtrarPruebas (en modo pruebas solo quedan los números de la lista)
@@ -139,19 +140,25 @@ const router = (name, position, campo, rutas, fallback) =>
 
 // ── Piezas de IA ──
 // Los 5 modelos son "Google Gemini Chat Model" (multimodal: las agentes ven las fotos gracias a
-// passthroughBinaryImages). Gemini 3.5 Flash para las dos agentes que conversan; Flash-Lite (más rápido y
-// barato) para clasificar, analizar check-ins y resumir. La credencial se referencia solo por nombre: al
-// importar, n8n la enlaza con la credencial "Google Gemini(PaLM) Api" de ese nombre. La API key vive solo en n8n.
-const MODELO_PRINCIPAL = 'models/gemini-3.5-flash';
+// passthroughBinaryImages). Gemini 3.6 Flash para las dos agentes que conversan (3.5 Flash devolvía 503
+// "high demand" y tardaba 11-17 s); Flash-Lite (más rápido y barato) para clasificar, analizar check-ins y
+// resumir, y como modelo de respaldo ("Fallback Model") de cada agente si el principal falla.
+// La credencial se referencia solo por nombre: al importar, n8n la enlaza con la credencial
+// "Google Gemini(PaLM) Api" de ese nombre. La API key vive solo en n8n.
+const MODELO_PRINCIPAL = 'models/gemini-3.6-flash';
 const MODELO_RAPIDO = 'models/gemini-3.5-flash-lite';
+const MODELO_RESPALDO = MODELO_RAPIDO;
 const CRED_GEMINI = { credentials: { googlePalmApi: { name: 'Gemini - Aura y WhatsApp' } } };
+// Reintentos ante errores pasajeros de Gemini (503 "high demand", 429)
+const REINTENTOS_IA = { retryOnFail: true, maxTries: 3, waitBetweenTries: 2000 };
 
-const modelo = (name, position, modelName, target, temperature) => {
+// entrada: 0 = modelo principal; 1 = modelo de respaldo del agente (requiere needsFallback en el agente)
+const modelo = (name, position, modelName, target, temperature, entrada = 0) => {
   add(name, '@n8n/n8n-nodes-langchain.lmChatGoogleGemini', 1.1, position, {
     modelName,
     options: temperature === undefined ? {} : { temperature },
-  }, CRED_GEMINI);
-  link(name, target, 0, 'ai_languageModel');
+  }, { ...REINTENTOS_IA, ...CRED_GEMINI });
+  link(name, target, 0, 'ai_languageModel', entrada);
 };
 
 // Una sola conversación por paciente: la Enfermera y la Recepcionista comparten el historial
@@ -484,7 +491,7 @@ const GEMINI = add('Gemini · Transcribir nota de voz', '@n8n/n8n-nodes-langchai
   binaryPropertyName: 'data',
   simplify: true,
   options: {},
-}, { retryOnFail: true, maxTries: 2, waitBetweenTries: 2000, onError: 'continueRegularOutput', ...CRED_GEMINI });
+}, { ...REINTENTOS_IA, onError: 'continueRegularOutput', ...CRED_GEMINI });
 
 const TEXTO_AUDIO = code('Texto de la nota de voz', [2680, Y_MEDIO], () => {
   // La transcripción pasa a ser el mensaje (y queda así en la memoria de la conversación)
@@ -575,9 +582,12 @@ modelo('Modelo · Clasificador', [1600, Y_CHAT + 340], MODELO_RAPIDO, CLASIFICAD
 const ENFERMERA = add('Agente IA 1 · Enfermera Virtual', '@n8n/n8n-nodes-langchain.agent', 3.1, [1900, Y_CHAT + 60], {
   promptType: 'define',
   text: `={{ ${CHAT}.texto }}`,
-  options: { systemMessage: PROMPT_ENFERMERA, maxIterations: 8, passthroughBinaryImages: true },
+  needsFallback: true,
+  // returnIntermediateSteps: "Alerta para el panel · Enfermera" ve si usó despertar_doctora y con qué motivo
+  options: { systemMessage: PROMPT_ENFERMERA, maxIterations: 8, passthroughBinaryImages: true, returnIntermediateSteps: true },
 }, { onError: 'continueRegularOutput' });
 modelo('Modelo · Enfermera', [1780, Y_CHAT + 260], MODELO_PRINCIPAL, ENFERMERA);
+modelo('Modelo respaldo · Enfermera', [1780, Y_CHAT + 380], MODELO_RESPALDO, ENFERMERA, undefined, 1);
 memoria('Memoria · Enfermera', [1900, Y_CHAT + 260], ENFERMERA);
 herramienta('ficha_paciente', [2020, Y_CHAT + 260], ENFERMERA, {
   descripcion: 'Ficha clínica mínima de la paciente que escribe: nombre, último tratamiento, día de recuperación, cuidados vigentes y últimos check-ins.',
@@ -604,9 +614,11 @@ herramienta('despertar_doctora', [2260, Y_CHAT + 260], ENFERMERA, {
 const RECEPCIONISTA = add('Agente IA 2 · Recepcionista VIP', '@n8n/n8n-nodes-langchain.agent', 3.1, [1900, Y_CHAT + 500], {
   promptType: 'define',
   text: `={{ ${CHAT}.texto }}`,
+  needsFallback: true,
   options: { systemMessage: `=${PROMPT_RECEPCIONISTA}`, maxIterations: 10, passthroughBinaryImages: true },
 }, { onError: 'continueRegularOutput' });
 modelo('Modelo · Recepcionista', [1780, Y_CHAT + 700], MODELO_PRINCIPAL, RECEPCIONISTA);
+modelo('Modelo respaldo · Recepcionista', [1780, Y_CHAT + 820], MODELO_RESPALDO, RECEPCIONISTA, undefined, 1);
 memoria('Memoria · Recepcionista', [1900, Y_CHAT + 700], RECEPCIONISTA);
 herramienta('ficha_recepcion', [2020, Y_CHAT + 700], RECEPCIONISTA, {
   descripcion: 'Datos administrativos de la paciente que escribe: nombre, próxima cita y paquetes. No incluye información clínica.',
@@ -655,6 +667,67 @@ const AVISO_SIN_IA = code('Aviso: mensaje sin responder', [2400, Y_CHAT + 280], 
   const p = $('Red de seguridad clínica').first().json.payload;
   return [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['Mensaje sin responder (' + r.agente + ')', p.nombre || 'Paciente', p.from, 'La IA no pudo responder. Escribió: ' + p.texto])];
 });
+
+// ── Alertas para el panel de la doctora (Alertas y Hoy) ──
+// Cada aviso urgente por WhatsApp queda también registrado en la API (POST /n8n/alerta).
+// Van DESPUÉS del aviso: n8n (orden v1) ejecuta primero la rama más alta del lienzo, así que estos nodos
+// están más abajo que sus hermanos de WhatsApp. "API: registrar alerta" tiene onError y timeout corto:
+// si la API falla, la doctora y la paciente ya recibieron su mensaje y el flujo sigue.
+const ALERTA_EMERGENCIA = code('Alerta para el panel · emergencia', [1820, Y_CHAT - 40], () => {
+  const item = $input.first().json;
+  const p = item.payload || {};
+  return [{
+    json: {
+      telefono: p.from, nombre: p.nombre || '', origen: 'whatsapp', tipo: 'emergencia',
+      motivo: 'Señal de alarma en el chat' + (item.senal ? ': "' + item.senal + '"' : ''),
+      nota: String('Escribió: ' + (p.texto || '')).slice(0, 1000),
+    },
+  }];
+}, { helpers: false });
+
+// despertar_doctora es una herramienta (HTTP Request Tool) del agente: hace UNA sola petición (el WhatsApp).
+// En lugar de darle a la IA una segunda herramienta que podría olvidar usar, el agente devuelve sus pasos
+// (returnIntermediateSteps) y este nodo registra la alerta si la herramienta se usó, con el motivo que escribió la IA.
+const ALERTA_ENFERMERA = code('Alerta para el panel · Enfermera', [2240, Y_CHAT + 160], () => {
+  const r = $input.first().json || {};
+  const pasos = Array.isArray(r.intermediateSteps) ? r.intermediateSteps : [];
+  const usos = pasos.filter((s) => String(s?.action?.tool || '').toLowerCase().includes('despertar_doctora'));
+  if (!usos.length) return [];
+  const p = $('Red de seguridad clínica').first().json.payload;
+  const entrada = usos[usos.length - 1].action.toolInput || {};
+  const motivo = String(entrada.motivo ?? entrada.input?.motivo ?? (typeof entrada === 'string' ? entrada : '')).replace(/\s+/g, ' ').trim();
+  return [{
+    json: {
+      telefono: p.from, nombre: p.nombre || '', origen: 'whatsapp', tipo: 'enfermera',
+      motivo: (motivo || 'La Enfermera IA pidió que la doctora revise este caso').slice(0, 300),
+      nota: String('Escribió: ' + (p.texto || '')).slice(0, 1000),
+    },
+  }];
+}, { helpers: false });
+
+const ALERTA_SIN_IA = code('Alerta para el panel · sin respuesta', [2400, Y_CHAT + 400], () => {
+  const r = $input.first().json || {};
+  if (!r.sinIA) return [];
+  const p = $('Red de seguridad clínica').first().json.payload;
+  return [{
+    json: {
+      telefono: p.from, nombre: p.nombre || '', origen: 'whatsapp', tipo: 'ia_sin_respuesta',
+      motivo: 'La IA (' + r.agente + ') no pudo responder; la paciente recibió un mensaje de espera',
+      nota: String('Escribió: ' + (p.texto || '')).slice(0, 1000),
+    },
+  }];
+}, { helpers: false });
+
+const API_ALERTA = add('API: registrar alerta', 'n8n-nodes-base.httpRequest', 4.2, [2640, Y_CHAT + 400], {
+  method: 'POST',
+  url: `={{ ${CFG}.apiUrl }}/n8n/alerta`,
+  authentication: 'genericCredentialType',
+  genericAuthType: 'httpHeaderAuth',
+  sendBody: true,
+  specifyBody: 'json',
+  jsonBody: '={{ JSON.stringify($json) }}',
+  options: { timeout: 10000 },
+}, { retryOnFail: true, maxTries: 2, waitBetweenTries: 1000, onError: 'continueRegularOutput', credentials: { httpHeaderAuth: { name: 'Clínica · Secreto n8n' } } });
 
 // ════════════════════ Rama 2 · Check-in (Enfermera como analista emocional) ════════════════════
 const Y_CHECKIN = 460;
@@ -959,6 +1032,11 @@ link(ENFERMERA, RESPUESTA_ENFERMERA);
 link(RECEPCIONISTA, RESPUESTA_RECEPCION);
 [TXT_EMERGENCIA, RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION, TXT_BAJA, TXT_NO_SOPORTADO].forEach((n) => link(n, RESPONDER_WA));
 [RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION].forEach((n) => link(n, AVISO_SIN_IA));
+// Alertas para el panel (después de los avisos por WhatsApp; ver "Alerta para el panel · …")
+link(RUTA_CHAT, ALERTA_EMERGENCIA, 0);
+link(ENFERMERA, ALERTA_ENFERMERA);
+[RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION].forEach((n) => link(n, ALERTA_SIN_IA));
+[ALERTA_EMERGENCIA, ALERTA_ENFERMERA, ALERTA_SIN_IA].forEach((n) => link(n, API_ALERTA));
 
 // Check-in y preparación de consultas
 link(CONTEXTO_CHECKIN, ANALISTA);

@@ -116,25 +116,48 @@ describe('cerebro de n8n: notas de voz', () => {
 describe('cerebro de n8n: modelos de IA (Google Gemini)', () => {
   const CREDENCIAL = { googlePalmApi: { name: 'Gemini - Aura y WhatsApp' } };
 
-  it('los 5 modelos son Gemini Chat Model con el modelo, la temperatura y la credencial esperados', () => {
+  const REINTENTOS = { retryOnFail: true, maxTries: 3, waitBetweenTries: 2000 };
+
+  it('los 5 modelos son Gemini Chat Model con el modelo, la temperatura, la credencial y los reintentos esperados', () => {
     const esperado = {
-      'Modelo · Enfermera': ['models/gemini-3.5-flash', {}],
-      'Modelo · Recepcionista': ['models/gemini-3.5-flash', {}],
-      'Modelo · Clasificador': ['models/gemini-3.5-flash-lite', { temperature: 0 }],
-      'Modelo · Analista': ['models/gemini-3.5-flash-lite', { temperature: 0 }],
-      'Modelo · Resumen': ['models/gemini-3.5-flash-lite', { temperature: 0.2 }],
+      'Modelo · Enfermera': ['models/gemini-3.6-flash', {}, 'Agente IA 1 · Enfermera Virtual'],
+      'Modelo · Recepcionista': ['models/gemini-3.6-flash', {}, 'Agente IA 2 · Recepcionista VIP'],
+      'Modelo · Clasificador': ['models/gemini-3.5-flash-lite', { temperature: 0 }, 'Clasificador de intención'],
+      'Modelo · Analista': ['models/gemini-3.5-flash-lite', { temperature: 0 }, 'Enfermera · Analista emocional'],
+      'Modelo · Resumen': ['models/gemini-3.5-flash-lite', { temperature: 0.2 }, 'Recepcionista · Resumen ejecutivo'],
     };
-    for (const [nombre, [modelName, options]] of Object.entries(esperado)) {
+    for (const [nombre, [modelName, options, destino]] of Object.entries(esperado)) {
       const n = nodo(nombre);
       expect(n.type).toBe('@n8n/n8n-nodes-langchain.lmChatGoogleGemini');
       expect(n.typeVersion).toBe(1.1);
       expect(n.parameters).toEqual({ modelName, options });
+      expect(n).toMatchObject(REINTENTOS);
       // Solo el nombre: sin id ni clave en el repo
       expect(n.credentials).toEqual(CREDENCIAL);
-      expect(flujo.connections[nombre].ai_languageModel[0]).toHaveLength(1);
+      // Modelo principal: entrada 0 del nodo de IA
+      expect(flujo.connections[nombre].ai_languageModel[0]).toEqual([{ node: destino, type: 'ai_languageModel', index: 0 }]);
     }
-    expect(flujo.nodes.filter((n) => n.type.endsWith('lmChatGoogleGemini'))).toHaveLength(5);
     expect(nodo('Gemini · Transcribir nota de voz').credentials).toEqual(CREDENCIAL);
+    expect(nodo('Gemini · Transcribir nota de voz')).toMatchObject(REINTENTOS);
+  });
+
+  it('cada agente tiene un modelo de respaldo (Fallback Model) Flash-Lite en la entrada 1', () => {
+    for (const [agente, respaldo] of [
+      ['Agente IA 1 · Enfermera Virtual', 'Modelo respaldo · Enfermera'],
+      ['Agente IA 2 · Recepcionista VIP', 'Modelo respaldo · Recepcionista'],
+    ]) {
+      const a = nodo(agente);
+      expect(a.typeVersion).toBe(3.1);
+      expect(a.parameters.needsFallback).toBe(true);
+      const r = nodo(respaldo);
+      expect(r.type).toBe('@n8n/n8n-nodes-langchain.lmChatGoogleGemini');
+      expect(r.parameters).toEqual({ modelName: 'models/gemini-3.5-flash-lite', options: {} });
+      expect(r).toMatchObject(REINTENTOS);
+      expect(r.credentials).toEqual(CREDENCIAL);
+      expect(flujo.connections[respaldo].ai_languageModel[0]).toEqual([{ node: agente, type: 'ai_languageModel', index: 1 }]);
+    }
+    // 5 modelos + 2 de respaldo
+    expect(flujo.nodes.filter((n) => n.type.endsWith('lmChatGoogleGemini'))).toHaveLength(7);
   });
 
   it('no queda ningún nodo ni referencia de Anthropic/Claude en los flujos', () => {

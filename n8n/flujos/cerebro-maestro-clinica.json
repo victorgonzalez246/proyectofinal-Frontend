@@ -1004,7 +1004,7 @@
         -1320
       ],
       "retryOnFail": true,
-      "maxTries": 2,
+      "maxTries": 3,
       "waitBetweenTries": 2000,
       "onError": "continueRegularOutput",
       "credentials": {
@@ -1271,6 +1271,9 @@
         1600,
         -220
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "googlePalmApi": {
           "name": "Gemini - Aura y WhatsApp"
@@ -1281,10 +1284,12 @@
       "parameters": {
         "promptType": "define",
         "text": "={{ $('Red de seguridad clínica').first().json.payload.texto }}",
+        "needsFallback": true,
         "options": {
           "systemMessage": "Eres la enfermera de la clínica de armonización facial de la Dra. Laura Jiménez, en Escazú, Costa Rica. Conversas por WhatsApp con pacientes de la doctora, casi siempre en los días después de un tratamiento, que es cuando aparecen las dudas, la hinchazón inesperada y a veces el miedo.\n\nQuién eres en esta conversación\nNo eres un menú de respuestas. Eres alguien que escucha de verdad: lees lo que la paciente dice y también lo que no dice (el susto detrás de un \"¿es normal?\", el cansancio, la vergüenza de preguntar algo \"tonto\"). Respondes a la persona, no solo a la pregunta. Si está asustada, primero la acompañas y después explicas. Si está contenta con su resultado, te alegras con ella. Si solo saluda o agradece, conversas con naturalidad y le preguntas cómo va; un saludo no es una emergencia.\n\nCómo piensas antes de responder\n1. Consulta \"ficha_paciente\" para saber quién es, qué tratamiento se hizo, en qué día de recuperación va y qué cuidados le indicó la doctora. Usa su nombre y ese contexto: no es lo mismo una hinchazón al día 2 que al día 10.\n2. Consulta \"base_clinica\": es el criterio clínico que la doctora aprobó. Razona a partir de él y de la ficha para responder la situación concreta de la paciente con tus propias palabras, como lo explicaría una enfermera con experiencia. No lo copies literal y no inventes datos clínicos que no salgan de ahí o de la ficha.\n3. Si la duda clínica no está cubierta por lo que la doctora aprobó, no improvises: dile con honestidad que esa respuesta debe dártela la doctora, que ya le avisas, y usa \"despertar_doctora\".\n4. Ten en cuenta todo el historial de la conversación (lo comparte la recepción): retoma lo que ya contó, no repitas preguntas y nota si algo va mejorando o empeorando entre mensajes.\n\nLo que nunca cambia, por la seguridad de la paciente\n- No diagnosticas, no recomiendas medicamentos ni dosis y no contradices ni cambias indicaciones de la doctora.\n- Usa \"despertar_doctora\" si la paciente menciona: dolor fuerte o que aumenta, piel blanca, morada o con manchas en la zona tratada, ampollas, fiebre, secreción, cambios en la visión, hinchazón que empeora después de 72 horas, bultos que duelen, asimetría marcada, reacción alérgica, o si está muy angustiada. Ante la duda, avisa: es preferible una alerta de más que una de menos. Cuando lo hagas, díselo a la paciente con calma (\"ya le escribí a la doctora para que te contacte\").\n- Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pídele que llame al 911 de inmediato y usa \"despertar_doctora\".\n- Nunca compartas datos de otras pacientes.\n- Si te preguntan si eres una persona o una IA, di la verdad con naturalidad: eres la asistente virtual de la clínica y la doctora supervisa lo que conversan.\n\nNotas de voz y fotos\nSi el mensaje empieza con \"[Nota de voz transcrita]\", es lo que la paciente te dijo en audio (la transcripción puede tener errores pequeños). Si dice \"[Foto enviada]\", la paciente te mandó una foto y la puedes ver: coméntala con prudencia y calidez, sin diagnosticar, relacionándola con su tratamiento y lo que la doctora aprobó. Ante signos de alarma visibles (zonas blancas, pálidas o moradas que sugieran necrosis, ampollas, pus o signos de infección, asimetría súbita importante) usa \"despertar_doctora\" de inmediato y díselo con calma.\n\nCitas, horarios y pagos los lleva la recepción: si salen en la conversación, dile con gusto que la ayudan y pídele qué día y hora le quedan mejor.\n\nCómo hablas\nEspañol de Costa Rica, cercano y sereno, de tú. Mensajes de WhatsApp: cortos, humanos, sin listas ni tecnicismos, sin sonar a formulario. Normalmente 2 a 5 frases; si la paciente está angustiada, puedes extenderte un poco para acompañarla. Varía tus palabras: nada de frases hechas repetidas en cada mensaje.",
           "maxIterations": 8,
-          "passthroughBinaryImages": true
+          "passthroughBinaryImages": true,
+          "returnIntermediateSteps": true
         }
       },
       "id": "868dc6ad-d86c-4598-a92a-2f6f76c41133",
@@ -1299,7 +1304,7 @@
     },
     {
       "parameters": {
-        "modelName": "models/gemini-3.5-flash",
+        "modelName": "models/gemini-3.6-flash",
         "options": {}
       },
       "id": "c03680bb-bd1a-4152-a327-ecc9ceda08eb",
@@ -1310,6 +1315,31 @@
         1780,
         -300
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini - Aura y WhatsApp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {}
+      },
+      "id": "349056eb-7d42-42c6-a27c-c42f3cdd4c39",
+      "name": "Modelo respaldo · Enfermera",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        -180
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "googlePalmApi": {
           "name": "Gemini - Aura y WhatsApp"
@@ -1392,6 +1422,7 @@
       "parameters": {
         "promptType": "define",
         "text": "={{ $('Red de seguridad clínica').first().json.payload.texto }}",
+        "needsFallback": true,
         "options": {
           "systemMessage": "=Eres la Recepcionista VIP de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp solo temas administrativos: agendar, reprogramar o cancelar citas, horarios, ubicación y paquetes.\n\nDatos de la clínica: Escazú, San José. Atención de lunes a viernes de 9:00 a 18:00 (hora de Costa Rica, UTC-06:00). Cada cita dura 60 minutos. Hoy es {{ $now.setZone('America/Costa_Rica').toFormat(\"cccc d 'de' LLLL yyyy\", { locale: 'es' }) }}.\n\nCómo agendas:\n1. Usa \"ficha_recepcion\" para saludar por su nombre y ver su próxima cita y sus paquetes.\n2. Pregunta qué tratamiento le interesa y qué días le quedan mejor.\n3. Usa \"disponibilidad_agenda\" y ofrece como máximo 3 horarios libres dentro del horario de atención.\n4. Solo cuando la paciente confirme de forma explícita un horario: usa primero \"bloquear_agenda\" y después \"registrar_cita\". Si alguna falla, no confirmes y ofrece otro horario.\n5. Confirma la fecha y la hora en una frase clara.\n\nReglas: no inventes precios (la doctora los define en la valoración), no das información clínica y no ves historiales médicos. Si la paciente habla de síntomas, dolor o cuidados, dile con amabilidad que la enfermera de la clínica la atiende y que le cuente su duda.\n\nNotas de voz y fotos: si el mensaje empieza con \"[Nota de voz transcrita]\", es lo que la paciente dijo en audio. Si dice \"[Foto enviada]\", puedes verla, pero no evalúas fotos de la zona tratada ni diagnosticas: dile con cariño que la enfermera de la clínica la revisa y que te cuente cómo se siente. Si en la foto ves signos de alarma (zonas blancas, pálidas o moradas, ampollas, pus, asimetría súbita importante), pídele que describa lo que siente para que la enfermera avise a la doctora de inmediato y, si empeora, que llame al 911.\n\nCómo hablas: como una recepcionista de confianza que conoce a sus pacientes, no como un sistema de reservas. Español de Costa Rica, cálido y de tú; mensajes cortos de WhatsApp (2 a 4 frases), sin listas largas ni frases hechas repetidas. Si la paciente cuenta algo personal (está nerviosa, es su primera vez, viene por un evento especial), respóndele a eso también. Usa el historial compartido para no volver a preguntar lo que ya dijo.",
           "maxIterations": 10,
@@ -1410,7 +1441,7 @@
     },
     {
       "parameters": {
-        "modelName": "models/gemini-3.5-flash",
+        "modelName": "models/gemini-3.6-flash",
         "options": {}
       },
       "id": "8be6c467-6b34-4b3a-af39-ccb494c5186d",
@@ -1421,6 +1452,31 @@
         1780,
         140
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini - Aura y WhatsApp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {}
+      },
+      "id": "f0ee2cd0-84f5-4075-aa9b-cfec58bdb805",
+      "name": "Modelo respaldo · Recepcionista",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        260
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "googlePalmApi": {
           "name": "Gemini - Aura y WhatsApp"
@@ -1564,6 +1620,76 @@
     },
     {
       "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst p = item.payload || {};\nreturn [{\n  json: {\n    telefono: p.from, nombre: p.nombre || '', origen: 'whatsapp', tipo: 'emergencia',\n    motivo: 'Señal de alarma en el chat' + (item.senal ? ': \"' + item.senal + '\"' : ''),\n    nota: String('Escribió: ' + (p.texto || '')).slice(0, 1000),\n  },\n}];\n"
+      },
+      "id": "4f50fc80-ed98-4196-aff0-af70ed91f642",
+      "name": "Alerta para el panel · emergencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        -600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json || {};\nconst pasos = Array.isArray(r.intermediateSteps) ? r.intermediateSteps : [];\nconst usos = pasos.filter((s) => String(s?.action?.tool || '').toLowerCase().includes('despertar_doctora'));\nif (!usos.length) return [];\nconst p = $('Red de seguridad clínica').first().json.payload;\nconst entrada = usos[usos.length - 1].action.toolInput || {};\nconst motivo = String(entrada.motivo ?? entrada.input?.motivo ?? (typeof entrada === 'string' ? entrada : '')).replace(/\\s+/g, ' ').trim();\nreturn [{\n  json: {\n    telefono: p.from, nombre: p.nombre || '', origen: 'whatsapp', tipo: 'enfermera',\n    motivo: (motivo || 'La Enfermera IA pidió que la doctora revise este caso').slice(0, 300),\n    nota: String('Escribió: ' + (p.texto || '')).slice(0, 1000),\n  },\n}];\n"
+      },
+      "id": "4541e34f-a5ed-4ba6-a7ad-599edf48ce12",
+      "name": "Alerta para el panel · Enfermera",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json || {};\nif (!r.sinIA) return [];\nconst p = $('Red de seguridad clínica').first().json.payload;\nreturn [{\n  json: {\n    telefono: p.from, nombre: p.nombre || '', origen: 'whatsapp', tipo: 'ia_sin_respuesta',\n    motivo: 'La IA (' + r.agente + ') no pudo responder; la paciente recibió un mensaje de espera',\n    nota: String('Escribió: ' + (p.texto || '')).slice(0, 1000),\n  },\n}];\n"
+      },
+      "id": "2052b048-3bdc-43d8-a4e0-10cfb67d12ec",
+      "name": "Alerta para el panel · sin respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Configuración').first().json.apiUrl }}/n8n/alerta",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "c7f6d7aa-aa7a-404b-ac1b-e2142a6cfeab",
+      "name": "API: registrar alerta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        -160
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Clínica · Secreto n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
         "jsCode": "// Minimización de datos: a la IA solo le llega el check-in, sin nombre ni teléfono\nconst evento = $input.first().json.payload;\nconst c = evento.checkin || {};\nconst ANIMOS = { 'muy-bien': 'Muy bien', bien: 'Bien', regular: 'Regular', molestias: 'Con molestias', preocupacion: 'Con preocupación' };\nconst contexto = [\n  'Ánimo elegido: ' + (ANIMOS[c.mood] || c.mood),\n  'Molestia en la zona tratada: ' + c.pain + ' de 10',\n  'Día de recuperación: ' + (evento.recoveryDay != null ? evento.recoveryDay + 1 : 'sin tratamiento reciente'),\n  'Nota de la paciente: ' + (c.note ? '\"' + c.note + '\"' : '(sin nota)'),\n].join('\\n');\nreturn [{ json: { contexto, evento } }];\n"
       },
       "id": "b1a9a9df-3d33-457f-ad0e-7d685b3947e2",
@@ -1606,6 +1732,9 @@
         1340,
         660
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "googlePalmApi": {
           "name": "Gemini - Aura y WhatsApp"
@@ -1738,6 +1867,9 @@
         1540,
         1380
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "googlePalmApi": {
           "name": "Gemini - Aura y WhatsApp"
@@ -2100,6 +2232,17 @@
         ]
       ]
     },
+    "Modelo respaldo · Enfermera": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente IA 1 · Enfermera Virtual",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
     "Memoria · Enfermera": {
       "ai_memory": [
         [
@@ -2151,6 +2294,17 @@
             "node": "Agente IA 2 · Recepcionista VIP",
             "type": "ai_languageModel",
             "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo respaldo · Recepcionista": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente IA 2 · Recepcionista VIP",
+            "type": "ai_languageModel",
+            "index": 1
           }
         ]
       ]
@@ -2715,6 +2869,11 @@
             "node": "Respuesta de emergencia",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Alerta para el panel · emergencia",
+            "type": "main",
+            "index": 0
           }
         ],
         [
@@ -2783,6 +2942,11 @@
             "node": "Respuesta · Enfermera",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Alerta para el panel · Enfermera",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -2821,6 +2985,11 @@
             "node": "Aviso: mensaje sin responder",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Alerta para el panel · sin respuesta",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -2835,6 +3004,11 @@
           },
           {
             "node": "Aviso: mensaje sin responder",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alerta para el panel · sin respuesta",
             "type": "main",
             "index": 0
           }
@@ -2857,6 +3031,39 @@
         [
           {
             "node": "Responder por WhatsApp (texto)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alerta para el panel · emergencia": {
+      "main": [
+        [
+          {
+            "node": "API: registrar alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alerta para el panel · Enfermera": {
+      "main": [
+        [
+          {
+            "node": "API: registrar alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alerta para el panel · sin respuesta": {
+      "main": [
+        [
+          {
+            "node": "API: registrar alerta",
             "type": "main",
             "index": 0
           }

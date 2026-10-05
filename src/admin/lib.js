@@ -22,6 +22,27 @@ export const ORIGENES = {
   'recepcionista-ia': 'Recepcionista por WhatsApp',
 };
 
+// Alertas del panel: SOS del portal, check-ins marcados y alertas que llegan del chat de WhatsApp
+// (emergencia detectada sin IA, aviso de la Enfermera IA o mensaje que la IA no pudo responder)
+export const SUBTIPOS_WHATSAPP = {
+  emergencia: 'Emergencia',
+  enfermera: 'Enfermera IA',
+  ia_sin_respuesta: 'Sin respuesta de la IA',
+};
+
+// Distintivo de cada alerta: { etiqueta, chip, detalle } (detalle: tipo de alerta de WhatsApp)
+export const distintivoAlerta = (alerta = {}) => {
+  if (alerta.tipo === 'sos') return { etiqueta: 'SOS', chip: 'p-chip p-chip--alert', detalle: '' };
+  if (alerta.tipo === 'whatsapp') {
+    return {
+      etiqueta: 'WhatsApp',
+      chip: alerta.subtipo === 'emergencia' ? 'p-chip p-chip--alert' : 'p-chip p-chip--rose',
+      detalle: SUBTIPOS_WHATSAPP[alerta.subtipo] || '',
+    };
+  }
+  return { etiqueta: 'Check-in', chip: 'p-chip p-chip--rose', detalle: '' };
+};
+
 // Enlace de WhatsApp a partir de un teléfono de Costa Rica (8 dígitos, con o sin +506)
 export const whatsappLink = (phone = '') => {
   const digits = phone.replace(/\D/g, '');

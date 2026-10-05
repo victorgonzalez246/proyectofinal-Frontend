@@ -18,6 +18,8 @@ const RECUPERACION_DIAS = 14;
 
 const MOODS = ['muy-bien', 'bien', 'regular', 'molestias', 'preocupacion'];
 const SOS_REASONS = ['dolor', 'inflamacion', 'aspecto', 'duda'];
+// Alertas que el cerebro de n8n registra desde el chat de WhatsApp (además del aviso a la doctora)
+export const TIPOS_ALERTA_WHATSAPP = ['emergencia', 'enfermera', 'ia_sin_respuesta'];
 const ESTADOS_CITA = ['pendiente', 'confirmada', 'cancelada'];
 const TIPOS_PASO = ['valoracion', 'tratamiento', 'control', 'retoque', 'sugerencia'];
 const ESTADOS_PASO = ['done', 'current', 'next', 'future'];
@@ -148,12 +150,22 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
       });
     };
 
-    // Alertas: SOS del portal y check-ins que la regla fija marcó para seguimiento
+    // Alertas: SOS del portal, alertas del chat de WhatsApp (pueden no tener paciente registrada)
+    // y check-ins que la regla fija marcó para seguimiento
+    const pacienteDeAlerta = (a) => {
+      const c = a.userId ? contacto(a.userId) : {};
+      return { ...c, name: c.name || a.nombre || 'Paciente de WhatsApp', phone: c.phone || a.telefono || '' };
+    };
     const alertas = () => [
-      ...db.sosAlerts.map((a) => ({
-        id: a.id, tipo: 'sos', paciente: contacto(a.userId), motivo: a.reason, nota: a.note || '',
-        estado: a.status || 'abierta', respuesta: a.respuesta || '', createdAt: a.createdAt,
-      })),
+      ...db.sosAlerts.map((a) => (a.origen === 'whatsapp'
+        ? {
+          id: a.id, tipo: 'whatsapp', origen: 'whatsapp', subtipo: a.tipoAlerta || '', paciente: pacienteDeAlerta(a),
+          motivo: a.reason || '', nota: a.note || '', estado: a.status || 'abierta', respuesta: a.respuesta || '', createdAt: a.createdAt,
+        }
+        : {
+          id: a.id, tipo: 'sos', paciente: contacto(a.userId), motivo: a.reason, nota: a.note || '',
+          estado: a.status || 'abierta', respuesta: a.respuesta || '', createdAt: a.createdAt,
+        })),
       ...db.checkins.filter((c) => c.needsFollowUp).map((c) => ({
         id: c.id, tipo: 'checkin', paciente: contacto(c.userId), motivo: `Ánimo: ${c.mood} · molestia ${c.pain}/10`, nota: c.note || '',
         estado: c.estado || 'abierta', respuesta: c.respuesta || '', createdAt: c.createdAt,
@@ -365,6 +377,32 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
         if (!cita || puntos.length === 0) falla(400, 'Indica la cita y los puntos del resumen.');
         guardar('appointments', { ...cita, resumen: { puntos, fecha: new Date(ahora()).toISOString() } });
         return [200, { ok: true }];
+      }],
+
+      // Emergencia del chat, alerta de la Enfermera IA (despertar_doctora) o mensaje que la IA no pudo responder:
+      // la doctora ya recibió el WhatsApp; esto la deja en el panel (Alertas y Hoy) para atenderla y marcarla.
+      // No emite eventos: el aviso ya salió del cerebro.
+      ['POST', '/n8n/alerta', 'n8n', () => {
+        const telefono = str(body.telefono, 20);
+        const tipo = TIPOS_ALERTA_WHATSAPP.includes(body.tipo) ? body.tipo : '';
+        const motivo = str(body.motivo, 300);
+        if (phoneKey(telefono).length < 8 || !tipo || !motivo) {
+          falla(400, 'Indica el teléfono, el tipo de alerta (emergencia, enfermera o ia_sin_respuesta) y el motivo.');
+        }
+        const paciente = pacientePorTelefono(telefono);
+        const alerta = guardar('sosAlerts', {
+          id: nuevoId('wa'),
+          ...(paciente ? { userId: paciente.id } : {}),
+          nombre: str(body.nombre, 80) || paciente?.name || '',
+          telefono: paciente?.phone || telefono,
+          origen: 'whatsapp',
+          tipoAlerta: tipo,
+          reason: motivo,
+          note: str(body.nota, 1000),
+          status: 'abierta',
+          createdAt: new Date(ahora()).toISOString(),
+        });
+        return [201, { ok: true, id: alerta.id, pacienteRegistrada: Boolean(paciente) }];
       }],
 
       // La paciente respondió "BAJA" por WhatsApp: deja de recibir promociones

@@ -58,6 +58,7 @@ export const RUTAS = [
   ['GET', '/n8n/preparacion'],
   ['POST', '/n8n/resumen'],
   ['POST', '/n8n/baja'],
+  ['POST', '/n8n/alerta'],
 ];
 
 
