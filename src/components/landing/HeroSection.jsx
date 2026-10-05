@@ -16,16 +16,16 @@ export default function HeroSection() {
         overflow: 'hidden',
       }}
     >
-      {/* Background light orbs */}
+      {/* Background light orbs: degradado radial en vez de filter: blur(130px), que en celular
+          es carísimo de dibujar y bloqueaba la carga del resto de la página. Se ve igual. */}
       <div
         style={{
           position: 'absolute',
-          top: '-40px',
-          left: '-60px',
-          width: '550px',
-          height: '550px',
-          background: 'var(--nude-rose-10)',
-          filter: 'blur(130px)',
+          top: '-170px',
+          left: '-190px',
+          width: '810px',
+          height: '810px',
+          background: 'radial-gradient(closest-side, var(--nude-rose-10), transparent)',
           borderRadius: '50%',
           pointerEvents: 'none',
           zIndex: -1,
@@ -34,12 +34,11 @@ export default function HeroSection() {
       <div
         style={{
           position: 'absolute',
-          top: '100px',
-          right: '-80px',
-          width: '600px',
-          height: '600px',
-          background: 'var(--celadon-pearl-30)',
-          filter: 'blur(140px)',
+          top: '-40px',
+          right: '-220px',
+          width: '880px',
+          height: '880px',
+          background: 'radial-gradient(closest-side, var(--celadon-pearl-30), transparent)',
           borderRadius: '50%',
           pointerEvents: 'none',
           zIndex: -1,

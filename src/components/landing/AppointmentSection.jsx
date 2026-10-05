@@ -133,16 +133,15 @@ export default function AppointmentSection() {
         position: 'relative',
       }}
     >
-      {/* Decorative orb */}
+      {/* Decorative orb (degradado radial: mismo efecto que blur(120px) sin el costo en celular) */}
       <div
         style={{
           position: 'absolute',
-          top: '50%',
-          right: '-100px',
-          width: '400px',
-          height: '400px',
-          background: 'var(--nude-rose-10)',
-          filter: 'blur(120px)',
+          top: 'calc(50% - 120px)',
+          right: '-220px',
+          width: '640px',
+          height: '640px',
+          background: 'radial-gradient(closest-side, var(--nude-rose-10), transparent)',
           borderRadius: '50%',
           pointerEvents: 'none',
         }}
