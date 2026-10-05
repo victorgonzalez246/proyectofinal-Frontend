@@ -18,7 +18,8 @@ Esta hoja de ruta lleva el proyecto a **pacientes reales**, con **Chatwoot** com
 ## Fase 1 · Infraestructura (días 1–2)
 
 - [ ] **Dónde vive n8n:** plan pagado de n8n Cloud o servidor propio (VPS con Docker). La prueba gratuita de n8n Cloud vence alrededor del 7 de octubre.
-- [ ] **Meta:** iniciar la verificación de negocio, generar el token permanente y aprobar la plantilla `codigo_acceso` (Autenticación).
+- [x] Token permanente de Meta.
+- [ ] **Meta:** iniciar la verificación de negocio y aprobar la plantilla `codigo_acceso` (Autenticación).
 - [ ] Respaldos de los flujos de Cloud antes de cualquier cambio (`n8n/respaldos-cloud/`, fuera de git).
 
 ## Fase 2 · Chatwoot como espejo (días 2–3)

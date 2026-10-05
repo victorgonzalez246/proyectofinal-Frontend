@@ -148,7 +148,8 @@ Estado actual: **modo pruebas activo** (solo responde a los números de `numeros
 
 - El webhook de la app de Meta apunta al nodo *WhatsApp entrante* del Cerebro (Meta acepta un solo webhook por app).
 - En modo prueba, cada número de prueba debe haber escrito a la clínica en las últimas 24 h para recibir respuestas.
-- Pendiente para salir de modo prueba: verificación de negocio, token permanente y plantilla `codigo_acceso` (ver `pendientes/README.md`).
+- El token de Meta (credencial `Header Auth account`) es **permanente**: no vence.
+- Pendiente para salir de modo prueba: verificación de negocio y plantilla `codigo_acceso` (ver `pendientes/README.md`).
 
 ## 9. Archivos que NO están en git (cópialos a mano si los necesitas)
 
