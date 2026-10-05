@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { LogOut, Globe } from 'lucide-react';
 import Sheet from './Sheet.jsx';
+import LectorVoz from '../../components/ui/LectorVoz.jsx';
 
 const THEMES = [
   { id: 'light', label: 'Claro' },
@@ -87,6 +88,10 @@ export default function SettingsSheet({ prefs, update, onClose, onLogout }) {
           <Switch id="discreet-switch" checked={prefs.discreet} onChange={(on) => update({ discreet: on })} />
         </div>
         <p className="p-small">Desenfoca tus fotos y los nombres de tus tratamientos.</p>
+      </div>
+
+      <div className="p-setting" style={{ borderTop: '1px solid var(--p-line)', paddingTop: '1.25rem' }}>
+        <LectorVoz contenedorId="portal-main" />
       </div>
 
       <Link to="/" className="p-btn p-btn--quiet p-btn--block" style={{ marginTop: '1.5rem' }}>

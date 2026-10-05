@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Accessibility, X } from 'lucide-react';
+import LectorVoz from './LectorVoz.jsx';
 import './accesibilidad.css';
 
 const TAMANOS = [
@@ -25,9 +26,9 @@ function Interruptor({ id, checked, onChange, describedBy }) {
 /**
  * Selector de accesibilidad: tamaño de texto, alto contraste y reducir animaciones.
  * Usa las mismas preferencias que el portal (usePreferences), así se conservan en todo el sitio.
- * @param {{ prefs: object, update: (patch: object) => void, variante?: 'flotante' | 'cabecera' }} props
+ * @param {{ prefs: object, update: (patch: object) => void, variante?: 'flotante' | 'cabecera', contenedorLector?: string }} props
  */
-export default function ControlAccesibilidad({ prefs, update, variante = 'flotante' }) {
+export default function ControlAccesibilidad({ prefs, update, variante = 'flotante', contenedorLector }) {
   const [abierto, setAbierto] = useState(false);
   const botonRef = useRef(null);
   const panelRef = useRef(null);
@@ -133,6 +134,10 @@ export default function ControlAccesibilidad({ prefs, update, variante = 'flotan
           />
         </div>
         <p className="a11y-ayuda" id={`${movimientoId}-ayuda`}>Detiene los movimientos decorativos.</p>
+
+        <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--p-line)', paddingTop: '1.5rem' }}>
+          <LectorVoz contenedorId={contenedorLector || 'portal-main'} />
+        </div>
 
         {personalizado && (
           <button

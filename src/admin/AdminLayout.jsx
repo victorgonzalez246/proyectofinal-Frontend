@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { CalendarCheck, CalendarDays, ChartColumn, Users, BellRing, Megaphone, BarChart3, ReceiptText, LogOut, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { usePreferences } from '../portal/usePreferences.js';
@@ -23,17 +23,41 @@ const NAV = [
   { to: '/admin/facturas', label: 'Facturas', Icon: ReceiptText },
 ];
 
+const TITULOS_ADMIN = {
+  '/admin': 'Panel de hoy',
+  '/admin/citas': 'Citas',
+  '/admin/metricas': 'Métricas',
+  '/admin/pacientes': 'Pacientes',
+  '/admin/alertas': 'Alertas',
+  '/admin/campanas': 'Campañas',
+  '/admin/estadisticas': 'Estadísticas',
+  '/admin/facturas': 'Facturas',
+};
+
 // Panel de la doctora: mismo sistema visual que el portal de pacientes (tokens, tema claro/oscuro)
 export default function AdminLayout() {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { prefs, update, resolvedTheme } = usePreferences();
+  const mainRef = useRef(null);
+  const [anuncio, setAnuncio] = useState('');
 
   useEffect(() => {
     const previous = document.title;
     document.title = 'Panel médico';
     return () => { document.title = previous; };
   }, []);
+
+  // Anunciador de ruta para TalkBack / VoiceOver
+  useEffect(() => {
+    const titulo = TITULOS_ADMIN[location.pathname] || '';
+    if (titulo) {
+      const t = setTimeout(() => setAnuncio(`Navegaste a: ${titulo}`), 150);
+      mainRef.current?.focus();
+      return () => clearTimeout(t);
+    }
+  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -47,6 +71,11 @@ export default function AdminLayout() {
       data-contrast={prefs.contrast}
       data-motion={prefs.reduceMotion ? 'reduced' : 'full'}
     >
+      {/* Anunciador invisible para lectores de pantalla */}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {anuncio}
+      </div>
+
       <a href="#admin-main" className="p-skip">Saltar al contenido</a>
       <div className="p-shell">
         <header className="p-header">
@@ -63,7 +92,7 @@ export default function AdminLayout() {
             >
               {resolvedTheme === 'dark' ? <Sun size={19} aria-hidden="true" /> : <Moon size={19} aria-hidden="true" />}
             </button>
-            <ControlAccesibilidad prefs={prefs} update={update} variante="cabecera" />
+            <ControlAccesibilidad prefs={prefs} update={update} variante="cabecera" contenedorLector="admin-main" />
             <button type="button" className="p-icon-btn" onClick={handleLogout} aria-label="Cerrar sesión">
               <LogOut size={19} aria-hidden="true" />
               <span className="p-icon-btn__label" aria-hidden="true">Salir</span>
@@ -81,7 +110,7 @@ export default function AdminLayout() {
           <p className="p-sidebar-foot">La sesión del panel se cierra sola a las 4 horas.</p>
         </nav>
 
-        <main id="admin-main" className="p-main a-main" tabIndex={-1}>
+        <main id="admin-main" ref={mainRef} className="p-main a-main" tabIndex={-1}>
           <Outlet />
         </main>
       </div>
