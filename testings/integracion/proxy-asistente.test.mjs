@@ -7,7 +7,7 @@ import { middlewareAsistente, RUTA_ASISTENTE } from '../../api/_asistente.mjs';
 const levantar = (apiKey) =>
   new Promise((resolve) => {
     const siguiente = (req, res) => { res.statusCode = 404; res.end('siguiente'); };
-    const server = http.createServer((req, res) => middlewareAsistente(apiKey)(req, res, () => siguiente(req, res)));
+    const server = http.createServer((req, res) => middlewareAsistente(apiKey, '', '')(req, res, () => siguiente(req, res)));
     server.listen(0, () => resolve({ server, url: `http://localhost:${server.address().port}` }));
   });
 
@@ -31,7 +31,8 @@ describe('proxy del asistente (HTTP)', () => {
     expect(res.status).toBe(503);
     const body = await res.json();
     expect(body.type).toBe('error');
-    expect(body.error.message).toMatch(/no está configurado/);
+    expect(body.error.message).toMatch(/no está disponible por ahora/);
+    expect(res.headers.get('x-should-retry')).toBe('false'); // el SDK del navegador no reintenta
   });
 
   it('rechaza conversaciones inválidas antes de llamar al modelo', async () => {

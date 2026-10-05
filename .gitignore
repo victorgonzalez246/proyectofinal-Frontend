@@ -25,6 +25,7 @@ dist-ssr
 
 # Datos de pacientes (simulador): nunca se versionan. Plantilla en db.example.json
 db.json
+db.sesiones.json
 
 # Variables de entorno (webhooks n8n, etc.)
 .env
@@ -34,3 +35,6 @@ datos-demo-sheets.xlsx
 
 .vercel
 .env*.local
+
+# Respaldos de flujos n8n Cloud (contienen secretos)
+n8n/respaldos-cloud/

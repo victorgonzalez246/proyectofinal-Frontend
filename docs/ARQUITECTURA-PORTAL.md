@@ -9,7 +9,7 @@ Según los requisitos, el frontend es **100 % puro** y **n8n es el único backen
 | Frontend | **React 19 + Vite + React Router** (ya en uso) | Mismo proyecto que la landing. Carga diferida del portal y del panel. Build estático para Vercel o Netlify. No tiene SDKs de bases de datos: solo `fetch` a webhooks. |
 | Animación | **framer-motion** | Transiciones del mapa, el check-in y las hojas. Respeta "reducir movimiento". |
 | Backend y orquestador | **n8n**: un único flujo, el *cerebro maestro* | Recibe todos los eventos en un webhook, los enruta con un Switch y ejecuta las rutinas programadas. La clínica ajusta reglas sin tocar código. |
-| Inteligencia | **Claude (Anthropic)** dentro de n8n: Sonnet 5 para los agentes y Haiku 4.5 para clasificar | Dos agentes con responsabilidades separadas (ver sección 3). |
+| Inteligencia | **Claude (Anthropic)** dentro de n8n: Opus 5.5 para los agentes y Haiku 4.5 para clasificar | Dos agentes con responsabilidades separadas (ver sección 3). |
 | Datos | **Google Sheets** gestionado por n8n (Airtable es una alternativa equivalente) | La doctora puede leer y editar la base clínica, el plan de cada paciente y los paquetes sin herramientas técnicas. |
 | Agenda | **Google Calendar** | La agenda real de la doctora: la Recepcionista consulta la disponibilidad y reserva ahí. |
 | Mensajería | **WhatsApp Cloud API (Meta)** | Plantillas aprobadas para lo que inicia la clínica, y texto libre para responder en el chat. |

@@ -18,7 +18,7 @@ const secciones = [
   },
   {
     titulo: 'Con quién los compartimos',
-    texto: 'Solo con los proveedores que necesitamos para darte el servicio: WhatsApp (Meta) para enviarte mensajes, Google para la agenda y los documentos de la clínica, n8n para automatizar los avisos y Anthropic (Claude) para la enfermera y la recepcionista virtuales. A estos asistentes de inteligencia artificial les enviamos la mínima información necesaria, nunca tu teléfono, y la doctora supervisa su trabajo.',
+    texto: 'Solo con los proveedores que necesitamos para darte el servicio: WhatsApp (Meta) para enviarte mensajes, Google para la agenda y los documentos de la clínica, n8n para automatizar los avisos, Anthropic (Claude) para la enfermera y la recepcionista virtuales de WhatsApp y Google (Gemini) para Aura, la asistente virtual del sitio. A estos asistentes de inteligencia artificial les enviamos la mínima información necesaria, nunca tu teléfono, y la doctora supervisa su trabajo.',
   },
   {
     titulo: 'Cuánto tiempo los guardamos',
@@ -30,7 +30,7 @@ const secciones = [
   },
   {
     titulo: 'Cómo los protegemos',
-    texto: 'Acceso al portal sin contraseñas mediante enlaces de un solo uso, conexiones cifradas, acceso restringido a la doctora y su equipo, y un modo discreto en el portal para que nadie vea tus fotos o tratamientos si abres la app en público.',
+    texto: 'Acceso al portal sin contraseñas mediante códigos de un solo uso enviados por WhatsApp, conexiones cifradas, acceso restringido a la doctora y su equipo, y un modo discreto en el portal para que nadie vea tus fotos o tratamientos si abres la app en público.',
   },
 ]
 
@@ -51,19 +51,8 @@ export default function PrivacyPage() {
           Cómo cuidamos tu información personal y de salud.
         </p>
 
-        {/* PENDIENTE: borrador que debe revisar una persona asesora legal antes de publicar */}
-        <p
-          role="note"
-          style={{
-            marginTop: '1.5rem',
-            padding: '0.9rem 1.1rem',
-            borderRadius: 'var(--radius-md)',
-            background: 'var(--nude-rose-10)',
-            border: '1px dashed var(--nude-rose)',
-            fontSize: '0.88rem',
-          }}
-        >
-          Borrador pendiente de revisión legal. Versión {AVISO_VERSION}.
+        <p style={{ color: 'var(--stone-muted)', marginTop: '0.5rem', fontSize: '0.88rem' }}>
+          Versión {AVISO_VERSION}. Consulta también los <a href="/terminos.html">términos y condiciones</a>.
         </p>
 
         {secciones.map((s) => (

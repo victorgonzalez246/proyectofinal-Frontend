@@ -1,7 +1,8 @@
 import { TOKEN_KEY, USER_KEY } from './session.js';
 
 // Cliente HTTP mínimo sobre fetch (antes axios): misma forma de uso en los servicios.
-//   api.get(ruta, { params })  ·  api.post / put / patch(ruta, body, { params, headers })\n// Devuelve { data } y, si la respuesta no es 2xx, lanza un Error con `response: { status, data }`.
+//   api.get(ruta, { params })  ·  api.post / put / patch(ruta, body, { params, headers })
+// Devuelve { data } y, si la respuesta no es 2xx, lanza un Error con `response: { status, data }`.
 // En desarrollo (Vite) se usan rutas relativas (BASE_URL='') para que el proxy de vite.config.js
 // reenvíe las peticiones a localhost:3001 sin problemas de CORS.
 // En producción VITE_API_URL apunta al webhook de n8n con la URL completa.

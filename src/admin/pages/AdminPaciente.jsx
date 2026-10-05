@@ -9,6 +9,7 @@ import { useCarga } from '../useCarga.js';
 import { ESTADOS_CITA, ORIGENES, whatsappLink } from '../lib.js';
 import Estado from '../components/Estado.jsx';
 import PlanEditor from '../components/PlanEditor.jsx';
+import TratamientosPaciente from '../components/TratamientosPaciente.jsx';
 import EvolucionPaciente from '../../components/analitica/EvolucionPaciente.jsx';
 
 const animo = (id) => MOODS.find((m) => m.id === id)?.label || id;
@@ -90,6 +91,12 @@ export default function AdminPaciente() {
                 )}
               </section>
             </div>
+
+            <section className="p-section" aria-labelledby="tratamientos-title">
+              <h2 className="p-title" id="tratamientos-title">Tratamientos</h2>
+              <p className="p-small" style={{ margin: '0.35rem 0 1.25rem' }}>Medicamentos e indicaciones que ella ve en «Mis tratamientos» de su portal.</p>
+              <TratamientosPaciente pacienteId={p.id} />
+            </section>
 
             <section className="p-section" aria-labelledby="evolucion-title">
               <h2 className="p-title" id="evolucion-title">Evolución del tratamiento</h2>

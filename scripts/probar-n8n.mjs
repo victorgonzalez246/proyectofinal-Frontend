@@ -71,7 +71,22 @@ const sheets = http.createServer(async (req, res) => {
 
 // ── Simulador de la API de WhatsApp (Meta): guarda cada mensaje que envía el cerebro ──
 const whatsapp = [];
+// También sirve los medios entrantes: GET /<versión>/<media-id> da la URL temporal y GET /descargas/<id> el archivo
+const MEDIOS = {
+  'media.foto': { mime_type: 'image/png', archivo: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') },
+  'media.audio': { mime_type: 'audio/ogg', archivo: Buffer.from('OggS-prueba') },
+};
 const graph = http.createServer(async (req, res) => {
+  if (req.method === 'GET') {
+    const descarga = req.url.match(/^\/descargas\/(.+)$/);
+    const id = descarga ? descarga[1] : req.url.split('/').pop();
+    const medio = MEDIOS[id];
+    if (!medio) { res.writeHead(404); res.end(); return; }
+    if (descarga) { res.writeHead(200, { 'Content-Type': medio.mime_type }); res.end(medio.archivo); return; }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ id, mime_type: medio.mime_type, file_size: medio.archivo.length, url: `http://localhost:${GRAPH_PORT}/descargas/${id}` }));
+    return;
+  }
   const cuerpo = await leerCuerpo(req);
   try { whatsapp.push(JSON.parse(cuerpo)); } catch { /* ignorado */ }
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -226,6 +241,23 @@ try {
   await chat('50686665544', 'Ayuda, no puedo respirar bien');
   ok(Boolean(await plantilla('alerta_clinica', CLINICA, (t) => t[0] === 'EMERGENCIA')), 'Emergencia: la red de seguridad avisa a la doctora sin pasar por la IA');
   ok(Boolean(await esperarWhatsapp((m) => m.type === 'text' && m.to === '50686665544' && m.text.body.includes('911'))), 'Emergencia: la paciente recibe la indicación de llamar al 911');
+
+  console.log('\nChat de WhatsApp: notas de voz, fotos y otros formatos');
+  const adjunto = (from, mensaje) => fetch(`${API}/prueba/whatsapp`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ object: 'whatsapp_business_account', entry: [{ changes: [{ value: { contacts: [{ profile: { name: 'Prueba' } }], messages: [{ from, id: `wamid.in.${Date.now()}`, ...mensaje }] } }] }] }),
+  });
+  await adjunto('50686665511', { type: 'video', video: { id: 'media.video' } });
+  ok(Boolean(await esperarWhatsapp((m) => m.type === 'text' && m.to === '50686665511' && m.text.body.includes('escuchar notas de voz y ver fotos'))), 'Video: respuesta corta sin IA');
+  await adjunto('50686665522', { type: 'image', image: { id: 'media.foto', mime_type: 'image/png', caption: 'Así va la zona tratada' } });
+  ok(Boolean(await plantilla('alerta_clinica', CLINICA, (t) => t[2] === '50686665522' && t[3].includes('[Foto enviada: Así va la zona tratada]'))),
+    'Foto: se descarga de Meta y llega a la Enfermera con su pie (sin IA disponible, la doctora recibe el aviso)');
+  await adjunto('50686665533', { type: 'image', image: { id: 'media.foto', caption: 'Ayuda, no puedo respirar bien' } });
+  ok(Boolean(await plantilla('alerta_clinica', CLINICA, (t) => t[0] === 'EMERGENCIA' && t[2] === '50686665533')), 'Foto: una emergencia en el pie de foto va directo a la doctora');
+  await adjunto('50686665544', { type: 'audio', audio: { id: 'media.audio', mime_type: 'audio/ogg; codecs=opus', voice: true } });
+  ok(Boolean(await esperarWhatsapp((m) => m.type === 'text' && m.to === '50686665544' && m.text.body.includes('nota de voz'))), 'Nota de voz: si Gemini no responde, se le pide amablemente que lo escriba');
+  await adjunto('50686665555', { type: 'image', image: { id: 'media.no-existe' } });
+  ok(Boolean(await esperarWhatsapp((m) => m.type === 'text' && m.to === '50686665555' && m.text.body.includes('No pude abrir tu foto'))), 'Foto: si Meta no la entrega, respuesta amable');
 
   console.log('\nFallas');
   lecturasQueFallan = 3; // Google Sheets no responde en los 3 intentos de "Leer hojas"

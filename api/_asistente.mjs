@@ -33,7 +33,7 @@ Datos de la clínica:
 - Horario: ${CLINICA.horario}.
 - WhatsApp: ${CLINICA.telefonoVisible}. Correo: ${CLINICA.email}.
 - Para agendar: el formulario "Agenda tu valoración" al final de esta página (sección Contacto) o por WhatsApp. La clínica confirma la hora por WhatsApp.
-- Las pacientes tienen un portal privado en /portal/acceso: entran con su número y reciben un enlace por WhatsApp, sin contraseñas.
+- Las pacientes tienen un portal privado en /portal/acceso: entran con su número y reciben por WhatsApp un código de acceso de 6 dígitos, sin contraseñas.
 
 Tratamientos que ofrece la clínica:
 ${TRATAMIENTOS.map((t) => `- ${t}`).join('\n')}
@@ -94,12 +94,117 @@ export async function esDoctora(token, apiUrl, fetchImpl = fetch, ahora = Date.n
   }
 }
 
-// Respuestas de error con la misma forma que la API de Anthropic, para que el SDK las entienda
+// Respuestas de error con la misma forma que la API de Anthropic, para que el SDK las entienda.
+// x-should-retry: false evita que el SDK del navegador repita la llamada (no arreglaría nada y duplicaría el costo).
 const errorJson = (status, type, message) =>
   new Response(JSON.stringify({ type: 'error', error: { type, message } }), {
     status,
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-should-retry': 'false' },
   });
+
+// Mensajes amables para la paciente (tú) y la doctora (usted). Nunca incluyen detalles técnicos ni la clave.
+export const MENSAJES_ASISTENTE = {
+  sinConfigurar: {
+    paciente: 'Aura no está disponible por ahora. Escríbenos por WhatsApp y con gusto te ayudamos.',
+    doctora: 'Aura no está disponible por ahora: el asistente aún no está configurado en el servidor.',
+  },
+  noDisponible: {
+    paciente: 'Aura no está disponible en este momento. Inténtalo más tarde o escríbenos por WhatsApp.',
+    doctora: 'Aura no está disponible en este momento. Inténtelo más tarde.',
+  },
+};
+
+// Causa real de un error del proveedor, solo para la consola del servidor (sin la clave)
+export function causaDelError(proveedor, status, cuerpo = '') {
+  let detalle = String(cuerpo || '');
+  try {
+    const e = JSON.parse(detalle)?.error || {};
+    detalle = [e.type || e.status, e.message].filter(Boolean).join(': ') || detalle;
+  } catch { /* cuerpo no JSON: se usa tal cual */ }
+  detalle = detalle.replace(/\s+/g, ' ').trim().slice(0, 300);
+  let causa = 'error del proveedor';
+  if (status === 400 && /credit balance/i.test(detalle)) causa = 'la cuenta no tiene crédito';
+  else if (status === 401 || /api key not valid|API_KEY_INVALID|authentication_error/i.test(detalle)) causa = 'clave inválida';
+  else if (status === 403) causa = 'clave sin permiso';
+  else if (status === 429 || /RESOURCE_EXHAUSTED/.test(detalle)) causa = 'límite de uso o cuota del proveedor';
+  else if (status === 529 || /overloaded/i.test(detalle)) causa = 'proveedor saturado';
+  else if (status >= 500) causa = 'falla del proveedor';
+  return `[asistente] ${proveedor} respondió ${status} (${causa}): ${detalle}`;
+}
+
+// Cualquier error del proveedor (sin crédito, clave inválida, saturado, límite) llega al navegador como 503 amable
+async function errorDelProveedor(proveedor, upstream, perfil) {
+  const cuerpo = await upstream.text().catch(() => '');
+  console.error(causaDelError(proveedor, upstream.status, cuerpo));
+  return errorJson(503, 'api_error', MENSAJES_ASISTENTE.noDisponible[perfil]);
+}
+
+// ── Gemini (Google): proveedor principal si hay GEMINI_API_KEY ──
+// Modelo estable verificado en https://ai.google.dev/gemini-api/docs/models (rápido y económico)
+export const MODELO_GEMINI = 'gemini-3.5-flash-lite';
+const URL_GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// finishReason de Gemini → stop_reason que entiende el SDK de Anthropic del navegador
+const MOTIVO_FIN = { MAX_TOKENS: 'max_tokens', SAFETY: 'refusal', PROHIBITED_CONTENT: 'refusal', BLOCKLIST: 'refusal', SPII: 'refusal', RECITATION: 'refusal' };
+
+/**
+ * Convierte el SSE de Gemini (streamGenerateContent?alt=sse) en eventos SSE con el formato de Anthropic,
+ * para que @anthropic-ai/sdk del navegador lo lea sin cambios. El campo model dice el modelo real (Gemini).
+ * Un error a mitad de la respuesta se emite como evento "error" con el mensaje amable (la causa va a la consola).
+ */
+export function geminiComoAnthropic(cuerpo, perfil = 'paciente') {
+  const encoder = new TextEncoder();
+  const evento = (tipo, datos) => encoder.encode(`event: ${tipo}\ndata: ${JSON.stringify({ type: tipo, ...datos })}\n\n`);
+  return new ReadableStream({
+    async start(controller) {
+      const reader = cuerpo.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let motivo = 'end_turn';
+      let tokensSalida = 0;
+      let tokensEntrada = 0;
+      controller.enqueue(evento('message_start', {
+        message: { id: `msg_${crypto.randomUUID().replaceAll('-', '')}`, type: 'message', role: 'assistant', content: [], model: MODELO_GEMINI, stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } },
+      }));
+      controller.enqueue(evento('content_block_start', { index: 0, content_block: { type: 'text', text: '' } }));
+      const procesar = (linea) => {
+        if (!linea.startsWith('data:')) return;
+        let datos;
+        try { datos = JSON.parse(linea.slice(5).trim()); } catch { return; }
+        if (datos?.error) throw Object.assign(new Error('error de Gemini en el stream'), { detalle: datos.error });
+        const candidato = datos?.candidates?.[0];
+        for (const parte of candidato?.content?.parts || []) {
+          if (parte.text && !parte.thought) controller.enqueue(evento('content_block_delta', { index: 0, delta: { type: 'text_delta', text: parte.text } }));
+        }
+        if (candidato?.finishReason && candidato.finishReason !== 'STOP') motivo = MOTIVO_FIN[candidato.finishReason] || motivo;
+        if (datos?.promptFeedback?.blockReason) motivo = 'refusal';
+        tokensSalida = datos?.usageMetadata?.candidatesTokenCount ?? tokensSalida;
+        tokensEntrada = datos?.usageMetadata?.promptTokenCount ?? tokensEntrada;
+      };
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lineas = buffer.split(/\r?\n/);
+          buffer = lineas.pop();
+          lineas.forEach(procesar);
+        }
+        procesar(buffer);
+      } catch (err) {
+        console.error(causaDelError('Gemini', 'stream', JSON.stringify({ error: err.detalle || { message: err.message } })));
+        controller.enqueue(evento('error', { error: { type: 'api_error', message: MENSAJES_ASISTENTE.noDisponible[perfil] } }));
+        controller.close();
+        return;
+      }
+      controller.enqueue(evento('content_block_stop', { index: 0 }));
+      controller.enqueue(evento('message_delta', { delta: { stop_reason: motivo, stop_sequence: null }, usage: { input_tokens: tokensEntrada, output_tokens: tokensSalida } }));
+      controller.enqueue(evento('message_stop', {}));
+      controller.close();
+    },
+  });
+}
+
 
 // Acepta solo texto plano, alternando paciente → asistente, empezando y terminando en la paciente
 export function limpiarMensajes(body, maxCaracteres = MAX_CARACTERES) {
@@ -118,8 +223,9 @@ export function limpiarMensajes(body, maxCaracteres = MAX_CARACTERES) {
 
 // Reenvía la conversación a Claude o Gemini y devuelve la respuesta en streaming compatible
 // opciones.perfil: 'paciente' (por defecto) o 'doctora'; esta última necesita token y apiUrl para verificar la sesión
-export async function responderAsistente(body, apiKey, fetchImpl = fetch, { perfil = 'paciente', token = '', apiUrl = '' } = {}) {
+export async function responderAsistente(body, apiKey, fetchImpl = fetch, { perfil = 'paciente', token = '', apiUrl = '', geminiApiKey = process.env.GEMINI_API_KEY } = {}) {
   const doctora = perfil === 'doctora';
+  const quien = doctora ? 'doctora' : 'paciente';
   if (doctora && !(await esDoctora(token, apiUrl, fetchImpl))) {
     return errorJson(403, 'permission_error', 'Aura del panel solo está disponible con la sesión de la doctora. Vuelva a iniciar sesión.');
   }
@@ -131,103 +237,33 @@ Datos del panel (foto de este momento, JSON):
 ${contexto || '(no llegaron datos)'}`
     : SISTEMA;
   const cleanKey = apiKey ? apiKey.trim() : '';
-  const isGemini = Boolean(process.env.GEMINI_API_KEY || cleanKey.startsWith('AIzaSy') || cleanKey.startsWith('AQ.'));
-  const geminiKey = process.env.GEMINI_API_KEY || (isGemini ? cleanKey : null);
-  const effectiveKey = geminiKey || cleanKey;
+  // Gemini tiene prioridad: GEMINI_API_KEY (o una clave de Google pasada como apiKey, por compatibilidad)
+  const geminiKey = (geminiApiKey || '').trim()
+    || (cleanKey.startsWith('AIzaSy') || cleanKey.startsWith('AQ.') ? cleanKey : '');
+  const anthropicKey = geminiKey ? '' : cleanKey;
 
-  if (!effectiveKey) {
-    return errorJson(503, 'api_error', 'El asistente no está configurado (falta GEMINI_API_KEY o ANTHROPIC_API_KEY en el servidor).');
+  if (!geminiKey && !anthropicKey) {
+    console.error('[asistente] sin clave: falta GEMINI_API_KEY o ANTHROPIC_API_KEY en el servidor');
+    return errorJson(503, 'api_error', MENSAJES_ASISTENTE.sinConfigurar[quien]);
   }
   const messages = limpiarMensajes(body, doctora ? MAX_CARACTERES_DOCTORA : MAX_CARACTERES);
   if (!messages) return errorJson(400, 'invalid_request_error', 'Conversación inválida.');
 
-  // Si tenemos clave de Gemini, usamos la API gratuita de Gemini de Google
   if (geminiKey) {
-    const contents = messages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
-
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:streamGenerateContent?alt=sse&key=${geminiKey}`;
-    const upstream = await fetchImpl(geminiUrl, {
+    const upstream = await fetchImpl(`${URL_GEMINI}/${MODELO_GEMINI}:streamGenerateContent?alt=sse`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      // La clave va en el encabezado (no en la URL, que puede quedar en registros)
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': geminiKey },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: sistema }] },
-        contents,
-        generationConfig: { maxOutputTokens: MAX_TOKENS, temperature: 0.7 }
-      })
+        contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+        generationConfig: { maxOutputTokens: MAX_TOKENS, temperature: 0.7 },
+      }),
     });
-
-    if (!upstream.ok) {
-      const errText = await upstream.text().catch(() => '');
-      console.error('[Gemini API error]', upstream.status, errText);
-      return errorJson(upstream.status, 'api_error', 'Error al consultar Google Gemini.');
-    }
-
-    // Transformador de SSE de Gemini a SSE de Anthropic (para que @anthropic-ai/sdk del cliente lo reciba intacto)
-    const reader = upstream.body.getReader();
-    const decoder = new TextDecoder();
-    const encoder = new TextEncoder();
-
-    const stream = new ReadableStream({
-      async pull(controller) {
-        let buffer = '';
-        const msgId = 'msg_' + Math.random().toString(36).slice(2, 12);
-        
-        // El SDK de Anthropic exige message_start y content_block_start para no lanzar error
-        controller.enqueue(encoder.encode(`event: message_start\ndata: ${JSON.stringify({
-          type: 'message_start',
-          message: { id: msgId, type: 'message', role: 'assistant', content: [], model: 'claude-opus-5-5', stop_reason: null, usage: { input_tokens: 10, output_tokens: 1 } }
-        })}\n\n`));
-        controller.enqueue(encoder.encode(`event: content_block_start\ndata: ${JSON.stringify({
-          type: 'content_block_start',
-          index: 0,
-          content_block: { type: 'text', text: '' }
-        })}\n\n`));
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            controller.enqueue(encoder.encode(`event: content_block_stop\ndata: ${JSON.stringify({ type: 'content_block_stop', index: 0 })}\n\n`));
-            controller.enqueue(encoder.encode(`event: message_delta\ndata: ${JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 100 } })}\n\n`));
-            controller.enqueue(encoder.encode(`event: message_stop\ndata: ${JSON.stringify({ type: 'message_stop' })}\n\n`));
-            controller.close();
-            break;
-          }
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop(); // guardar línea incompleta
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                const parts = data?.candidates?.[0]?.content?.parts || [];
-                for (const part of parts) {
-                  if (part.text) {
-                    const eventData = {
-                      type: 'content_block_delta',
-                      index: 0,
-                      delta: { type: 'text_delta', text: part.text }
-                    };
-                    controller.enqueue(encoder.encode(`event: content_block_delta\ndata: ${JSON.stringify(eventData)}\n\n`));
-                  }
-                }
-              } catch {
-                // ignorar json parcial
-              }
-            }
-          }
-        }
-      }
-    });
-
-    return new Response(stream, {
+    if (!upstream.ok) return errorDelProveedor('Gemini', upstream, quien);
+    return new Response(geminiComoAnthropic(upstream.body, quien), {
       status: 200,
-      headers: {
-        'content-type': 'text/event-stream',
-        'cache-control': 'no-store'
-      }
+      headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-store' },
     });
   }
 
@@ -235,7 +271,7 @@ ${contexto || '(no llegaron datos)'}`
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': apiKey,
+      'x-api-key': anthropicKey,
       'anthropic-version': '2023-06-01',
       // Si el modelo declina por sus salvaguardas, la API reintenta con otro modelo en la misma llamada
       'anthropic-beta': 'server-side-fallback-2026-07-01',
@@ -250,6 +286,8 @@ ${contexto || '(no llegaron datos)'}`
       messages,
     }),
   });
+
+  if (!upstream.ok) return errorDelProveedor('Anthropic', upstream, quien);
 
   return new Response(upstream.body, {
     status: upstream.status,
@@ -279,7 +317,7 @@ export const demasiadasSolicitudes = () =>
   errorJson(429, 'rate_limit_error', 'Hiciste muchas preguntas seguidas. Espera unos minutos e intenta de nuevo.');
 
 // Adaptador para servidores Node (middleware de Vite): http.IncomingMessage → Response → http.ServerResponse
-export function middlewareAsistente(apiKey, apiUrl = '') {
+export function middlewareAsistente(apiKey, apiUrl = '', geminiApiKey = process.env.GEMINI_API_KEY) {
   return async (req, res, next) => {
     if (req.url.split('?')[0] !== RUTA_ASISTENTE) return next();
     const enviar = async (response) => {
@@ -303,10 +341,12 @@ export function middlewareAsistente(apiKey, apiUrl = '') {
         perfil: req.headers[ENCABEZADO_PERFIL],
         token: req.headers[ENCABEZADO_SESION],
         apiUrl,
+        geminiApiKey,
       }));
     } catch (err) {
       console.error('[asistente]', err);
-      if (!res.headersSent) await enviar(errorJson(502, 'api_error', 'No pudimos contactar al asistente.'));
+      const quien = req.headers[ENCABEZADO_PERFIL] === 'doctora' ? 'doctora' : 'paciente';
+      if (!res.headersSent) await enviar(errorJson(503, 'api_error', MENSAJES_ASISTENTE.noDisponible[quien]));
       else res.end();
     }
   };

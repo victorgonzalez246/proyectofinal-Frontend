@@ -1,7 +1,7 @@
 // Exporta los datos de db.json a un Excel (.xlsx) listo para importar en la hoja de Google que usa n8n:
 //   npm run sembrar:demo && npm run exportar:sheets
 //   DOCTORA_TELEFONO="+506 7000 0000" npm run exportar:sheets   ← número real de WhatsApp de la doctora
-// Una pestaña por tabla (users, appointments, portal, checkins, sosAlerts, accesos), con el mismo formato
+// Una pestaña por tabla (users, appointments, portal, checkins, sosAlerts, accesos, facturas, tratamientos), con el mismo formato
 // que escribe el flujo API (api/hojas.mjs): encabezados en la fila 1 y objetos/listas como JSON en su celda.
 // Se usa .xlsx y no CSV porque conserva los tipos: el texto sigue siendo texto (fechas y teléfonos "+506"
 // no se convierten) y los números y verdadero/falso llegan como tales, igual que los lee n8n.

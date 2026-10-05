@@ -42,9 +42,9 @@ export default function AdminEstadisticas() {
                 tono="bien"
               />
               <Cifra
-                etiqueta="Pendiente de cobro"
+                etiqueta="Pendiente de cobro del mes"
                 valor={formatColones(r.pendientesMes)}
-                detalle={`₡${r.pendientesMes.toLocaleString('es-CR')} por cobrar`}
+                detalle={`₡${r.pendientesMes.toLocaleString('es-CR')} por cobrar de facturas de este mes`}
                 tono={r.pendientesMes > 0 ? 'alerta' : undefined}
               />
               <Cifra etiqueta="Citas de hoy" valor={r.citasHoy} detalle="Confirmadas para hoy" />

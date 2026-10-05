@@ -188,7 +188,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Solo mensajes de texto de pacientes (se ignoran estados de entrega, audios, etc.)\nconst raw = $input.first().json;\nconst value = raw.messages ? raw : (raw.entry?.[0]?.changes?.[0]?.value || {});\nconst mensaje = (value.messages || [])[0];\nif (!mensaje || mensaje.type !== 'text' || !mensaje.text?.body) return [];\nconst contacto = (value.contacts || [])[0] || {};\nreturn [{\n  json: {\n    accion: 'chat_whatsapp',\n    payload: { from: mensaje.from, nombre: contacto.profile?.name || '', texto: mensaje.text.body.slice(0, 1500), messageId: mensaje.id },\n  },\n}];\n"
+        "jsCode": "// Mensajes de pacientes. Se ignoran estados de entrega (statuses), reacciones, stickers y avisos del sistema.\n// tipo: \"texto\" (también botones y listas, con su título), \"audio\" (se transcribe), \"imagen\" (la ve el agente)\n// o \"no_texto\" (video, documento, ubicación...: respuesta corta sin IA).\n// contenido: lo que dijo o escribió la paciente (la red de seguridad lo revisa); texto: lo que leen la IA y la memoria.\nconst raw = $input.first().json;\nconst value = raw.messages ? raw : (raw.entry?.[0]?.changes?.[0]?.value || {});\nconst mensaje = (value.messages || [])[0];\nif (!mensaje) return [];\nconst OTROS = ['video', 'document', 'location', 'contacts', 'unsupported'];\nconst opcion = mensaje.interactive?.button_reply || mensaje.interactive?.list_reply;\nlet contenido = '';\nlet tipo = 'texto';\nlet medio = null;\nif (mensaje.type === 'text') contenido = mensaje.text?.body || '';\nelse if (mensaje.type === 'button') contenido = mensaje.button?.text || mensaje.button?.payload || '';\nelse if (mensaje.type === 'interactive') contenido = opcion?.title || '';\nelse if (mensaje.type === 'audio' || mensaje.type === 'voice') {\n  tipo = 'audio';\n  medio = mensaje[mensaje.type] || {};\n} else if (mensaje.type === 'image') {\n  tipo = 'imagen';\n  medio = mensaje.image || {};\n  contenido = medio.caption || '';\n} else if (OTROS.includes(mensaje.type)) {\n  tipo = 'no_texto';\n  contenido = mensaje[mensaje.type]?.caption || '';\n} else return [];\nif (tipo === 'texto' && !String(contenido).trim()) return [];\ncontenido = String(contenido).slice(0, 1400);\nconst texto = tipo === 'imagen' ? '[Foto enviada' + (contenido ? ': ' + contenido : '') + ']' : contenido;\nconst contacto = (value.contacts || [])[0] || {};\nreturn [{\n  json: {\n    accion: 'chat_whatsapp',\n    payload: {\n      from: mensaje.from, nombre: contacto.profile?.name || '', texto, contenido, messageId: mensaje.id,\n      tipo, tipoOriginal: mensaje.type, mediaId: medio?.id || '',\n    },\n  },\n}];\n"
       },
       "id": "526a3bb8-f08a-4008-ab70-6012052eb066",
       "name": "Normalizar mensaje",
@@ -353,7 +353,7 @@
             {
               "id": "b4521f27-be2c-4bbf-a4a0-28a135dc0c14",
               "name": "graphApiVersion",
-              "value": "v21.0",
+              "value": "v26.0",
               "type": "string"
             },
             {
@@ -794,7 +794,236 @@
     },
     {
       "parameters": {
-        "jsCode": "const SENALES = [\"no puedo respirar\",\"me ahogo\",\"me falta el aire\",\"dificultad para respirar\",\"se me cierra la garganta\",\"garganta hinchada\",\"lengua hinchada\",\"dolor en el pecho\",\"no veo\",\"perdi la vista\",\"vision borrosa\",\"veo borroso\",\"veo doble\",\"piel morada\",\"se puso morad\",\"piel blanca\",\"se puso blanc\",\"desmay\",\"convuls\",\"sangra mucho\",\"sangrado abundante\",\"fiebre alta\"];\n// Regla fija, sin IA: una emergencia nunca depende de un modelo de lenguaje\nconst item = $input.first().json;\nconst texto = String(item.payload.texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');\n// SENALES: REVISION-DOCTORA.md, sección 2 (se inserta al generar, ya sin tildes)\nconst senal = SENALES.find((s) => texto.includes(s));\n// \"BAJA\" (solo esa palabra) deja de enviar promociones; una emergencia siempre tiene prioridad\nconst baja = !senal && /^\\s*(baja|stop)\\s*[.!]*\\s*$/.test(texto);\nreturn [{ json: { ...item, ruta: senal ? 'emergencia' : baja ? 'baja' : 'conversacion', senal: senal || '' } }];\n"
+        "jsCode": "const cfg = $('Configuración').first().json;\nconst item = $input.first().json;\nconst p = item.payload;\nif (p.tipo === 'texto') return [{ json: item }];\nconst toWa = (n) => {\n  const d = String(n || '').replace(/\\D/g, '');\n  return d.length === 8 ? '506' + d : d;\n};\nconst enPruebas = String(cfg.modoPruebas || '').trim().toLowerCase() === 'si';\nconst numerosPrueba = String(cfg.numerosPrueba || '').split(',').map(toWa).filter(Boolean);\nif (enPruebas && !numerosPrueba.includes(toWa(p.from))) return [];\nif ((p.tipo === 'audio' || p.tipo === 'imagen') && !p.mediaId) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];\nreturn [{ json: item }];\n"
+      },
+      "id": "5dd31c09-2b32-4765-a654-b7887c71d402",
+      "name": "Revisar adjunto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        -1320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d2c420a9-9e90-4840-a6f0-a17c38dfde22",
+                    "leftValue": "={{ $json.payload.tipo }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Nota de voz"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f59d4d49-64b8-4aa8-ac67-e4c603b326d6",
+                    "leftValue": "={{ $json.payload.tipo }}",
+                    "rightValue": "imagen",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Foto"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Texto u otro"
+        }
+      },
+      "id": "42649b6f-0af3-4568-a686-61e8c34a83fe",
+      "name": "¿Nota de voz o foto?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1360,
+        -1320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/{{ $('Configuración').first().json.graphApiVersion }}/{{ $json.payload.mediaId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "de1c7fd9-e93c-42ec-a5b6-ad6fa793ce95",
+      "name": "Meta: datos del medio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        -1320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "6efc0cd9-9463-4b8b-a5d2-e3648b716009",
+      "name": "Meta: descargar medio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        -1320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Límites de WhatsApp: audio 16 MB, imagen 5 MB (también el máximo que acepta Claude por imagen)\nconst LIMITE_MB = { audio: 16, imagen: 5 };\nconst item = $('Revisar adjunto').first().json;\nconst p = item.payload;\nconst info = $('Meta: datos del medio').first().json || {};\nconst entrada = $input.first();\nconst archivo = entrada.binary?.data;\nconst mimeType = String(info.mime_type || archivo?.mimeType || '').split(';')[0].trim();\nconst bytes = Number(info.file_size) || 0;\nconst ok = archivo && !entrada.json?.error && bytes <= LIMITE_MB[p.tipo] * 1024 * 1024\n  && mimeType.startsWith(p.tipo === 'audio' ? 'audio/' : 'image/');\nif (!ok) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];\nreturn [{ json: item, binary: { data: { ...archivo, mimeType } } }];\n"
+      },
+      "id": "aff24da1-430b-4fb2-a738-88e0eb06f004",
+      "name": "Revisar descarga",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        -1320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "77ba01f1-dd08-4735-a0e6-6a9025b68542",
+                    "leftValue": "={{ $json.payload.tipo }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Nota de voz"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Foto o fallo"
+        }
+      },
+      "id": "df874b03-3605-459d-af93-0a4865dce3cd",
+      "name": "¿Es nota de voz?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2240,
+        -1320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemini-3.5-flash"
+        },
+        "text": "Transcribe literalmente esta nota de voz de WhatsApp, en el idioma en que se habla (normalmente español de Costa Rica). Devuelve solo la transcripción: sin comentarios, sin marcas de tiempo y sin etiquetas de hablante. Si no se entiende nada, responde exactamente [inaudible].",
+        "inputType": "binary",
+        "binaryPropertyName": "data",
+        "simplify": true,
+        "options": {}
+      },
+      "id": "0fed82fd-c29d-4369-a03e-b2ac8e41fa3f",
+      "name": "Gemini · Transcribir nota de voz",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        2460,
+        -1320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// La transcripción pasa a ser el mensaje (y queda así en la memoria de la conversación)\nconst item = $('Revisar adjunto').first().json;\nconst p = item.payload;\nconst r = $input.first().json || {};\nconst t = (r.content?.parts || []).filter((x) => !x.thought).map((x) => x.text || '').join(' ').replace(/\\s+/g, ' ').trim();\nif (!t || /^\\[?inaudible\\]?\\.?$/i.test(t)) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];\nconst contenido = t.slice(0, 1400);\nreturn [{ json: { ...item, payload: { ...p, contenido, texto: '[Nota de voz transcrita] ' + contenido } } }];\n"
+      },
+      "id": "abda0469-382d-48b9-ab58-1d37e7cfe26d",
+      "name": "Texto de la nota de voz",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2680,
+        -1320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SENALES = [\"no puedo respirar\",\"me ahogo\",\"me falta el aire\",\"dificultad para respirar\",\"se me cierra la garganta\",\"garganta hinchada\",\"lengua hinchada\",\"dolor en el pecho\",\"no veo\",\"perdi la vista\",\"vision borrosa\",\"veo borroso\",\"veo doble\",\"piel morada\",\"se puso morad\",\"piel blanca\",\"se puso blanc\",\"desmay\",\"convuls\",\"sangra mucho\",\"sangrado abundante\",\"fiebre alta\"];\n// Regla fija, sin IA: una emergencia nunca depende de un modelo de lenguaje.\n// Revisa lo que la paciente escribió, dijo en la nota de voz (transcrita) o puso al pie de la foto.\nconst entrada = $input.first();\nconst item = entrada.json;\nconst texto = String(item.payload.contenido ?? item.payload.texto ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');\n// SENALES: REVISION-DOCTORA.md, sección 2 (se inserta al generar, ya sin tildes)\nconst senal = SENALES.find((s) => texto.includes(s));\n// \"BAJA\" (solo esa palabra) deja de enviar promociones; una emergencia siempre tiene prioridad\nconst baja = !senal && /^\\s*(baja|stop)\\s*[.!]*\\s*$/.test(texto);\n// Video, documento, ubicación... o un audio/foto que no se pudo abrir: respuesta corta sin IA\nconst noSoportado = !senal && !baja && ['no_texto', 'medio_fallido'].includes(item.payload.tipo);\nconst ruta = senal ? 'emergencia' : baja ? 'baja' : noSoportado ? 'no_soportado' : 'conversacion';\n// La foto (binario) sigue hasta el agente para que la vea\nreturn [{ json: { ...item, ruta, senal: senal || '' }, ...(entrada.binary ? { binary: entrada.binary } : {}) }];\n"
       },
       "id": "8b97a7b1-fe4c-4a14-a956-2f4b2c983981",
       "name": "Red de seguridad clínica",
@@ -880,6 +1109,30 @@
               },
               "renameOutput": true,
               "outputKey": "Baja de promociones"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6b34b2c3-56b1-4cc0-a2aa-0b853b507605",
+                    "leftValue": "={{ $json.ruta }}",
+                    "rightValue": "no_soportado",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Formato no soportado"
             }
           ]
         },
@@ -932,6 +1185,19 @@
     },
     {
       "parameters": {
+        "jsCode": "const p = $('Red de seguridad clínica').first().json.payload;\nconst FALLO = {\n  audio: 'No logré escuchar bien tu nota de voz 🙏 ¿Me la envías de nuevo o me lo escribes?',\n  voice: 'No logré escuchar bien tu nota de voz 🙏 ¿Me la envías de nuevo o me lo escribes?',\n  image: 'No pude abrir tu foto 🙏 ¿Me la envías de nuevo o me cuentas por escrito qué notas?',\n};\nconst texto = p.tipo === 'medio_fallido'\n  ? FALLO[p.tipoOriginal] || 'No pude abrir lo que me enviaste 🙏 ¿Me lo escribes?'\n  : 'Por ahora puedo leer texto, escuchar notas de voz y ver fotos 🙏 ¿Me lo cuentas así?';\nreturn [{ json: { to: p.from, texto } }];\n"
+      },
+      "id": "aa6ff016-1062-4159-a438-4ac8b9a03747",
+      "name": "Respuesta: formato no soportado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        340
+      ]
+    },
+    {
+      "parameters": {
         "jsCode": "const PLANTILLAS = {\"cita_recibida_v2\":{\"cuerpo\":\"Hola {{1}}, gracias por escribirnos. Recibimos tu solicitud de cita para el {{2}} y muy pronto te escribiremos por este medio para confirmar la hora. Mientras tanto, ya puedes entrar a tu portal privado desde el botón de abajo.\",\"boton\":{\"texto\":\"Ir a mi portal\",\"ruta\":\"/portal/acceso\"}},\"nueva_solicitud_cita\":{\"cuerpo\":\"Hola doctora, llegó una nueva solicitud de cita. La paciente {{1}}, con número {{2}}, desea agendar {{3}} para el {{4}}. Puede revisarla y confirmarla en el panel médico.\"},\"cita_confirmada_v2\":{\"cuerpo\":\"Hola {{1}}, te confirmamos que tu cita quedó agendada para el {{2}} a las {{3}}. Puedes ver los detalles en tu portal privado y con gusto te esperamos en la clínica.\",\"boton\":{\"texto\":\"Ver mi cita\",\"ruta\":\"/portal\"}},\"cita_cancelada\":{\"cuerpo\":\"Hola {{1}}, te avisamos que tu cita del {{2}} fue cancelada. Si deseas elegir una nueva fecha, solo responde a este mensaje y con gusto te ayudamos.\"},\"codigo_acceso\":{\"cuerpo\":\"*{{1}}* es tu código de verificación. Por tu seguridad, no lo compartas. Vence en 15 minutos.\"},\"alerta_clinica\":{\"cuerpo\":\"Hola doctora, hay una alerta de tipo {{1}} que necesita su atención. La paciente es {{2}} y su teléfono es {{3}}. Lo que ocurrió: {{4}}. Puede ver todos los detalles en el panel médico.\"},\"sos_recibido\":{\"cuerpo\":\"Hola {{1}}, la Dra. Laura ya recibió tu aviso y te escribirá en pocos minutos. Si se trata de una emergencia médica, por favor llama de inmediato al 911.\"},\"resumen_consulta\":{\"cuerpo\":\"Hola doctora, este es el resumen de la consulta de hoy con {{1}} a las {{2}}. Primer punto: {{3}}. Segundo punto: {{4}}. Tercer punto: {{5}}. Encontrará más detalles en el panel médico.\"},\"recordatorio_cita\":{\"cuerpo\":\"Hola {{1}}, te recordamos que te esperamos mañana {{2}} a las {{3}}. Para prepararte antes de tu cita: {{4}}. Si necesitas cambiar la hora, solo responde a este mensaje.\"},\"seguimiento_tratamiento_v2\":{\"cuerpo\":\"Hola {{1}}, queremos saber cómo te sientes hoy después de tu visita. Puedes contarnos desde tu portal privado o simplemente responder a este mensaje.\",\"boton\":{\"texto\":\"Contar cómo me siento\",\"ruta\":\"/portal\"}},\"proximo_paso_mapa_v2\":{\"cuerpo\":\"Hola {{1}}, te recordamos que tu próximo paso en tu mapa de belleza está previsto para el {{2}}. Puedes ver tu plan completo en tu portal cuando gustes.\",\"boton\":{\"texto\":\"Ver mi mapa\",\"ruta\":\"/portal/mapa\"}},\"resumen_semana_clinica\":{\"cuerpo\":\"Hola doctora, esta semana hay {{1}} pasos programados en los mapas de belleza de sus pacientes: {{2}}. Puede revisarlos con calma en el panel médico.\"},\"promocion\":{\"cuerpo\":\"Hola {{1}}, en la clínica de la Dra. Laura tenemos una novedad especial para ti: {{2}} Si prefieres no recibir más promociones, solo responde BAJA.\"}};\n// Configuración editable (nodo \"Configuración\")\nconst cfg = $('Configuración').first().json;\n// WhatsApp exige el número con código de país y sin símbolos (Costa Rica: 506)\nconst toWa = (phone) => {\n  const digits = String(phone || '').replace(/\\D/g, '');\n  return digits.length === 8 ? '506' + digits : digits;\n};\nconst firstName = (name) => String(name || '').trim().split(/\\s+/)[0] || '';\nconst fechaLarga = (iso) =>\n  new Date(String(iso).slice(0, 10) + 'T12:00:00-06:00').toLocaleDateString('es-CR', {\n    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Costa_Rica',\n  });\n// Las variables de plantilla no admiten saltos de línea ni espacios repetidos\nconst clean = (value) => String(value ?? '').replace(/\\s+/g, ' ').trim().slice(0, 900);\n// boton: valor de la variable de un botón (URL dinámica o código de verificación); las URL fijas van en la plantilla\n// texto: el mismo mensaje ya rellenado, para el modo pruebas (texto libre mientras Meta revisa las plantillas)\nconst msg = (to, template, params, boton) => ({\n  json: { to: toWa(to), template, params: params.map(clean), ...(boton ? { boton: clean(boton) } : {}), texto: textoPrueba(template, params.map(clean)) },\n});\n// ── Modo pruebas (Configuración: modoPruebas = \"si\") ──\n// PLANTILLAS se inserta al generar el flujo (n8n/plantillas.mjs)\nconst textoPrueba = (template, params) => {\n  const p = PLANTILLAS[template];\n  if (!p) return params.join(' · ');\n  const cuerpo = p.cuerpo.replace(/\\{\\{(\\d+)\\}\\}/g, (_, n) => params[Number(n) - 1] ?? '');\n  return p.boton ? `${cuerpo}\\n\\n${p.boton.texto}: ${cfg.portalUrl}${p.boton.ruta}` : cuerpo;\n};\nconst enPruebas = String(cfg.modoPruebas || '').trim().toLowerCase() === 'si';\n// En pruebas solo se escribe a los números de la lista (con código de país): evita escribir a pacientes ficticias\nconst numerosPrueba = String(cfg.numerosPrueba || '').split(',').map((n) => toWa(n)).filter(Boolean);\nconst filtrarPruebas = (salida) =>\n  enPruebas && Array.isArray(salida)\n    ? salida.filter((item) => !item?.json?.to || numerosPrueba.includes(item.json.to))\n    : salida;\n\nreturn filtrarPruebas(await (async () => {\nconst p = $input.first().json.payload;\nreturn [msg(cfg.clinicWhatsapp, 'alerta_clinica', ['EMERGENCIA', p.nombre || 'Paciente', p.from, 'Escribió: ' + p.texto])];\n\n})());"
       },
       "id": "0d26f148-41fc-45f6-a848-e879296b2466",
@@ -963,7 +1229,7 @@
           "categories": [
             {
               "category": "clinica",
-              "description": "Dudas de salud, síntomas, dolor, inflamación, cuidados posteriores, emociones o miedo después de un tratamiento."
+              "description": "Dudas de salud, síntomas, dolor, inflamación, cuidados posteriores, fotos de la zona tratada, emociones o miedo después de un tratamiento."
             },
             {
               "category": "administrativa",
@@ -1010,8 +1276,9 @@
         "promptType": "define",
         "text": "={{ $('Red de seguridad clínica').first().json.payload.texto }}",
         "options": {
-          "systemMessage": "Eres la enfermera de la clínica de armonización facial de la Dra. Laura Jiménez, en Escazú, Costa Rica. Conversas por WhatsApp con pacientes de la doctora, casi siempre en los días después de un tratamiento, que es cuando aparecen las dudas, la hinchazón inesperada y a veces el miedo.\n\nQuién eres en esta conversación\nNo eres un menú de respuestas. Eres alguien que escucha de verdad: lees lo que la paciente dice y también lo que no dice (el susto detrás de un \"¿es normal?\", el cansancio, la vergüenza de preguntar algo \"tonto\"). Respondes a la persona, no solo a la pregunta. Si está asustada, primero la acompañas y después explicas. Si está contenta con su resultado, te alegras con ella. Si solo saluda o agradece, conversas con naturalidad y le preguntas cómo va; un saludo no es una emergencia.\n\nCómo piensas antes de responder\n1. Consulta \"ficha_paciente\" para saber quién es, qué tratamiento se hizo, en qué día de recuperación va y qué cuidados le indicó la doctora. Usa su nombre y ese contexto: no es lo mismo una hinchazón al día 2 que al día 10.\n2. Consulta \"base_clinica\": es el criterio clínico que la doctora aprobó. Razona a partir de él y de la ficha para responder la situación concreta de la paciente con tus propias palabras, como lo explicaría una enfermera con experiencia. No lo copies literal y no inventes datos clínicos que no salgan de ahí o de la ficha.\n3. Si la duda clínica no está cubierta por lo que la doctora aprobó, no improvises: dile con honestidad que esa respuesta debe dártela la doctora, que ya le avisas, y usa \"despertar_doctora\".\n4. Ten en cuenta todo el historial de la conversación (lo comparte la recepción): retoma lo que ya contó, no repitas preguntas y nota si algo va mejorando o empeorando entre mensajes.\n\nLo que nunca cambia, por la seguridad de la paciente\n- No diagnosticas, no recomiendas medicamentos ni dosis y no contradices ni cambias indicaciones de la doctora.\n- Usa \"despertar_doctora\" si la paciente menciona: dolor fuerte o que aumenta, piel blanca, morada o con manchas en la zona tratada, ampollas, fiebre, secreción, cambios en la visión, hinchazón que empeora después de 72 horas, bultos que duelen, asimetría marcada, reacción alérgica, o si está muy angustiada. Ante la duda, avisa: es preferible una alerta de más que una de menos. Cuando lo hagas, díselo a la paciente con calma (\"ya le escribí a la doctora para que te contacte\").\n- Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pídele que llame al 911 de inmediato y usa \"despertar_doctora\".\n- Nunca compartas datos de otras pacientes.\n- Si te preguntan si eres una persona o una IA, di la verdad con naturalidad: eres la asistente virtual de la clínica y la doctora supervisa lo que conversan.\n\nCitas, horarios y pagos los lleva la recepción: si salen en la conversación, dile con gusto que la ayudan y pídele qué día y hora le quedan mejor.\n\nCómo hablas\nEspañol de Costa Rica, cercano y sereno, de tú. Mensajes de WhatsApp: cortos, humanos, sin listas ni tecnicismos, sin sonar a formulario. Normalmente 2 a 5 frases; si la paciente está angustiada, puedes extenderte un poco para acompañarla. Varía tus palabras: nada de frases hechas repetidas en cada mensaje.",
-          "maxIterations": 8
+          "systemMessage": "Eres la enfermera de la clínica de armonización facial de la Dra. Laura Jiménez, en Escazú, Costa Rica. Conversas por WhatsApp con pacientes de la doctora, casi siempre en los días después de un tratamiento, que es cuando aparecen las dudas, la hinchazón inesperada y a veces el miedo.\n\nQuién eres en esta conversación\nNo eres un menú de respuestas. Eres alguien que escucha de verdad: lees lo que la paciente dice y también lo que no dice (el susto detrás de un \"¿es normal?\", el cansancio, la vergüenza de preguntar algo \"tonto\"). Respondes a la persona, no solo a la pregunta. Si está asustada, primero la acompañas y después explicas. Si está contenta con su resultado, te alegras con ella. Si solo saluda o agradece, conversas con naturalidad y le preguntas cómo va; un saludo no es una emergencia.\n\nCómo piensas antes de responder\n1. Consulta \"ficha_paciente\" para saber quién es, qué tratamiento se hizo, en qué día de recuperación va y qué cuidados le indicó la doctora. Usa su nombre y ese contexto: no es lo mismo una hinchazón al día 2 que al día 10.\n2. Consulta \"base_clinica\": es el criterio clínico que la doctora aprobó. Razona a partir de él y de la ficha para responder la situación concreta de la paciente con tus propias palabras, como lo explicaría una enfermera con experiencia. No lo copies literal y no inventes datos clínicos que no salgan de ahí o de la ficha.\n3. Si la duda clínica no está cubierta por lo que la doctora aprobó, no improvises: dile con honestidad que esa respuesta debe dártela la doctora, que ya le avisas, y usa \"despertar_doctora\".\n4. Ten en cuenta todo el historial de la conversación (lo comparte la recepción): retoma lo que ya contó, no repitas preguntas y nota si algo va mejorando o empeorando entre mensajes.\n\nLo que nunca cambia, por la seguridad de la paciente\n- No diagnosticas, no recomiendas medicamentos ni dosis y no contradices ni cambias indicaciones de la doctora.\n- Usa \"despertar_doctora\" si la paciente menciona: dolor fuerte o que aumenta, piel blanca, morada o con manchas en la zona tratada, ampollas, fiebre, secreción, cambios en la visión, hinchazón que empeora después de 72 horas, bultos que duelen, asimetría marcada, reacción alérgica, o si está muy angustiada. Ante la duda, avisa: es preferible una alerta de más que una de menos. Cuando lo hagas, díselo a la paciente con calma (\"ya le escribí a la doctora para que te contacte\").\n- Si hay dificultad para respirar, hinchazón de garganta o lengua, dolor en el pecho o pérdida de visión: pídele que llame al 911 de inmediato y usa \"despertar_doctora\".\n- Nunca compartas datos de otras pacientes.\n- Si te preguntan si eres una persona o una IA, di la verdad con naturalidad: eres la asistente virtual de la clínica y la doctora supervisa lo que conversan.\n\nNotas de voz y fotos\nSi el mensaje empieza con \"[Nota de voz transcrita]\", es lo que la paciente te dijo en audio (la transcripción puede tener errores pequeños). Si dice \"[Foto enviada]\", la paciente te mandó una foto y la puedes ver: coméntala con prudencia y calidez, sin diagnosticar, relacionándola con su tratamiento y lo que la doctora aprobó. Ante signos de alarma visibles (zonas blancas, pálidas o moradas que sugieran necrosis, ampollas, pus o signos de infección, asimetría súbita importante) usa \"despertar_doctora\" de inmediato y díselo con calma.\n\nCitas, horarios y pagos los lleva la recepción: si salen en la conversación, dile con gusto que la ayudan y pídele qué día y hora le quedan mejor.\n\nCómo hablas\nEspañol de Costa Rica, cercano y sereno, de tú. Mensajes de WhatsApp: cortos, humanos, sin listas ni tecnicismos, sin sonar a formulario. Normalmente 2 a 5 frases; si la paciente está angustiada, puedes extenderte un poco para acompañarla. Varía tus palabras: nada de frases hechas repetidas en cada mensaje.",
+          "maxIterations": 8,
+          "passthroughBinaryImages": true
         }
       },
       "id": "868dc6ad-d86c-4598-a92a-2f6f76c41133",
@@ -1119,8 +1386,9 @@
         "promptType": "define",
         "text": "={{ $('Red de seguridad clínica').first().json.payload.texto }}",
         "options": {
-          "systemMessage": "=Eres la Recepcionista VIP de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp solo temas administrativos: agendar, reprogramar o cancelar citas, horarios, ubicación y paquetes.\n\nDatos de la clínica: Escazú, San José. Atención de lunes a viernes de 9:00 a 18:00 (hora de Costa Rica, UTC-06:00). Cada cita dura 60 minutos. Hoy es {{ $now.setZone('America/Costa_Rica').toFormat(\"cccc d 'de' LLLL yyyy\", { locale: 'es' }) }}.\n\nCómo agendas:\n1. Usa \"ficha_recepcion\" para saludar por su nombre y ver su próxima cita y sus paquetes.\n2. Pregunta qué tratamiento le interesa y qué días le quedan mejor.\n3. Usa \"disponibilidad_agenda\" y ofrece como máximo 3 horarios libres dentro del horario de atención.\n4. Solo cuando la paciente confirme de forma explícita un horario: usa primero \"bloquear_agenda\" y después \"registrar_cita\". Si alguna falla, no confirmes y ofrece otro horario.\n5. Confirma la fecha y la hora en una frase clara.\n\nReglas: no inventes precios (la doctora los define en la valoración), no das información clínica y no ves historiales médicos. Si la paciente habla de síntomas, dolor o cuidados, dile con amabilidad que la enfermera de la clínica la atiende y que le cuente su duda.\n\nCómo hablas: como una recepcionista de confianza que conoce a sus pacientes, no como un sistema de reservas. Español de Costa Rica, cálido y de tú; mensajes cortos de WhatsApp (2 a 4 frases), sin listas largas ni frases hechas repetidas. Si la paciente cuenta algo personal (está nerviosa, es su primera vez, viene por un evento especial), respóndele a eso también. Usa el historial compartido para no volver a preguntar lo que ya dijo.",
-          "maxIterations": 10
+          "systemMessage": "=Eres la Recepcionista VIP de la clínica de armonización facial de la Dra. Laura Jiménez (Costa Rica). Atiendes por WhatsApp solo temas administrativos: agendar, reprogramar o cancelar citas, horarios, ubicación y paquetes.\n\nDatos de la clínica: Escazú, San José. Atención de lunes a viernes de 9:00 a 18:00 (hora de Costa Rica, UTC-06:00). Cada cita dura 60 minutos. Hoy es {{ $now.setZone('America/Costa_Rica').toFormat(\"cccc d 'de' LLLL yyyy\", { locale: 'es' }) }}.\n\nCómo agendas:\n1. Usa \"ficha_recepcion\" para saludar por su nombre y ver su próxima cita y sus paquetes.\n2. Pregunta qué tratamiento le interesa y qué días le quedan mejor.\n3. Usa \"disponibilidad_agenda\" y ofrece como máximo 3 horarios libres dentro del horario de atención.\n4. Solo cuando la paciente confirme de forma explícita un horario: usa primero \"bloquear_agenda\" y después \"registrar_cita\". Si alguna falla, no confirmes y ofrece otro horario.\n5. Confirma la fecha y la hora en una frase clara.\n\nReglas: no inventes precios (la doctora los define en la valoración), no das información clínica y no ves historiales médicos. Si la paciente habla de síntomas, dolor o cuidados, dile con amabilidad que la enfermera de la clínica la atiende y que le cuente su duda.\n\nNotas de voz y fotos: si el mensaje empieza con \"[Nota de voz transcrita]\", es lo que la paciente dijo en audio. Si dice \"[Foto enviada]\", puedes verla, pero no evalúas fotos de la zona tratada ni diagnosticas: dile con cariño que la enfermera de la clínica la revisa y que te cuente cómo se siente. Si en la foto ves signos de alarma (zonas blancas, pálidas o moradas, ampollas, pus, asimetría súbita importante), pídele que describa lo que siente para que la enfermera avise a la doctora de inmediato y, si empeora, que llame al 911.\n\nCómo hablas: como una recepcionista de confianza que conoce a sus pacientes, no como un sistema de reservas. Español de Costa Rica, cálido y de tú; mensajes cortos de WhatsApp (2 a 4 frases), sin listas largas ni frases hechas repetidas. Si la paciente cuenta algo personal (está nerviosa, es su primera vez, viene por un evento especial), respóndele a eso también. Usa el historial compartido para no volver a preguntar lo que ya dijo.",
+          "maxIterations": 10,
+          "passthroughBinaryImages": true
         }
       },
       "id": "5fe82adf-9615-429e-a9dd-c2dde7a9987c",
@@ -2196,7 +2464,7 @@
       "main": [
         [
           {
-            "node": "Red de seguridad clínica",
+            "node": "Revisar adjunto",
             "type": "main",
             "index": 0
           }
@@ -2301,6 +2569,115 @@
         ]
       ]
     },
+    "Revisar adjunto": {
+      "main": [
+        [
+          {
+            "node": "¿Nota de voz o foto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Nota de voz o foto?": {
+      "main": [
+        [
+          {
+            "node": "Meta: datos del medio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Meta: datos del medio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Red de seguridad clínica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta: datos del medio": {
+      "main": [
+        [
+          {
+            "node": "Meta: descargar medio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta: descargar medio": {
+      "main": [
+        [
+          {
+            "node": "Revisar descarga",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisar descarga": {
+      "main": [
+        [
+          {
+            "node": "¿Es nota de voz?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es nota de voz?": {
+      "main": [
+        [
+          {
+            "node": "Gemini · Transcribir nota de voz",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Red de seguridad clínica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini · Transcribir nota de voz": {
+      "main": [
+        [
+          {
+            "node": "Texto de la nota de voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto de la nota de voz": {
+      "main": [
+        [
+          {
+            "node": "Red de seguridad clínica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Red de seguridad clínica": {
       "main": [
         [
@@ -2336,6 +2713,13 @@
         [
           {
             "node": "API: baja de promociones",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta: formato no soportado",
             "type": "main",
             "index": 0
           }
@@ -2444,6 +2828,17 @@
       ]
     },
     "Respuesta de baja": {
+      "main": [
+        [
+          {
+            "node": "Responder por WhatsApp (texto)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta: formato no soportado": {
       "main": [
         [
           {

@@ -72,6 +72,9 @@ function App() {
               <Route path="facturas" element={<AdminFacturas />} />
             </Route>
           </Route>
+
+          {/* Cualquier otra ruta: a la landing (evita una página en blanco) */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </AuthProvider>

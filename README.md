@@ -52,7 +52,9 @@ Pacientes y doctora entran igual: escriben su número en `/portal/acceso` y reci
 
 ## Asistente virtual, clima y accesibilidad
 
-- **Asistente "Aura"** (landing y portal): chat flotante con respuestas en streaming de Claude. El navegador usa `@anthropic-ai/sdk` apuntando a `/api/asistente`; ese proxy (middleware de Vite en desarrollo, función de Vercel `api/asistente/v1/messages.js` en producción) agrega `ANTHROPIC_API_KEY` y fija el modelo, el prompt de sistema, el tope de tokens y un límite de 30 preguntas cada 10 minutos por IP. La clave nunca llega al navegador. No diagnostica ni da precios: orienta y guía para agendar.
+- **Asistente "Aura"** (landing, portal y panel de la doctora): chat flotante con respuestas en streaming. El navegador usa `@anthropic-ai/sdk` apuntando a `/api/asistente`; ese proxy (`api/_asistente.mjs`: middleware de Vite en desarrollo, función de Vercel `api/asistente/v1/messages.js` en producción) agrega la clave y fija el modelo, el prompt de sistema, el tope de tokens y un límite de 30 preguntas cada 10 minutos por IP. La clave nunca llega al navegador. No diagnostica ni da precios: orienta y guía para agendar.
+  - **Proveedor**: si `GEMINI_API_KEY` tiene valor se usa Google Gemini (`gemini-3.5-flash-lite`, clave en el encabezado `x-goog-api-key`) y el proxy traduce su streaming al formato de Anthropic; si está vacía, se usa Claude con `ANTHROPIC_API_KEY`. Para cambiar de proveedor basta con poner o vaciar `GEMINI_API_KEY` (en `.env` o en Vercel) y reiniciar.
+  - **Errores**: sin clave, Aura dice que "no está disponible por ahora"; si el proveedor falla (sin crédito, clave inválida, cuota agotada, saturado), dice que "no está disponible en este momento" y la causa real queda en la consola del servidor (`[asistente] … respondió …`, sin la clave). El límite propio de preguntas muestra su propio aviso.
 - **Clima y piel** (landing y `/portal/cuidados`): índice UV, temperatura y humedad de Escazú desde Open-Meteo, con recomendaciones de protección solar e hidratación. Estados de carga, error con reintento y datos.
 - **Accesibilidad**: selector visible (tamaño de texto, alto contraste, reducir animaciones) en la landing (botón flotante) y en la cabecera del panel; el portal ya lo tenía en "Apariencia y accesibilidad". Las preferencias son las mismas en todo el sitio. Además: enlace "Saltar al contenido", foco visible, `aria-expanded`/`aria-controls` en menús y paneles, errores del formulario enlazados con `aria-describedby` y `role="alert"`, y regiones `aria-live` en el chat.
 
@@ -60,7 +62,7 @@ Pacientes y doctora entran igual: escriben su número en `/portal/acceso` y reci
 
 ```bash
 npm install
-cp .env.example .env     # completa N8N_SHARED_SECRET, SESSION_SECRET y ANTHROPIC_API_KEY (asistente)
+cp .env.example .env     # completa N8N_SHARED_SECRET, SESSION_SECRET y GEMINI_API_KEY o ANTHROPIC_API_KEY (asistente)
 npm run server           # simulador en :3001
 npm run dev              # sitio en :5173
 ```
@@ -109,7 +111,7 @@ Publicado en **https://clinica-dra-laura.vercel.app** (Vercel, proyecto `clinica
 
 1. Configura n8n siguiendo [`n8n/README.md`](n8n/README.md). Genera los flujos con el dominio del sitio y el de desarrollo:
    `ORIGEN_PERMITIDO="https://clinica-dra-laura.vercel.app,http://localhost:5173" npm run generar:n8n`.
-2. En Vercel, variables del proyecto: `VITE_API_URL=https://<tu-n8n>/webhook` y `ANTHROPIC_API_KEY` (la usa la función del asistente, `api/asistente/v1/messages.js`).
+2. En Vercel, variables del proyecto: `VITE_API_URL=https://<tu-n8n>/webhook` y `GEMINI_API_KEY` o `ANTHROPIC_API_KEY` (las usa la función del asistente, `api/asistente/v1/messages.js`; Gemini tiene prioridad).
 3. `npx vercel deploy --prod`. `.vercelignore` deja fuera de la subida los secretos (`.env`) y los archivos de `api/` que no son funciones (núcleo y hojas, que viven en n8n).
 4. Para probar en local contra n8n: `npm run dev:n8n` y `npm run probar:produccion` (comprueba CORS, permisos y validaciones sin enviar WhatsApp).
 

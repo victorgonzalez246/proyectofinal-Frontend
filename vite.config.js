@@ -26,28 +26,29 @@ function cspPlugin(env, command) {
   }
 }
 
-// Asistente virtual: el servidor de desarrollo y el de preview atienden /api/asistente con la clave
-// ANTHROPIC_API_KEY de .env (sin prefijo VITE_, así nunca entra al paquete del navegador).
+// Asistente virtual: el servidor de desarrollo y el de preview atienden /api/asistente con las claves
+// GEMINI_API_KEY (prioridad) o ANTHROPIC_API_KEY de .env (sin prefijo VITE_, así nunca entran al paquete del navegador).
 // En producción lo atiende la función de Vercel api/asistente/v1/messages.js.
 // apiUrl: backend contra el que se verifica la sesión de la doctora (Aura del panel)
-function asistentePlugin(apiKey, apiUrl) {
+function asistentePlugin(apiKey, apiUrl, geminiApiKey) {
   return {
     name: 'asistente',
-    configureServer: (server) => { server.middlewares.use(middlewareAsistente(apiKey, apiUrl)) },
-    configurePreviewServer: (server) => { server.middlewares.use(middlewareAsistente(apiKey, apiUrl)) },
+    configureServer: (server) => { server.middlewares.use(middlewareAsistente(apiKey, apiUrl, geminiApiKey)) },
+    configurePreviewServer: (server) => { server.middlewares.use(middlewareAsistente(apiKey, apiUrl, geminiApiKey)) },
   }
 }
 
 // https://vite.dev/config/
 export default defineConfig(({ mode, command }) => {
   const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env }
+  const claves = { ...loadEnv(mode, process.cwd(), ['ANTHROPIC_', 'GEMINI_']), ...process.env } // solo para el servidor
   const apiTarget = env.VITE_API_URL || 'http://localhost:3001'
   return {
     plugins: [
       react(),
       tailwindcss(),
       cspPlugin(env, command),
-      asistentePlugin(process.env.ANTHROPIC_API_KEY || loadEnv(mode, process.cwd(), 'ANTHROPIC_').ANTHROPIC_API_KEY, apiTarget),
+      asistentePlugin(claves.ANTHROPIC_API_KEY, apiTarget, claves.GEMINI_API_KEY),
     ],
     // Desarrollo: src/services/api.js usa rutas relativas y este proxy las reenvía al simulador (sin CORS).
     // Son las rutas reales del contrato (api/nucleo.mjs). /admin y /auth también son páginas de React:

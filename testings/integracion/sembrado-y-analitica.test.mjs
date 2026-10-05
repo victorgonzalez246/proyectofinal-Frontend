@@ -114,3 +114,15 @@ describe('dashboard de la paciente con la API real', () => {
     expect(llamar('GET', '/admin/citas', { token: paciente }).status).toBe(403);
   });
 });
+
+describe('tratamientos (API)', () => {
+  it('rechaza una fecha de fin anterior a la de inicio y acepta un rango válido', () => {
+    const doctora = entrar('8888 8888');
+    const base = { idPaciente: 'pac-demo-1', medicamento: 'Prueba', dosis: 'Capa fina', frecuencia: 'Diaria', notas: '' };
+    const malo = llamar('POST', '/admin/tratamientos', { token: doctora, body: { ...base, fechaInicio: '2026-10-04', fechaFin: '2026-10-01' } });
+    expect(malo.status).toBe(400);
+    expect(malo.body.error).toMatch(/fecha de fin/);
+    const bueno = llamar('POST', '/admin/tratamientos', { token: doctora, body: { ...base, fechaInicio: '2026-10-04', fechaFin: '2026-10-04' } });
+    expect(bueno.status).toBe(201);
+  });
+});

@@ -81,7 +81,7 @@ La guía paso a paso está en [`n8n/README.md`](../n8n/README.md).
   - [ ] Con el negocio verificado: crear `codigo_acceso` (Autenticación → Código de acceso de un solo uso → *Copiar código*, idioma *Spanish*, recomendación de seguridad, vence en 15 minutos) y pasar `modoPruebas` a `no`. Mientras tanto, el cerebro sigue en `modoPruebas = si` y el código llega como texto a los `numerosPrueba` que escribieron a la clínica en las últimas 24 h.
 - [ ] **Anthropic:** crear una API key (console.anthropic.com).
 - [ ] **Google:**
-  - [ ] Crear la **hoja de datos** con sus 6 pestañas y la fila de la doctora (con su número real).
+  - [ ] Crear la **hoja de datos** con sus 8 pestañas (incluye `facturas` y `tratamientos`) y la fila de la doctora (con su número real).
   - [ ] Crear la hoja **Base clínica** (pestaña `BaseClinica`) a partir del CSV.
   - [ ] Crear una carpeta privada de Drive para los respaldos semanales.
   - [ ] Dar acceso al calendario de la doctora.

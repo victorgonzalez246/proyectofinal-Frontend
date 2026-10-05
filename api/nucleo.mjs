@@ -656,6 +656,7 @@ export function crearApi({ secretoSesion, secretoN8n, portalUrl, modoDesarrollo 
         if (!medicamento || !dosis || !frecuencia || !esFecha(fechaInicio) || !esFecha(fechaFin)) {
           falla(400, 'Completa todos los campos: medicamento, dosis, frecuencia, fecha inicio y fin.');
         }
+        if (fechaFin < fechaInicio) falla(400, 'La fecha de fin no puede ser anterior a la de inicio.');
         const tratamiento = guardar('tratamientos', {
           id: nuevoId('trat'),
           idPaciente,

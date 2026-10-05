@@ -86,10 +86,10 @@ const pacientes = NOMBRES.map((name, i) => {
     dateJoined: `${fechaMas(-Math.floor(Math.pow(azar(), 1.4) * 360) - 1)}T15:00:00.000Z`,
     demo: true,
   };
-  if (azar() < 0.55) paciente.promociones = { acepta: true, version: '2026-09-borrador', fecha: paciente.dateJoined };
+  if (azar() < 0.55) paciente.promociones = { acepta: true, version: '2026-10', fecha: paciente.dateJoined };
   return paciente;
 });
-const todas = [{ ...valeria, source: 'landing-cita', promociones: { acepta: true, version: '2026-09-borrador', fecha: valeria.dateJoined } }, ...pacientes];
+const todas = [{ ...valeria, source: 'landing-cita', promociones: { acepta: true, version: '2026-10', fecha: valeria.dateJoined } }, ...pacientes];
 
 // ── Citas ──
 let n = 0;
@@ -113,7 +113,7 @@ const nuevaCita = (paciente, fecha, { estado, hora, tratamiento, mensaje, origen
   };
   if (hora) cita.hora = hora;
   if (via === 'recepcionista-ia') cita.origen = 'recepcionista-ia';
-  else cita.consentimiento = { version: '2026-09-borrador', fecha: creada };
+  else cita.consentimiento = { version: '2026-10', fecha: creada };
   citas.push(cita);
   return cita;
 };
@@ -317,6 +317,26 @@ if (facturas.length > 10) {
   delete f.pagadaEn;
 }
 
+// ── Tratamientos de demostración (cuidados de venta libre; la doctora registra los reales desde la ficha) ──
+const tratamientos = [
+  [valeria, 'Compresas frías', '10 minutos, envueltas en un paño', 'Cada 2 horas el primer día', -5, -3, 'Nunca directamente sobre la piel.'],
+  [valeria, 'Bálsamo labial reparador con pantenol', 'Capa fina', '3 veces al día', -5, 9, 'No uses labiales de larga duración mientras lo apliques.'],
+  [valeria, 'Protector solar mineral SPF 50+', 'Capa generosa en el rostro', 'Cada 3 horas durante el día', -5, 25, 'Vuelve a aplicarlo después de sudar o lavarte la cara.'],
+  [valeria, 'Sérum de ácido hialurónico', '2 a 3 gotas', 'Cada noche', 10, 70, 'Sobre la piel limpia, antes de la crema hidratante.'],
+  [pacientes[5], 'Gel de árnica tópico', 'Capa fina sobre el moretón', '2 veces al día', -3, 7, 'Si el moretón crece o duele más, escríbenos.'],
+].filter(([p]) => p).map(([p, medicamento, dosis, frecuencia, desde, hasta, notas], i) => ({
+  id: `trat_demo_${String(i + 1).padStart(3, '0')}`,
+  idPaciente: p.id,
+  nombrePaciente: p.name,
+  medicamento,
+  dosis,
+  frecuencia,
+  fechaInicio: fechaMas(desde),
+  fechaFin: fechaMas(hasta),
+  notas,
+  creadoEn: new Date(`${fechaMas(Math.min(desde, 0))}T15:00:00-06:00`).toISOString(),
+}));
+
 const db = {
   users: [doctora, ...todas],
   appointments: citas.sort((a, b) => b.fecha.localeCompare(a.fecha)),
@@ -325,11 +345,11 @@ const db = {
   sosAlerts,
   accesos: [],
   facturas,
-  tratamientos: [],
+  tratamientos,
 };
 
 fs.writeFileSync(DB_FILE, `${JSON.stringify(db, null, 2)}\n`);
 const cuenta = (estado) => citas.filter((c) => c.estado === estado).length;
-console.log(`✓ ${DB_FILE}: ${todas.length} pacientes, ${citas.length} citas (${cuenta('confirmada')} confirmadas, ${cuenta('pendiente')} por confirmar, ${cuenta('cancelada')} canceladas), ${checkins.length} check-ins, ${sosAlerts.length} alertas SOS y ${facturas.length} facturas (${facturas.filter((f) => f.estado === 'pendiente').length} pendientes).`);
+console.log(`✓ ${DB_FILE}: ${todas.length} pacientes, ${citas.length} citas (${cuenta('confirmada')} confirmadas, ${cuenta('pendiente')} por confirmar, ${cuenta('cancelada')} canceladas), ${checkins.length} check-ins, ${sosAlerts.length} alertas SOS y ${facturas.length} facturas (${facturas.filter((f) => f.estado === 'pendiente').length} pendientes) y ${tratamientos.length} tratamientos.`);
 console.log(`  Hoy (${hoy}): ${citas.filter((c) => c.fecha === hoy).length} consultas confirmadas.`);
 console.log('  Doctora: 8888 8888 · Paciente con portal completo: 8888 0001 (Valeria Rojas)');

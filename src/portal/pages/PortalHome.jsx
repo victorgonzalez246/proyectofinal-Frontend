@@ -40,7 +40,7 @@ export default function PortalHome() {
         <h1 className="p-display">{greeting()}, {name}</h1>
         {inRecovery ? (
           <p className="p-hello__day">
-            Hoy es tu <strong>{ordinalDay(recoveryDay)} día</strong> de recuperación tras tu{' '}
+            Hoy es tu <strong>{ordinalDay(recoveryDay)}</strong> de recuperación tras tu{' '}
             <Sensitive>{lowerFirst(portal.lastTreatment.name)}</Sensitive>.
           </p>
         ) : (

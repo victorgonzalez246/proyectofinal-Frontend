@@ -23,14 +23,23 @@ const cargarSdk = async () => {
   return sdk;
 };
 
-const mensajeDeError = (Anthropic, err) => {
+// El proxy (api/_asistente.mjs) traduce los errores del proveedor (sin crédito, clave inválida, saturado,
+// cuota agotada) a un 503 o a un evento "error" con un mensaje amable; aquí se muestra ese mensaje.
+// Nunca se muestra el texto técnico del proveedor.
+export const mensajeDeError = (Anthropic, err, doctora = false) => {
+  const delServidor = err?.error?.error?.message;
+  const noDisponible = doctora
+    ? 'Aura no está disponible en este momento. Inténtelo más tarde.'
+    : 'Aura no está disponible en este momento. Inténtalo más tarde o escríbenos por WhatsApp.';
   if (err instanceof Anthropic.APIUserAbortError) return '';
-  if (err instanceof Anthropic.RateLimitError) return err.error?.error?.message || 'Hiciste muchas preguntas seguidas. Espera unos minutos.';
+  // 429 del proxy: límite de preguntas propio de la app (por IP)
+  if (err instanceof Anthropic.RateLimitError) return delServidor || 'Hiciste muchas preguntas seguidas. Espera unos minutos.';
   if (err instanceof Anthropic.BadRequestError) return 'No pudimos procesar la conversación. Empieza una nueva e intenta otra vez.';
   if (err instanceof Anthropic.APIConnectionError) return 'Sin conexión con el asistente. Revisa tu internet e intenta de nuevo.';
-  if (err instanceof Anthropic.PermissionDeniedError) return err.error?.error?.message || 'Vuelva a iniciar sesión para usar Aura.';
-  if (err instanceof Anthropic.APIError && err.status === 503) return 'El asistente no está disponible en este momento. Escríbenos por WhatsApp.';
-  return 'El asistente tuvo un problema. Intenta de nuevo o escríbenos por WhatsApp.';
+  if (err instanceof Anthropic.PermissionDeniedError) return delServidor || 'Vuelva a iniciar sesión para usar Aura.';
+  // 503 (sin clave o proveedor no disponible) y errores a mitad de la respuesta: mensaje amable del proxy
+  if (err instanceof Anthropic.APIError && (err.status === 503 || err.status === undefined)) return delServidor || noDisponible;
+  return noDisponible;
 };
 
 /**
@@ -67,7 +76,7 @@ export async function preguntarAlAsistente(mensajes, alRecibir, signal, { perfil
     if (final.stop_reason === 'max_tokens') return { aviso: 'La respuesta quedó incompleta. Pídeme que continúe.' };
     return { aviso: '' };
   } catch (err) {
-    const texto = mensajeDeError(Anthropic, err);
+    const texto = mensajeDeError(Anthropic, err, doctora);
     if (!texto) return { aviso: '' }; // cancelada por la persona
     throw new Error(texto, { cause: err });
   }

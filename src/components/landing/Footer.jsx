@@ -36,6 +36,7 @@ const quickLinks = [
   { label: 'Agendar Cita', href: '#agendar' },
   { label: 'Portal de pacientes', href: '/portal/acceso' },
   { label: 'Aviso de privacidad', href: '/privacidad' },
+  { label: 'Términos y condiciones', href: '/terminos.html' },
 ]
 
 export default function Footer() {
@@ -115,8 +116,9 @@ export default function Footer() {
             </h4>
             <nav aria-label="Enlaces rápidos" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {quickLinks.map((link) => {
-                const Anchor = link.href.startsWith('/') ? Link : 'a'
-                const target = link.href.startsWith('/') ? { to: link.href } : { href: link.href }
+                const interna = link.href.startsWith('/') && !link.href.endsWith('.html')
+                const Anchor = interna ? Link : 'a'
+                const target = interna ? { to: link.href } : { href: link.href }
                 return (
                 <Anchor
                   key={link.href}

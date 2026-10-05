@@ -190,6 +190,10 @@ const AUTH_API = { authentication: 'genericCredentialType', genericAuthType: 'ht
 const AUTH_GOOGLE = (tipo) => ({ authentication: 'predefinedCredentialType', nodeCredentialType: tipo });
 
 // ── Prompts de los perfiles ──
+// Notas de voz y fotos (se insertan en los prompts; en Cloud se pegan tal cual, ver n8n/README.md sección 8)
+const PROMPT_MEDIOS_ENFERMERA = `Notas de voz y fotos
+Si el mensaje empieza con "[Nota de voz transcrita]", es lo que la paciente te dijo en audio (la transcripción puede tener errores pequeños). Si dice "[Foto enviada]", la paciente te mandó una foto y la puedes ver: coméntala con prudencia y calidez, sin diagnosticar, relacionándola con su tratamiento y lo que la doctora aprobó. Ante signos de alarma visibles (zonas blancas, pálidas o moradas que sugieran necrosis, ampollas, pus o signos de infección, asimetría súbita importante) usa "despertar_doctora" de inmediato y díselo con calma.`;
+const PROMPT_MEDIOS_RECEPCION = `Notas de voz y fotos: si el mensaje empieza con "[Nota de voz transcrita]", es lo que la paciente dijo en audio. Si dice "[Foto enviada]", puedes verla, pero no evalúas fotos de la zona tratada ni diagnosticas: dile con cariño que la enfermera de la clínica la revisa y que te cuente cómo se siente. Si en la foto ves signos de alarma (zonas blancas, pálidas o moradas, ampollas, pus, asimetría súbita importante), pídele que describa lo que siente para que la enfermera avise a la doctora de inmediato y, si empeora, que llame al 911.`;
 const PROMPT_ENFERMERA = `Eres la enfermera de la clínica de armonización facial de la Dra. Laura Jiménez, en Escazú, Costa Rica. Conversas por WhatsApp con pacientes de la doctora, casi siempre en los días después de un tratamiento, que es cuando aparecen las dudas, la hinchazón inesperada y a veces el miedo.
 
 Quién eres en esta conversación
@@ -208,6 +212,8 @@ Lo que nunca cambia, por la seguridad de la paciente
 - Nunca compartas datos de otras pacientes.
 - Si te preguntan si eres una persona o una IA, di la verdad con naturalidad: eres la asistente virtual de la clínica y la doctora supervisa lo que conversan.
 
+${PROMPT_MEDIOS_ENFERMERA}
+
 Citas, horarios y pagos los lleva la recepción: si salen en la conversación, dile con gusto que la ayudan y pídele qué día y hora le quedan mejor.
 
 Cómo hablas
@@ -225,6 +231,8 @@ Cómo agendas:
 5. Confirma la fecha y la hora en una frase clara.
 
 Reglas: no inventes precios (la doctora los define en la valoración), no das información clínica y no ves historiales médicos. Si la paciente habla de síntomas, dolor o cuidados, dile con amabilidad que la enfermera de la clínica la atiende y que le cuente su duda.
+
+${PROMPT_MEDIOS_RECEPCION}
 
 Cómo hablas: como una recepcionista de confianza que conoce a sus pacientes, no como un sistema de reservas. Español de Costa Rica, cálido y de tú; mensajes cortos de WhatsApp (2 a 4 frases), sin listas largas ni frases hechas repetidas. Si la paciente cuenta algo personal (está nerviosa, es su primera vez, viene por un evento especial), respóndele a eso también. Usa el historial compartido para no volver a preguntar lo que ya dijo.`;
 
@@ -295,16 +303,44 @@ const NORMALIZAR = code('Normalizar evento', [440, 0], () => {
 }, { helpers: false });
 
 const NORMALIZAR_WA = code('Normalizar mensaje', [440, 200], () => {
-  // Solo mensajes de texto de pacientes (se ignoran estados de entrega, audios, etc.)
+  // Mensajes de pacientes. Se ignoran estados de entrega (statuses), reacciones, stickers y avisos del sistema.
+  // tipo: "texto" (también botones y listas, con su título), "audio" (se transcribe), "imagen" (la ve el agente)
+  // o "no_texto" (video, documento, ubicación...: respuesta corta sin IA).
+  // contenido: lo que dijo o escribió la paciente (la red de seguridad lo revisa); texto: lo que leen la IA y la memoria.
   const raw = $input.first().json;
   const value = raw.messages ? raw : (raw.entry?.[0]?.changes?.[0]?.value || {});
   const mensaje = (value.messages || [])[0];
-  if (!mensaje || mensaje.type !== 'text' || !mensaje.text?.body) return [];
+  if (!mensaje) return [];
+  const OTROS = ['video', 'document', 'location', 'contacts', 'unsupported'];
+  const opcion = mensaje.interactive?.button_reply || mensaje.interactive?.list_reply;
+  let contenido = '';
+  let tipo = 'texto';
+  let medio = null;
+  if (mensaje.type === 'text') contenido = mensaje.text?.body || '';
+  else if (mensaje.type === 'button') contenido = mensaje.button?.text || mensaje.button?.payload || '';
+  else if (mensaje.type === 'interactive') contenido = opcion?.title || '';
+  else if (mensaje.type === 'audio' || mensaje.type === 'voice') {
+    tipo = 'audio';
+    medio = mensaje[mensaje.type] || {};
+  } else if (mensaje.type === 'image') {
+    tipo = 'imagen';
+    medio = mensaje.image || {};
+    contenido = medio.caption || '';
+  } else if (OTROS.includes(mensaje.type)) {
+    tipo = 'no_texto';
+    contenido = mensaje[mensaje.type]?.caption || '';
+  } else return [];
+  if (tipo === 'texto' && !String(contenido).trim()) return [];
+  contenido = String(contenido).slice(0, 1400);
+  const texto = tipo === 'imagen' ? '[Foto enviada' + (contenido ? ': ' + contenido : '') + ']' : contenido;
   const contacto = (value.contacts || [])[0] || {};
   return [{
     json: {
       accion: 'chat_whatsapp',
-      payload: { from: mensaje.from, nombre: contacto.profile?.name || '', texto: mensaje.text.body.slice(0, 1500), messageId: mensaje.id },
+      payload: {
+        from: mensaje.from, nombre: contacto.profile?.name || '', texto, contenido, messageId: mensaje.id,
+        tipo, tipoOriginal: mensaje.type, mediaId: medio?.id || '',
+      },
     },
   }];
 }, { helpers: false });
@@ -337,7 +373,8 @@ const TODAS = code('Todas las rutinas', [440, 1040], () => {
 // ════════════════════ Configuración central + Router ════════════════════
 const CONFIG_FIELDS = [
   ['whatsappPhoneNumberId', 'REEMPLAZAR_PHONE_NUMBER_ID'],
-  ['graphApiVersion', 'v21.0'],
+  // Meta retira cada versión unos 2 años después de lanzarla: v26.0 (jul 2026) es la vigente más reciente
+  ['graphApiVersion', 'v26.0'],
   ['templateLanguage', 'es'],
   ['clinicWhatsapp', '50688888888'],
   ['portalUrl', 'http://localhost:5173'],
@@ -381,18 +418,100 @@ const ROUTER = router('Router por acción', [900, 520], 'accion', RUTAS, 'Evento
 
 // ════════════════════ Rama 1 · Chat WhatsApp (multi-agente) ════════════════════
 const Y_CHAT = -560;
-const SEGURIDAD = code('Red de seguridad clínica', [1140, Y_CHAT], () => {
-  // Regla fija, sin IA: una emergencia nunca depende de un modelo de lenguaje
+const Y_MEDIO = Y_CHAT - 760;
+
+// ── Notas de voz y fotos: se descargan de Meta antes de la red de seguridad ──
+// Modo pruebas: los audios, fotos y demás formatos de números fuera de numerosPrueba no se procesan ni se responden
+const REVISAR_ADJUNTO = code('Revisar adjunto', [1140, Y_MEDIO], () => {
+  const cfg = $('Configuración').first().json;
   const item = $input.first().json;
-  const texto = String(item.payload.texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const p = item.payload;
+  if (p.tipo === 'texto') return [{ json: item }];
+  const toWa = (n) => {
+    const d = String(n || '').replace(/\D/g, '');
+    return d.length === 8 ? '506' + d : d;
+  };
+  const enPruebas = String(cfg.modoPruebas || '').trim().toLowerCase() === 'si';
+  const numerosPrueba = String(cfg.numerosPrueba || '').split(',').map(toWa).filter(Boolean);
+  if (enPruebas && !numerosPrueba.includes(toWa(p.from))) return [];
+  if ((p.tipo === 'audio' || p.tipo === 'imagen') && !p.mediaId) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];
+  return [{ json: item }];
+}, { helpers: false });
+
+const RUTA_ADJUNTO = router('¿Nota de voz o foto?', [1360, Y_MEDIO], 'payload.tipo', [['audio', 'Nota de voz'], ['imagen', 'Foto']], 'Texto u otro');
+
+// 1) Meta da una URL temporal (5 min) del medio; 2) se descarga con el mismo token (credencial "WhatsApp Cloud API")
+const META_INFO = add('Meta: datos del medio', 'n8n-nodes-base.httpRequest', 4.2, [1580, Y_MEDIO], {
+  url: `=https://graph.facebook.com/{{ ${CFG}.graphApiVersion }}/{{ $json.payload.mediaId }}`,
+  ...AUTH_API,
+  options: { timeout: 15000 },
+}, { retryOnFail: true, maxTries: 2, waitBetweenTries: 1000, onError: 'continueRegularOutput' });
+const META_DESCARGA = add('Meta: descargar medio', 'n8n-nodes-base.httpRequest', 4.2, [1800, Y_MEDIO], {
+  url: '={{ $json.url }}',
+  ...AUTH_API,
+  options: { timeout: 30000, response: { response: { responseFormat: 'file', outputPropertyName: 'data' } } },
+}, { retryOnFail: true, maxTries: 2, waitBetweenTries: 1000, onError: 'continueRegularOutput' });
+
+const REVISAR_DESCARGA = code('Revisar descarga', [2020, Y_MEDIO], () => {
+  // Límites de WhatsApp: audio 16 MB, imagen 5 MB (también el máximo que acepta Claude por imagen)
+  const LIMITE_MB = { audio: 16, imagen: 5 };
+  const item = $('Revisar adjunto').first().json;
+  const p = item.payload;
+  const info = $('Meta: datos del medio').first().json || {};
+  const entrada = $input.first();
+  const archivo = entrada.binary?.data;
+  const mimeType = String(info.mime_type || archivo?.mimeType || '').split(';')[0].trim();
+  const bytes = Number(info.file_size) || 0;
+  const ok = archivo && !entrada.json?.error && bytes <= LIMITE_MB[p.tipo] * 1024 * 1024
+    && mimeType.startsWith(p.tipo === 'audio' ? 'audio/' : 'image/');
+  if (!ok) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];
+  return [{ json: item, binary: { data: { ...archivo, mimeType } } }];
+}, { helpers: false });
+
+const RUTA_AUDIO = router('¿Es nota de voz?', [2240, Y_MEDIO], 'payload.tipo', [['audio', 'Nota de voz']], 'Foto o fallo');
+
+// Nodo nativo de Google Gemini (credencial "Google Gemini(PaLM) Api"): transcribe el audio descargado
+const PROMPT_TRANSCRIPCION = 'Transcribe literalmente esta nota de voz de WhatsApp, en el idioma en que se habla (normalmente español de Costa Rica). Devuelve solo la transcripción: sin comentarios, sin marcas de tiempo y sin etiquetas de hablante. Si no se entiende nada, responde exactamente [inaudible].';
+const GEMINI = add('Gemini · Transcribir nota de voz', '@n8n/n8n-nodes-langchain.googleGemini', 1, [2460, Y_MEDIO], {
+  resource: 'audio',
+  operation: 'analyze',
+  modelId: { __rl: true, mode: 'id', value: 'models/gemini-3.5-flash' },
+  text: PROMPT_TRANSCRIPCION,
+  inputType: 'binary',
+  binaryPropertyName: 'data',
+  simplify: true,
+  options: {},
+}, { retryOnFail: true, maxTries: 2, waitBetweenTries: 2000, onError: 'continueRegularOutput' });
+
+const TEXTO_AUDIO = code('Texto de la nota de voz', [2680, Y_MEDIO], () => {
+  // La transcripción pasa a ser el mensaje (y queda así en la memoria de la conversación)
+  const item = $('Revisar adjunto').first().json;
+  const p = item.payload;
+  const r = $input.first().json || {};
+  const t = (r.content?.parts || []).filter((x) => !x.thought).map((x) => x.text || '').join(' ').replace(/\s+/g, ' ').trim();
+  if (!t || /^\[?inaudible\]?\.?$/i.test(t)) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];
+  const contenido = t.slice(0, 1400);
+  return [{ json: { ...item, payload: { ...p, contenido, texto: '[Nota de voz transcrita] ' + contenido } } }];
+}, { helpers: false });
+
+const SEGURIDAD = code('Red de seguridad clínica', [1140, Y_CHAT], () => {
+  // Regla fija, sin IA: una emergencia nunca depende de un modelo de lenguaje.
+  // Revisa lo que la paciente escribió, dijo en la nota de voz (transcrita) o puso al pie de la foto.
+  const entrada = $input.first();
+  const item = entrada.json;
+  const texto = String(item.payload.contenido ?? item.payload.texto ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   // SENALES: REVISION-DOCTORA.md, sección 2 (se inserta al generar, ya sin tildes)
   const senal = SENALES.find((s) => texto.includes(s));
   // "BAJA" (solo esa palabra) deja de enviar promociones; una emergencia siempre tiene prioridad
   const baja = !senal && /^\s*(baja|stop)\s*[.!]*\s*$/.test(texto);
-  return [{ json: { ...item, ruta: senal ? 'emergencia' : baja ? 'baja' : 'conversacion', senal: senal || '' } }];
+  // Video, documento, ubicación... o un audio/foto que no se pudo abrir: respuesta corta sin IA
+  const noSoportado = !senal && !baja && ['no_texto', 'medio_fallido'].includes(item.payload.tipo);
+  const ruta = senal ? 'emergencia' : baja ? 'baja' : noSoportado ? 'no_soportado' : 'conversacion';
+  // La foto (binario) sigue hasta el agente para que la vea
+  return [{ json: { ...item, ruta, senal: senal || '' }, ...(entrada.binary ? { binary: entrada.binary } : {}) }];
 }, { helpers: false, vars: { SENALES: CLINICO.senales } });
 
-const RUTA_CHAT = router('¿Emergencia?', [1360, Y_CHAT], 'ruta', [['emergencia', 'Emergencia'], ['conversacion', 'Conversación'], ['baja', 'Baja de promociones']]);
+const RUTA_CHAT = router('¿Emergencia?', [1360, Y_CHAT], 'ruta', [['emergencia', 'Emergencia'], ['conversacion', 'Conversación'], ['baja', 'Baja de promociones'], ['no_soportado', 'Formato no soportado']]);
 
 const API_BAJA = add('API: baja de promociones', 'n8n-nodes-base.httpRequest', 4.2, [1600, Y_CHAT - 340], {
   method: 'POST',
@@ -407,6 +526,20 @@ const API_BAJA = add('API: baja de promociones', 'n8n-nodes-base.httpRequest', 4
 const TXT_BAJA = code('Respuesta de baja', [1820, Y_CHAT - 340], () => {
   const p = $('Red de seguridad clínica').first().json.payload;
   return [{ json: { to: p.from, texto: 'Listo: ya no te enviaremos promociones. Seguirás recibiendo los avisos de tus citas y cuidados.' } }];
+}, { helpers: false });
+
+// Sin IA (el modo pruebas ya lo aplicó "Revisar adjunto")
+const TXT_NO_SOPORTADO = code('Respuesta: formato no soportado', [1600, Y_CHAT + 900], () => {
+  const p = $('Red de seguridad clínica').first().json.payload;
+  const FALLO = {
+    audio: 'No logré escuchar bien tu nota de voz 🙏 ¿Me la envías de nuevo o me lo escribes?',
+    voice: 'No logré escuchar bien tu nota de voz 🙏 ¿Me la envías de nuevo o me lo escribes?',
+    image: 'No pude abrir tu foto 🙏 ¿Me la envías de nuevo o me cuentas por escrito qué notas?',
+  };
+  const texto = p.tipo === 'medio_fallido'
+    ? FALLO[p.tipoOriginal] || 'No pude abrir lo que me enviaste 🙏 ¿Me lo escribes?'
+    : 'Por ahora puedo leer texto, escuchar notas de voz y ver fotos 🙏 ¿Me lo cuentas así?';
+  return [{ json: { to: p.from, texto } }];
 }, { helpers: false });
 
 const MSG_EMERGENCIA = code('Alerta de emergencia', [1600, Y_CHAT - 200], () => {
@@ -427,7 +560,7 @@ const CLASIFICADOR = add('Clasificador de intención', '@n8n/n8n-nodes-langchain
   inputText: '={{ $json.payload.texto }}',
   categories: {
     categories: [
-      { category: 'clinica', description: 'Dudas de salud, síntomas, dolor, inflamación, cuidados posteriores, emociones o miedo después de un tratamiento.' },
+      { category: 'clinica', description: 'Dudas de salud, síntomas, dolor, inflamación, cuidados posteriores, fotos de la zona tratada, emociones o miedo después de un tratamiento.' },
       { category: 'administrativa', description: 'Agendar, cambiar o cancelar citas, horarios, ubicación, pagos, paquetes o información general de la clínica.' },
     ],
   },
@@ -439,7 +572,7 @@ modelo('Modelo · Clasificador', [1600, Y_CHAT + 340], MODELO_RAPIDO, CLASIFICAD
 const ENFERMERA = add('Agente IA 1 · Enfermera Virtual', '@n8n/n8n-nodes-langchain.agent', 3.1, [1900, Y_CHAT + 60], {
   promptType: 'define',
   text: `={{ ${CHAT}.texto }}`,
-  options: { systemMessage: PROMPT_ENFERMERA, maxIterations: 8 },
+  options: { systemMessage: PROMPT_ENFERMERA, maxIterations: 8, passthroughBinaryImages: true },
 }, { onError: 'continueRegularOutput' });
 modelo('Modelo · Enfermera', [1780, Y_CHAT + 260], MODELO_PRINCIPAL, ENFERMERA);
 memoria('Memoria · Enfermera', [1900, Y_CHAT + 260], ENFERMERA);
@@ -468,7 +601,7 @@ herramienta('despertar_doctora', [2260, Y_CHAT + 260], ENFERMERA, {
 const RECEPCIONISTA = add('Agente IA 2 · Recepcionista VIP', '@n8n/n8n-nodes-langchain.agent', 3.1, [1900, Y_CHAT + 500], {
   promptType: 'define',
   text: `={{ ${CHAT}.texto }}`,
-  options: { systemMessage: `=${PROMPT_RECEPCIONISTA}`, maxIterations: 10 },
+  options: { systemMessage: `=${PROMPT_RECEPCIONISTA}`, maxIterations: 10, passthroughBinaryImages: true },
 }, { onError: 'continueRegularOutput' });
 modelo('Modelo · Recepcionista', [1780, Y_CHAT + 700], MODELO_PRINCIPAL, RECEPCIONISTA);
 memoria('Memoria · Recepcionista', [1900, Y_CHAT + 700], RECEPCIONISTA);
@@ -791,25 +924,37 @@ link(ERROR_IN, NORMALIZAR_ERROR);
 link(CONFIG, ROUTER);
 
 // Salidas del Router en el mismo orden que RUTAS (+ respaldo)
-const SALIDAS = [SEGURIDAD, CONTEXTO_CHECKIN, MSG_SOS, MSG_CITA, MSG_ACCESO, API_PREP, API_CITAS, API_SEGUIMIENTO, API_PASOS,
+const SALIDAS = [REVISAR_ADJUNTO, CONTEXTO_CHECKIN, MSG_SOS, MSG_CITA, MSG_ACCESO, API_PREP, API_CITAS, API_SEGUIMIENTO, API_PASOS,
   MSG_CONFIRMADA, MSG_CANCELADA, MSG_CAMPANA, RESPALDO, MSG_FALLA];
 if (SALIDAS.length !== RUTAS.length) throw new Error('Cada ruta del Router necesita su nodo de salida');
 SALIDAS.forEach((n, i) => link(ROUTER, n, i));
 link(ROUTER, IGNORAR, RUTAS.length);
 
-// Chat: red de seguridad → emergencia o clasificador → agentes
+// Chat: adjuntos (nota de voz → Gemini; foto → binario para el agente) → red de seguridad → emergencia o clasificador → agentes
+link(REVISAR_ADJUNTO, RUTA_ADJUNTO);
+link(RUTA_ADJUNTO, META_INFO, 0);
+link(RUTA_ADJUNTO, META_INFO, 1);
+link(RUTA_ADJUNTO, SEGURIDAD, 2);
+link(META_INFO, META_DESCARGA);
+link(META_DESCARGA, REVISAR_DESCARGA);
+link(REVISAR_DESCARGA, RUTA_AUDIO);
+link(RUTA_AUDIO, GEMINI, 0);
+link(RUTA_AUDIO, SEGURIDAD, 1);
+link(GEMINI, TEXTO_AUDIO);
+link(TEXTO_AUDIO, SEGURIDAD);
 link(SEGURIDAD, RUTA_CHAT);
 link(RUTA_CHAT, MSG_EMERGENCIA, 0);
 link(RUTA_CHAT, TXT_EMERGENCIA, 0);
 link(RUTA_CHAT, CLASIFICADOR, 1);
 link(RUTA_CHAT, API_BAJA, 2);
 link(API_BAJA, TXT_BAJA);
+link(RUTA_CHAT, TXT_NO_SOPORTADO, 3);
 link(CLASIFICADOR, ENFERMERA, 0); // clinica
 link(CLASIFICADOR, RECEPCIONISTA, 1); // administrativa
 link(CLASIFICADOR, ENFERMERA, 2); // sin categoría clara → la opción clínica es la más segura
 link(ENFERMERA, RESPUESTA_ENFERMERA);
 link(RECEPCIONISTA, RESPUESTA_RECEPCION);
-[TXT_EMERGENCIA, RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION, TXT_BAJA].forEach((n) => link(n, RESPONDER_WA));
+[TXT_EMERGENCIA, RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION, TXT_BAJA, TXT_NO_SOPORTADO].forEach((n) => link(n, RESPONDER_WA));
 [RESPUESTA_ENFERMERA, RESPUESTA_RECEPCION].forEach((n) => link(n, AVISO_SIN_IA));
 
 // Check-in y preparación de consultas
@@ -858,6 +1003,19 @@ const workflow = {
 
 fs.writeFileSync(OUT_FILE, JSON.stringify(workflow, null, 2) + '\n');
 console.log(`✓ ${path.relative(process.cwd(), OUT_FILE)}: ${nodes.length} nodos`);
+
+// Parche para n8n Cloud (sin reimportar): solo los nodos nuevos de notas de voz y fotos, con sus conexiones internas.
+// Se copia el archivo entero y se pega (Ctrl+V) en el lienzo del cerebro. Ver n8n/README.md, sección 8.
+const NODOS_PARCHE = [REVISAR_ADJUNTO, RUTA_ADJUNTO, META_INFO, META_DESCARGA, REVISAR_DESCARGA, RUTA_AUDIO, GEMINI, TEXTO_AUDIO, TXT_NO_SOPORTADO];
+const PARCHE_FILE = path.join(HERE, 'flujos', 'parche-cloud-notas-de-voz-y-fotos.json');
+const parche = {
+  nodes: nodes.filter((n) => NODOS_PARCHE.includes(n.name)),
+  connections: Object.fromEntries(Object.entries(connections)
+    .filter(([origen]) => NODOS_PARCHE.includes(origen))
+    .map(([origen, tipos]) => [origen, { main: tipos.main.map((salida) => salida.filter((c) => NODOS_PARCHE.includes(c.node))) }])),
+};
+fs.writeFileSync(PARCHE_FILE, JSON.stringify(parche, null, 2) + '\n');
+console.log(`✓ ${path.relative(process.cwd(), PARCHE_FILE)}: ${parche.nodes.length} nodos para pegar en Cloud`);
 
 // Base clínica para la hoja de Google (pestaña BaseClinica), desde REVISION-DOCTORA.md
 fs.writeFileSync(ARCHIVO_CSV, baseClinicaCsv(CLINICO));

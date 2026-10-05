@@ -10,6 +10,7 @@ scripts/
 docs/
 pendientes/
 db.json
+db.sesiones.json
 db.example.json
 datos-demo-sheets.xlsx
 
