@@ -169,6 +169,8 @@ export default function CasesSection() {
                 transition={{ duration: 0.4, ease: [0.25, 0.8, 0.25, 1] }}
                 src={activeCase.image}
                 alt={activeCase.alt}
+                loading="lazy"
+                decoding="async"
                 style={{
                   width: '100%',
                   height: '100%',
@@ -392,6 +394,8 @@ export default function CasesSection() {
               <img
                 src={c.image}
                 alt=""
+                loading="lazy"
+                decoding="async"
                 style={{
                   width: '100%',
                   height: '100%',
