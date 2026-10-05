@@ -16,6 +16,7 @@
     "test:integracion": "vitest run testings/integracion",
     "test:todo": "node scripts/verificar.mjs && vitest run --reporter=verbose",
     "verificar": "node scripts/verificar.mjs",
+    "revisar": "node scripts/revisar-presentacion.mjs",
     "sembrar:demo": "node scripts/sembrar-demo.mjs",
     "exportar:sheets": "node scripts/exportar-sheets.mjs",
     "probar:n8n": "node scripts/probar-n8n.mjs",

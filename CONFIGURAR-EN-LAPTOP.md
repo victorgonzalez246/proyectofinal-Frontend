@@ -97,6 +97,8 @@ npm run probar:n8n   # opcional: levanta un n8n local con simuladores (necesita 
 
 Todo debe terminar sin errores.
 
+**Antes de presentar:** `npm run revisar` hace todo lo anterior y además comprueba producción (sitio en Vercel, una respuesta real de Aura, la API de n8n Cloud y los modelos de Gemini). También puedes abrir Claude Code en la carpeta y decirle *"deja listo todo y repasa que todo funcione antes de presentar"*: las instrucciones están en `CLAUDE.md`.
+
 ## 6. Publicar el sitio en Vercel
 
 El proyecto de Vercel es **`clinica-dra-laura`** → https://clinica-dra-laura.vercel.app. Vercel **no** está conectado a GitHub: un `git push` no publica; hay que desplegar con la CLI.
