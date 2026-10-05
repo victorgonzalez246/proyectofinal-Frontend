@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth.js';
  * Guardián de rutas protegidas
  * @param {string[]} allowedRoles - Roles que tienen permiso para acceder a esta ruta
  */
-export default function ProtectedRoute({ allowedRoles = [], redirectTo = '/auth' }) {
+export default function ProtectedRoute({ allowedRoles = [], redirectTo = '/portal/acceso' }) {
   const { isAuthenticated, role } = useAuth();
   const location = useLocation();
 

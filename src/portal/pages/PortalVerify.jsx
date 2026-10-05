@@ -19,7 +19,7 @@ export default function PortalVerify() {
     if (!token || started.current) return;
     started.current = true;
     loginWithMagicLink(token)
-      .then(() => navigate('/portal', { replace: true }))
+      .then(({ user }) => navigate(user.role === 'doctor' ? '/admin' : '/portal', { replace: true }))
       .catch((err) => setError(err.message));
   }, [token, loginWithMagicLink, navigate]);
 

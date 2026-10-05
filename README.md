@@ -1,87 +1,124 @@
-# 🏥 Proyecto Clínica Estética - Frontend
+# Clínica Dra. Laura Jiménez: frontend
 
-Este repositorio contiene la aplicación frontend para la gestión de la Clínica Estética de la Dra. Laura Jiménez. Fue inicializado con **React** y **Vite**, preparado con herramientas modernas de diseño, y blindado con prácticas de ciberseguridad para operar de manera independiente usando una base de datos mock local (`json-server`).
+Landing pública, portal privado de pacientes y panel de la doctora para la clínica de armonización facial.
 
----
+**Arquitectura:**
+- El frontend es 100 % estático y **n8n es el único backend**.
+- El navegador solo hace `fetch` a los webhooks de n8n, que guarda los datos en Google Sheets, Drive y Calendar.
+- `server.js` es un **simulador de desarrollo** que atiende el mismo contrato con la misma lógica (`api/nucleo.mjs`). No se despliega.
 
-## 🛠️ Tecnologías y Librerías Base
+## Stack
 
-- **Core:** React 19 + Vite
-- **Enrutamiento:** React Router DOM v7
-- **Estilos y UI:** Tailwind CSS v4
-- **Iconos:** Lucide React
-- **Gráficos:** Recharts
-- **Peticiones HTTP:** Axios
+| Capa | Herramienta |
+|---|---|
+| UI | React 19 + Vite, React Router 7, Tailwind CSS 4, framer-motion, lucide-react, sonner (avisos) |
+| Gráficos | Recharts (métricas del panel de la doctora) |
+| Asistente de IA | Google Gemini (`gemini-3.5-flash-lite`). El navegador usa `@anthropic-ai/sdk` solo como cliente de streaming, a través de un proxy del mismo origen que guarda la clave y traduce el formato (`api/_asistente.mjs`) |
+| API externa | Open-Meteo (clima e índice UV de Escazú, sin clave) |
+| Formularios | react-hook-form (reglas nativas) |
+| HTTP | `fetch` con un cliente mínimo (`src/services/api.js`) |
+| API | `api/nucleo.mjs`: una sola implementación del contrato, sin dependencias. La usan `server.js` y el flujo API de n8n |
+| Backend y automatizaciones | n8n: flujo **API** + flujo **Cerebro** con dos agentes de IA (Google Gemini). Ver [`n8n/README.md`](n8n/README.md) |
+| Pruebas | Vitest + Testing Library: carpeta [`testings/`](testings/README.md) (unitarias, componentes e integración) y pruebas junto al código; `npm run verificar` (contrato contra el simulador), `npm run probar:n8n` (flujos en n8n real) |
 
-## 🔒 Ciberseguridad Implementada (Frontend Impenetrable)
+## Acceso: sin contraseñas
 
-A pesar de no contar con un Backend real, se han implementado múltiples barreras de seguridad para proteger la integridad de la aplicación:
+Pacientes y doctora entran igual: escriben su número en `/portal/acceso` y reciben por WhatsApp un **código de 6 dígitos** de un solo uso (15 minutos), con la plantilla de Autenticación de Meta (`codigo_acceso`, con botón "Copiar código"). La paciente va a `/portal` y la doctora a `/admin`.
 
-1. **Protección XSS (Cross-Site Scripting):** 
-   - Uso de `DOMPurify` para sanitizar entradas de usuario.
-   - Implementación de **Content Security Policy (CSP)** en el `index.html`.
-2. **Hasheo de Contraseñas:** 
-   - Las contraseñas se hashean en el frontend con `bcryptjs` antes de enviarse al almacenamiento local (`db.json`), asegurando que jamás se guarden en texto plano.
-3. **Validación de Esquemas:** 
-   - Uso de `Zod` para garantizar que la estructura y los datos enviados cumplan con reglas estrictas.
-4. **Candado Local (Servidor Mock Seguro):**
-   - El `json-server` fue encapsulado en un archivo Node (`server.js`) con un **middleware de seguridad**.
-   - Cualquier intento de acceder a los datos directamente a través de `http://localhost:3001` sin un Token de Autorización válido será bloqueado (`401 Acceso Denegado`).
-5. **Comunicaciones Seguras:**
-   - Se configuró un interceptor global en Axios (`src/services/api.js`).
-   - El Token JWT se almacena de forma segura en `sessionStorage` en lugar de `localStorage`.
-   - Las sesiones inválidas o expiradas son interceptadas automáticamente para desconectar al usuario.
+- Solo se guarda el hash del código. Cada código se invalida al quinto intento fallido (fuerza bruta).
+- También se genera un enlace de un solo uso (token en el fragmento `#`), que se usa en desarrollo.
+- La respuesta es idéntica exista o no el número.
+- La sesión es un token firmado con HMAC que no se guarda en ninguna base: dura 8 h para pacientes y 4 h para la doctora. Vive en `sessionStorage`.
+- Sin n8n conectado (desarrollo), el código y el enlace se muestran en pantalla y en la consola del simulador.
 
----
+**Cuentas de prueba** (en `db.example.json`):
 
-## 📁 Estructura del Proyecto
+| Rol | Número |
+|---|---|
+| Doctora | 8888 8888 |
+| Paciente demo (Valeria Rojas) | 8888 0001 |
+
+## Panel de la doctora (`/admin`)
+
+| Sección | Qué hace |
+|---|---|
+| **Hoy** | Consultas confirmadas del día con el resumen de 3 puntos de la Recepcionista, solicitudes por confirmar y alertas abiertas |
+| **Citas** | Confirmar con hora (activa el recordatorio de 24 h), reprogramar, cancelar y reactivar. La paciente recibe cada cambio por WhatsApp |
+| **Pacientes** | Directorio y ficha: citas, check-ins y el **plan** que ve la paciente (mapa de belleza, cuidados, paquetes, productos con lote y vencimiento, videos) |
+| **Alertas** | SOS del portal y check-ins marcados; atender con una nota o reabrir |
+| **Campañas** | Promoción por WhatsApp solo a quienes la aceptaron. Pueden darse de baja respondiendo "BAJA" |
+| **Métricas** | Agenda (citas por mes y estado, canal web o Recepcionista IA, tratamientos, demanda por día, anticipación y franja horaria), evolución de las pacientes (curva de recuperación promedio a partir de sus check-ins, motivos de alertas) y pacientes (nuevas por mes, retorno, planes y consentimientos). Periodo de 3, 6 o 12 meses, tooltips y tabla equivalente para cada gráfico. En la ficha de cada paciente: evolución de su tratamiento |
+| **Facturas** | Registrar el cobro de cada cliente (SINPE con su comprobante, efectivo, tarjeta o transferencia), con servicios, descuento e IVA (0/1/2/4/13 %). Número consecutivo `FAC-0001`, estados pagada / pendiente / anulada (con motivo) y **PDF listo para entregar**. La paciente ve las suyas en `/portal/facturas`. El PDF es un comprobante interno: no sustituye la factura electrónica de Hacienda |
+
+## Asistente virtual, clima y accesibilidad
+
+- **Asistente "Aura"** (landing, portal y panel de la doctora): chat flotante con respuestas en streaming. El navegador usa `@anthropic-ai/sdk` apuntando a `/api/asistente`; ese proxy (`api/_asistente.mjs`: middleware de Vite en desarrollo, función de Vercel `api/asistente/v1/messages.js` en producción) agrega la clave y fija el modelo, el prompt de sistema, el tope de tokens y un límite de 30 preguntas cada 10 minutos por IP. La clave nunca llega al navegador. No diagnostica ni da precios: orienta y guía para agendar.
+  - **Proveedor**: si `GEMINI_API_KEY` tiene valor se usa Google Gemini (`gemini-3.5-flash-lite`, clave en el encabezado `x-goog-api-key`) y el proxy traduce su streaming al formato de Anthropic; si está vacía, se usa Claude con `ANTHROPIC_API_KEY` (camino alternativo, sin uso en producción: ahí está configurada `GEMINI_API_KEY`). Para cambiar de proveedor basta con poner o vaciar `GEMINI_API_KEY` (en `.env` o en Vercel) y reiniciar.
+  - **Errores**: sin clave, Aura dice que "no está disponible por ahora"; si el proveedor falla (sin crédito, clave inválida, cuota agotada, saturado), dice que "no está disponible en este momento" y la causa real queda en la consola del servidor (`[asistente] … respondió …`, sin la clave). El límite propio de preguntas muestra su propio aviso.
+- **Clima y piel** (landing y `/portal/cuidados`): índice UV, temperatura y humedad de Escazú desde Open-Meteo, con recomendaciones de protección solar e hidratación. Estados de carga, error con reintento y datos.
+- **Accesibilidad**: selector visible (tamaño de texto, alto contraste, reducir animaciones) en la landing (botón flotante) y en la cabecera del panel; el portal ya lo tenía en "Apariencia y accesibilidad". Las preferencias son las mismas en todo el sitio. Además: enlace "Saltar al contenido", foco visible, `aria-expanded`/`aria-controls` en menús y paneles, errores del formulario enlazados con `aria-describedby` y `role="alert"`, y regiones `aria-live` en el chat.
+
+## Cómo correrlo
+
+```bash
+npm install
+cp .env.example .env     # completa N8N_SHARED_SECRET, SESSION_SECRET y GEMINI_API_KEY o ANTHROPIC_API_KEY (asistente)
+npm run server           # simulador en :3001
+npm run dev              # sitio en :5173
+```
+
+| Comando | Para qué |
+|---|---|
+| `npm test` | Todas las pruebas (Vitest). Por tipo: `npm run test:unitarias`, `test:componentes`, `test:integracion` |
+| `npm run sembrar:demo` | Llena `db.json` con datos de demostración (pacientes, citas, check-ins y alertas con fechas relativas a hoy) |
+| `npm run verificar` | Contrato completo de la API contra el simulador (base temporal, no toca `db.json`) y estructura de los flujos de n8n |
+| `npm run probar:n8n` | Los dos flujos en un n8n real y local, con simuladores de Google Sheets y WhatsApp |
+| `npm run generar:n8n` | Regenera los flujos de n8n desde código (después de cambiar `api/` o `n8n/generar-*.mjs`) |
+| `npm run lint` | Linter (oxlint) |
+| `npm run build` | Versión de producción en `dist/`, con Content-Security-Policy estricto |
+
+La integración continua (`.github/workflows/ci.yml`) corre lint, tests, `verificar` y build en cada push, y además prueba los flujos en n8n real.
+
+## Seguridad
+
+- **Content-Security-Policy:** en producción solo se ejecutan scripts propios (sin `unsafe-inline` ni `unsafe-eval`), y las llamadas van únicamente a la API configurada.
+- **XSS:** React escapa todo lo que muestra y el proyecto no usa `innerHTML`. La API valida y recorta cada campo.
+- **Permisos:** las rutas `/me/*` operan solo sobre la sesión y las `/admin/*` exigen el rol de doctora. No hay acceso genérico a las tablas.
+- **Privacidad:** los mensajes de WhatsApp a pacientes no nombran tratamientos. Los agentes de IA reciben datos mínimos. El flujo API de n8n no guarda ejecuciones.
+
+## Estructura
 
 ```text
+api/                núcleo de la API (contrato) y conversión tablas ↔ Google Sheets
+server.js           simulador de desarrollo (HTTP + db.json sobre el núcleo)
 src/
-├── assets/         # Imágenes, iconos y recursos estáticos
-├── components/     
-│   ├── layout/     # Componentes estructurales (MainLayout, AdminLayout, Navbars)
-│   └── ui/         # Componentes reutilizables (Botones, Tarjetas, Inputs)
-├── context/        # Estado global de React (AuthContext)
-├── hooks/          # Custom Hooks de React (ej. useAuth)
-├── pages/          # Páginas y vistas principales (Login, Dashboard, Pacientes)
-├── services/       # Lógica de llamadas a la API (api.js configurado con interceptores)
-└── utils/          # Funciones de ayuda y seguridad (security.js con DOMPurify y bcrypt)
+├── admin/          panel de la doctora (carga diferida)
+├── portal/         portal de pacientes (carga diferida)
+├── components/     landing/, auth/ (guardián de rutas), ui/
+├── config/         clinica.js: datos de contacto de la clínica (único lugar para editarlos)
+├── context/        sesión (AuthContext)
+├── pages/          landing y aviso de privacidad
+└── services/       cliente HTTP y servicios de la API
+n8n/                generadores y flujos de n8n (API y Cerebro) con su guía
+scripts/            verificar y probar:n8n (mismo contrato: scripts/contrato.mjs)
+docs/               arquitectura y contrato de la API
+pendientes/         tareas manuales y plan de implementación
 ```
 
----
+## Despliegue
 
-## 🚀 Cómo inicializar el proyecto
+Publicado en **https://clinica-dra-laura.vercel.app** (Vercel, proyecto `clinica-dra-laura`).
 
-Para trabajar en el entorno de desarrollo, es necesario levantar tanto la aplicación de React como nuestro servidor seguro local.
+1. Configura n8n siguiendo [`n8n/README.md`](n8n/README.md). Genera los flujos con el dominio del sitio y el de desarrollo:
+   `ORIGEN_PERMITIDO="https://clinica-dra-laura.vercel.app,http://localhost:5173" npm run generar:n8n`.
+2. En Vercel, variables del proyecto: `VITE_API_URL=https://<tu-n8n>/webhook` y `GEMINI_API_KEY` o `ANTHROPIC_API_KEY` (las usa la función del asistente, `api/asistente/v1/messages.js`; Gemini tiene prioridad).
+3. `npx vercel deploy --prod`. `.vercelignore` deja fuera de la subida los secretos (`.env`) y los archivos de `api/` que no son funciones (núcleo y hojas, que viven en n8n).
+4. Para probar en local contra n8n: `npm run dev:n8n` y `npm run probar:produccion` (comprueba CORS, permisos y validaciones sin enviar WhatsApp).
 
-Abre dos terminales diferentes en la carpeta `clinica-app`:
+## Documentación
 
-**Terminal 1 (Frontend - Vite):**
-```bash
-npm run dev
-```
-
-**Terminal 2 (Base de Datos con Candado Local):**
-```bash
-npm run server
-```
-
----
-
-## 🧪 Testing
-El proyecto está configurado para pruebas unitarias y de componentes.
-- **Librerías:** Vitest, React Testing Library, JSDom.
-- **Comando:** `npm run test`
-
----
-*Este documento será actualizado progresivamente conforme se vayan añadiendo páginas, componentes y flujos de negocio.*
-
----
-
-## ✅ Estado de Avance (Hitos Completados)
-
-### 1. Módulo de Autenticación y Registro VIP
-- **Diseño UI/UX Premium:** Interfaz de pantalla dividida con fotografía editorial y un formulario minimalista, respetando estrictamente el manual de marca y los espaciados (*whitespace*).
-- **Integración Segura:** Protección de candado local en `server.js` (`json-server`) conectada al frontend, guardando contraseñas en formato hash.
-- **Flujo de Usuarios:** Funcionalidad completa para que pacientes se registren (recibiendo cupones) y el equipo médico acceda a su portal de administración de forma exclusiva y limpia.
+- [`docs/ARQUITECTURA-PORTAL.md`](docs/ARQUITECTURA-PORTAL.md): arquitectura y contrato de la API.
+- [`n8n/README.md`](n8n/README.md): instalar, configurar y probar los flujos de n8n.
+- [`REVISION-DOCTORA.md`](REVISION-DOCTORA.md): textos clínicos que la doctora revisa y edita (fuente única para el cerebro de n8n y la Base clínica).
+- [`pendientes/README.md`](pendientes/README.md): lo que requiere tus cuentas, datos reales o decisiones.
+- [`pendientes/proximos-desarrollos.md`](pendientes/proximos-desarrollos.md): plan por fases y su estado.

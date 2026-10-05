@@ -1,5 +1,4 @@
 import api from './api.js';
-import { sanitizeInput } from '../utils/security.js';
 
 // Contrato del portal de pacientes. Hoy lo atiende server.js (simulador);
 // en producción cada llamada será un webhook de n8n con la misma forma.
@@ -23,7 +22,7 @@ export const portalService = {
 
   async sendCheckin({ mood, pain, note = '' }) {
     try {
-      const { data } = await api.post('/me/checkins', { mood, pain, note: sanitizeInput(note.trim()) });
+      const { data } = await api.post('/me/checkins', { mood, pain, note: note.trim() });
       return data;
     } catch (err) {
       throw new Error(errorMessage(err, 'No pudimos guardar tu registro. Intenta de nuevo.'));
@@ -32,10 +31,20 @@ export const portalService = {
 
   async sendSos({ reason, note = '' }) {
     try {
-      const { data } = await api.post('/me/sos', { reason, note: sanitizeInput(note.trim()) });
+      const { data } = await api.post('/me/sos', { reason, note: note.trim() });
       return data;
     } catch (err) {
       throw new Error(errorMessage(err, 'No pudimos avisar a la clínica. Llámanos directamente.'));
     }
+  },
+
+  async getFacturas() {
+    const { data } = await api.get('/me/facturas');
+    return data;
+  },
+
+  async getTratamientos() {
+    const { data } = await api.get('/me/tratamientos');
+    return data;
   },
 };

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
-import { House, Route, Images, ListChecks, Gem, Eye, EyeOff, Moon, Sun, Accessibility } from 'lucide-react';
+import { House, Route, Images, ListChecks, Gem, Receipt, Pill, Eye, EyeOff, Moon, Sun, Accessibility } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import { portalService } from '../services/portalService.js';
 import { PortalContext } from './usePortal.js';
 import { usePreferences } from './usePreferences.js';
 import SosButton from './components/SosButton.jsx';
 import SettingsSheet from './components/SettingsSheet.jsx';
+import AsistenteVirtual from '../components/asistente/AsistenteVirtual.jsx';
 import { RECOVERY_WINDOW_DAYS } from './config.js';
 import { daysBetween } from './lib/format.js';
 // Nota: los nombres de los archivos de marca están cruzados; logo-isotipo.png es el logo blanco con transparencia
@@ -21,6 +22,8 @@ const NAV = [
   { to: '/portal/cuidados', label: 'Cuidados', Icon: ListChecks },
   { to: '/portal/evolucion', label: 'Evolución', Icon: Images },
   { to: '/portal/clinica', label: 'Mi clínica', Icon: Gem },
+  { to: '/portal/facturas', label: 'Facturas', Icon: Receipt },
+  { to: '/portal/tratamientos', label: 'Tratamientos', Icon: Pill },
 ];
 
 const fetchPortalState = async () => {
@@ -172,6 +175,7 @@ export default function PortalLayout() {
         </div>
 
         <SosButton recent={inRecovery} />
+        <AsistenteVirtual variante="portal" />
 
         <AnimatePresence>
           {settingsOpen && (

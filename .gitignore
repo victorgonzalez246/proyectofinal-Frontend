@@ -25,9 +25,21 @@ dist-ssr
 
 # Datos de pacientes (simulador): nunca se versionan. Plantilla en db.example.json
 db.json
+db.sesiones.json
 
 # Variables de entorno (webhooks n8n, etc.)
 .env
 
-# Sesiones del simulador (hash de tokens activos)
-*.sesiones.json
+# Datos de demostración exportados para Google Sheets (npm run exportar:sheets)
+datos-demo-sheets.xlsx
+
+.vercel
+.env*.local
+
+# Respaldos de flujos n8n Cloud (contienen secretos)
+n8n/respaldos-cloud/
+
+.vercel
+.env*
+!.env.example
+!.env.n8n

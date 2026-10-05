@@ -3,6 +3,7 @@ import { usePortal } from '../usePortal.js';
 import Sensitive from '../components/Sensitive.jsx';
 import { MOODS, PHOTO_ASSETS } from '../config.js';
 import { formatDate, relativeDays } from '../lib/format.js';
+import EvolucionPaciente from '../../components/analitica/EvolucionPaciente.jsx';
 
 const moodById = Object.fromEntries(MOODS.map((m) => [m.id, m]));
 
@@ -15,11 +16,16 @@ export default function PortalEvolution() {
       <header className="p-page-head">
         <h1 className="p-display">Tu evolución</h1>
         <p className="p-lead">
-          Tus fotos de control y cómo te has sentido. Las fotos son privadas: solo tú y la doctora pueden verlas.
+          Cómo avanza tu recuperación, tus fotos de control y cómo te has sentido. Las fotos son privadas: solo tú y la doctora pueden verlas.
         </p>
       </header>
 
-      <section aria-labelledby="photos-title">
+      <section aria-labelledby="cifras-title">
+        <h2 className="p-title" id="cifras-title" style={{ marginBottom: '1rem' }}>Tu recuperación en cifras</h2>
+        <EvolucionPaciente plan={portal} checkins={checkins} vista="paciente" />
+      </section>
+
+      <section className="p-section" aria-labelledby="photos-title">
         <h2 className="p-title" id="photos-title" style={{ marginBottom: '1rem' }}>Progreso fotográfico</h2>
         {photos.length === 0 ? (
           <p className="p-empty">Tomamos tus primeras fotos en tu valoración. Aparecerán aquí.</p>

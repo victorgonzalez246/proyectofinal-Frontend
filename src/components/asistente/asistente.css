@@ -1,0 +1,260 @@
+/* ============================================================
+   ASISTENTE VIRTUAL — widget flotante (landing, portal y panel de la doctora)
+   Dentro del portal hereda sus tokens (claro/oscuro/alto contraste);
+   en la landing usa los valores de respaldo de la marca.
+   ============================================================ */
+
+.asis {
+  --asis-bg: var(--p-surface, #FFFFFF);
+  --asis-bg-soft: var(--p-bg, #F5F3EF);
+  --asis-ink: var(--p-ink, #1C1B1A);
+  --asis-ink-soft: var(--p-ink-soft, #4E453B);
+  --asis-line: var(--p-line-strong, rgba(147, 130, 109, 0.28));
+  --asis-accent: var(--p-olive, #5C6651);
+  --asis-on-accent: var(--p-on-strong, #FFFFFF);
+  --asis-user: var(--p-rose-soft, rgba(219, 178, 153, 0.30));
+  --asis-alert: var(--p-alert, #9B3D4A);
+  --asis-font: var(--p-sans, 'Plus Jakarta Sans', 'Helvetica Neue', sans-serif);
+  --asis-serif: var(--p-serif, 'Cormorant Garamond', Georgia, serif);
+  --asis-bottom: 1.25rem;
+  --asis-right: 1.25rem;
+  font-family: var(--asis-font);
+}
+
+/* En el portal se ubica sobre la Línea de tranquilidad y la barra de navegación inferior */
+.asis--portal {
+  --asis-bottom: calc(var(--p-nav-h, 4.25rem) + env(safe-area-inset-bottom) + 5rem);
+  --asis-right: 1rem;
+}
+/* En el panel de la doctora, sobre la barra de navegación inferior del móvil */
+.asis--admin {
+  --asis-bottom: calc(var(--p-nav-h, 4.25rem) + env(safe-area-inset-bottom) + 1rem);
+  --asis-right: 1rem;
+}
+@media (min-width: 960px) {
+  .asis--landing { --asis-bottom: 2rem; --asis-right: 2rem; }
+  .asis--portal { --asis-bottom: 6.25rem; --asis-right: 2rem; }
+  .asis--admin { --asis-bottom: 2rem; --asis-right: 2rem; }
+}
+
+.asis-lanzador {
+  position: fixed;
+  right: var(--asis-right);
+  bottom: var(--asis-bottom);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 3.25rem;
+  min-width: 3.25rem;
+  justify-content: center;
+  padding: 0 1.15rem;
+  border-radius: 999px;
+  background: var(--asis-accent);
+  color: var(--asis-on-accent);
+  font-family: var(--asis-font);
+  font-size: 0.88rem;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(28, 27, 26, 0.22);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.asis-lanzador:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(28, 27, 26, 0.26); }
+.asis-lanzador:focus-visible,
+.asis button:focus-visible,
+.asis textarea:focus-visible,
+.asis a:focus-visible {
+  outline: 3px solid var(--asis-accent);
+  outline-offset: 2px;
+}
+.asis-lanzador:focus-visible { outline-color: var(--asis-ink); }
+/* En pantallas chicas el lanzador es solo el ícono */
+.asis-lanzador__texto { display: none; }
+@media (min-width: 640px) {
+  .asis-lanzador__texto { display: inline; }
+}
+
+.asis-panel {
+  position: fixed;
+  right: var(--asis-right);
+  bottom: calc(var(--asis-bottom) + 4rem);
+  top: auto;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: min(24rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - var(--asis-bottom) - 5.5rem);
+  height: min(34rem, calc(100dvh - var(--asis-bottom) - 5.5rem));
+  border-radius: 1.5rem;
+  border: 1px solid var(--asis-line);
+  background: var(--asis-bg);
+  color: var(--asis-ink);
+  box-shadow: 0 24px 60px rgba(28, 27, 26, 0.22);
+  overflow: hidden;
+  animation: asis-entrar 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.asis-panel[hidden] { display: none; }
+@keyframes asis-entrar {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .asis-panel, .asis-escribiendo span { animation: none !important; }
+  .asis-lanzador { transition: none; }
+}
+.portal[data-motion='reduced'] .asis-panel,
+.portal[data-motion='reduced'] .asis-escribiendo span,
+html.a11y-sin-animaciones .asis-panel,
+html.a11y-sin-animaciones .asis-escribiendo span { animation: none !important; }
+
+.asis-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid var(--asis-line);
+  background: var(--asis-bg-soft);
+}
+.asis-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--asis-accent);
+  color: var(--asis-on-accent);
+}
+.asis-titulo {
+  font-family: var(--asis-serif);
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--asis-ink);
+}
+.asis-subtitulo { font-size: 0.72rem; line-height: 1.35; color: var(--asis-ink-soft); margin-top: 0.15rem; }
+.asis-cabecera__acciones { display: flex; gap: 0.25rem; margin-left: auto; }
+.asis-icono {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  color: var(--asis-ink-soft);
+}
+.asis-icono:hover { background: var(--asis-line); color: var(--asis-ink); }
+
+.asis-mensajes {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1rem;
+  overscroll-behavior: contain;
+}
+.asis-msg {
+  max-width: 88%;
+  padding: 0.7rem 0.9rem;
+  border-radius: 1.1rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.asis-msg p + p, .asis-msg p + ul, .asis-msg ul + p { margin-top: 0.45rem; }
+.asis-msg ul { list-style: disc; padding-left: 1.1rem; display: grid; gap: 0.2rem; }
+.asis-msg strong { font-weight: 600; }
+.asis-msg--asistente { align-self: flex-start; background: var(--asis-bg-soft); border-bottom-left-radius: 0.35rem; }
+.asis-msg--paciente { align-self: flex-end; background: var(--asis-user); border-bottom-right-radius: 0.35rem; white-space: pre-wrap; }
+
+.asis-sugerencias { display: flex; flex-wrap: wrap; gap: 0.45rem; list-style: none; }
+.asis-sugerencias button {
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--asis-line);
+  background: transparent;
+  color: var(--asis-ink);
+  font-size: 0.78rem;
+  text-align: left;
+  transition: background-color 0.2s ease;
+}
+.asis-sugerencias button:hover { background: var(--asis-bg-soft); }
+
+.asis-escribiendo { display: inline-flex; gap: 0.3rem; align-items: center; min-height: 2.4rem; }
+.asis-escribiendo span[aria-hidden] {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--asis-ink-soft);
+  animation: asis-punto 1.2s infinite ease-in-out;
+}
+.asis-escribiendo span[aria-hidden]:nth-of-type(3) { animation-delay: 0.15s; }
+.asis-escribiendo span[aria-hidden]:nth-of-type(4) { animation-delay: 0.3s; }
+@keyframes asis-punto {
+  0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+
+.asis-nota { font-size: 0.78rem; color: var(--asis-ink-soft); font-style: italic; }
+.asis-error {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--asis-alert);
+  color: var(--asis-alert);
+  font-size: 0.82rem;
+}
+.asis-error a { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; text-decoration: underline; }
+
+.asis-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 0.75rem 0.4rem;
+  border-top: 1px solid var(--asis-line);
+}
+.asis-form textarea {
+  flex: 1;
+  resize: none;
+  max-height: 7rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 1rem;
+  border: 1px solid var(--asis-line);
+  background: var(--asis-bg);
+  color: var(--asis-ink);
+  font: inherit;
+  font-size: 0.88rem;
+  field-sizing: content;
+}
+.asis-form textarea::placeholder { color: var(--asis-ink-soft); opacity: 0.8; }
+.asis-enviar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--asis-accent);
+  color: var(--asis-on-accent);
+}
+.asis-enviar:disabled { opacity: 0.45; cursor: not-allowed; }
+.asis-legal { padding: 0 1rem 0.75rem; font-size: 0.68rem; line-height: 1.4; color: var(--asis-ink-soft); }
+.asis-legal a { text-decoration: underline; }
+
+/* Solo para lectores de pantalla */
+.asis-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (forced-colors: active) {
+  .asis-lanzador, .asis-enviar, .asis-panel { border: 1px solid CanvasText; }
+}

@@ -37,7 +37,9 @@ export default function MobileMenu({ isOpen, navLinks, portal, onClose }) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
+        <motion.nav
+          id="menu-movil"
+          aria-label="Menú móvil"
           initial="closed"
           animate="open"
           exit="closed"
@@ -90,7 +92,7 @@ export default function MobileMenu({ isOpen, navLinks, portal, onClose }) {
               onClick={onClose}
               style={{ marginTop: '1.5rem', transform: 'scale(1.1)' }}
             >
-              <Calendar size={18} />
+              <Calendar size={18} aria-hidden="true" />
               <span>Agendar Cita</span>
             </motion.a>
 
@@ -101,21 +103,12 @@ export default function MobileMenu({ isOpen, navLinks, portal, onClose }) {
                 onClick={onClose}
                 className="btn-secondary"
               >
-                <UserRound size={16} />
+                <UserRound size={16} aria-hidden="true" />
                 <span>{portal.label}</span>
               </MotionLink>
             )}
-            <MotionLink
-              variants={linkVariants}
-              to="/auth"
-              onClick={onClose}
-              className="label-upper"
-              style={{ textDecoration: 'underline', textUnderlineOffset: '4px' }}
-            >
-              Club VIP y cupones
-            </MotionLink>
           </motion.div>
-        </motion.div>
+        </motion.nav>
       )}
     </AnimatePresence>
   )

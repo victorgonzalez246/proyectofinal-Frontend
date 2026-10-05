@@ -36,6 +36,7 @@ export const greeting = (date = new Date()) => {
 };
 
 const ORDINALS = ['primer', 'segundo', 'tercer', 'cuarto', 'quinto', 'sexto', 'séptimo', 'octavo', 'noveno', 'décimo'];
-export const ordinalDay = (n) => ORDINALS[n - 1] || `día ${n} de`;
+// "primer día", "décimo día", "día 11" (después del décimo se usa el número)
+export const ordinalDay = (n) => (ORDINALS[n - 1] ? `${ORDINALS[n - 1]} día` : `día ${n}`);
 
 export const firstName = (name = '') => name.trim().split(/\s+/)[0] || '';

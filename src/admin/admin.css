@@ -1,0 +1,125 @@
+/* ============================================================
+   PANEL DE LA DOCTORA — complementa portal.css (mismos tokens)
+   ============================================================ */
+
+/* Como elemento de grid con margin auto, sin width se encogería al ancho del contenido */
+.a-main { width: 100%; max-width: 68rem; }
+
+.a-badge {
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: var(--p-rose-soft);
+  color: var(--p-rose-ink);
+}
+
+.p-chip--muted { background: var(--p-line); color: var(--p-muted); }
+
+/* Tarjetas de cifras del día */
+.a-stats { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+.a-stat { display: block; }
+.a-stat__value { font-family: var(--p-serif); font-size: 2.6rem; line-height: 1; margin: 0.4rem 0 0.2rem; color: var(--p-ink); }
+a.a-stat:hover { border-color: var(--p-line-strong); }
+
+/* Listas de elementos (citas, alertas, pacientes) */
+.a-list { display: grid; gap: 0.75rem; }
+.a-item { display: grid; gap: 0.75rem; }
+.a-item__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; }
+.a-item__meta { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; font-size: 0.85rem; color: var(--p-ink-soft); }
+.a-item__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.a-item .p-btn { min-height: 2.5rem; padding: 0 1.1rem; font-size: 0.85rem; }
+.a-quote { padding-left: 0.9rem; border-left: 2px solid var(--p-rose); color: var(--p-ink-soft); font-size: 0.9rem; }
+
+.a-points { display: grid; gap: 0.35rem; padding-left: 1.2rem; list-style: decimal; font-size: 0.9rem; color: var(--p-ink-soft); }
+
+/* Filtros */
+.a-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1.25rem; }
+.a-toolbar .p-seg { flex: 1 1 22rem; max-width: 34rem; background: var(--p-surface); border: 1px solid var(--p-line); }
+.a-toolbar .p-field { flex: 1 1 16rem; max-width: 22rem; min-height: 2.75rem; }
+
+/* Tabla de pacientes */
+.a-table-wrap { overflow-x: auto; border: 1px solid var(--p-line); border-radius: var(--p-radius-lg); background: var(--p-surface); }
+.a-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.a-table th { text-align: left; padding: 0.8rem 1rem; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--p-muted); border-bottom: 1px solid var(--p-line); white-space: nowrap; }
+.a-table td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--p-line); vertical-align: top; }
+.a-table tr:last-child td { border-bottom: 0; }
+.a-table tbody tr:hover { background: var(--p-olive-soft); }
+
+/* Formularios */
+.a-form { display: grid; gap: 1rem; }
+.a-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); align-items: end; }
+.a-form .p-field { min-height: 2.75rem; padding: 0.55rem 0.8rem; }
+textarea.p-field { min-height: 5.5rem; resize: vertical; }
+
+/* Editor del plan: filas repetibles */
+.a-fieldset { display: grid; gap: 0.75rem; padding: 1.25rem; border: 1px solid var(--p-line); border-radius: var(--p-radius-lg); background: var(--p-surface); }
+.a-fieldset legend { padding: 0 0.4rem; font-family: var(--p-serif); font-size: 1.35rem; color: var(--p-ink); }
+.a-row { display: grid; gap: 0.6rem; padding: 0.9rem; border-radius: var(--p-radius-md); background: var(--p-bg); }
+.a-row__foot { display: flex; justify-content: flex-end; }
+.a-remove { font-size: 0.8rem; font-weight: 600; color: var(--p-alert); }
+.a-add { justify-self: start; }
+
+.a-save {
+  position: sticky;
+  bottom: calc(var(--p-nav-h) + 0.75rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1.25rem;
+  border-radius: var(--p-radius-lg);
+  background: color-mix(in srgb, var(--p-surface) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--p-line-strong);
+  z-index: 5;
+}
+@media (min-width: 960px) {
+  .a-save { bottom: 1rem; }
+}
+
+.a-counter { font-size: 0.78rem; color: var(--p-muted); text-align: right; }
+
+/* Barra inferior del móvil: el panel tiene ocho secciones, así que la barra se desplaza de lado
+   (cada botón conserva un tamaño cómodo para el dedo en vez de apretarse) */
+@media (max-width: 959px) {
+  .a-nav {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .a-nav::-webkit-scrollbar { display: none; }
+  .a-nav .p-nav__link { flex: 0 0 4.6rem; scroll-snap-align: start; font-size: 0.64rem; }
+}
+
+/* ── Facturas ── */
+.f-form { gap: 1.1rem; }
+.f-seg { flex-wrap: wrap; }
+.f-seg button { flex: 1 1 7rem; }
+.f-item { display: grid; gap: 0.6rem; grid-template-columns: minmax(0, 1fr) 4.5rem 7.5rem auto; align-items: end; }
+@media (max-width: 640px) {
+  .f-item { grid-template-columns: 4.5rem minmax(0, 1fr) auto; }
+  .f-item__desc { grid-column: 1 / -1; }
+}
+.f-item__quitar {
+  display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 50%;
+  color: var(--p-alert); border: 1px solid var(--p-line);
+}
+.f-item__quitar:disabled { opacity: 0.35; cursor: not-allowed; }
+.f-totales { display: grid; gap: 0.35rem; margin-left: auto; width: min(100%, 22rem); font-variant-numeric: tabular-nums; }
+.f-totales div { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.92rem; color: var(--p-ink-soft); }
+.f-totales dd { color: var(--p-ink); }
+.f-totales__total {
+  margin-top: 0.35rem; padding: 0.7rem 0.9rem; border-radius: var(--p-radius-md);
+  background: var(--p-olive); font-weight: 700;
+}
+.f-totales .f-totales__total, .f-totales .f-totales__total dd { color: var(--p-on-strong); font-size: 1.05rem; }
+.f-buscar { position: relative; display: flex; align-items: center; margin: 1.25rem 0 1rem; max-width: 28rem; }
+.f-buscar svg { position: absolute; left: 0.85rem; color: var(--p-muted); pointer-events: none; }
+.f-buscar .p-field { width: 100%; min-height: 2.75rem; padding-left: 2.5rem; }
+.f-monto { display: flex; align-items: center; gap: 0.75rem; }
+.f-monto strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; color: var(--p-ink); }
+.f-anular { color: var(--p-alert); }

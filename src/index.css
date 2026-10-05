@@ -517,3 +517,74 @@ h4 {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--taupe-atelier);
 }
+
+/* ── ACCESIBILIDAD (sitio público) ─────────────────────────── */
+
+/* Enlace "Saltar al contenido": visible solo al recibir el foco con el teclado */
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-full);
+  background: var(--charcoal);
+  color: var(--white);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  transform: translateY(-200%);
+  transition: transform 0.2s var(--ease-out);
+}
+.skip-link:focus { transform: none; }
+main:focus { outline: none; }
+
+/* Foco visible con teclado en todos los controles */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:not([tabindex='-1']):focus-visible {
+  outline: 3px solid var(--olive-maison);
+  outline-offset: 3px;
+}
+
+/* Reducir animaciones: preferencia del sistema o del selector de accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+html.a11y-sin-animaciones { scroll-behavior: auto; }
+html.a11y-sin-animaciones *,
+html.a11y-sin-animaciones *::before,
+html.a11y-sin-animaciones *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Alto contraste: oscurece los tonos suaves de la marca y subraya los enlaces de texto */
+html.a11y-alto-contraste {
+  --stone-muted: #3A3634;
+  --stone-light: #4F4A47;
+  --taupe-atelier: #54483B;
+  --olive-maison: #3E4735;
+  --champagne-gold: #6A4D25;
+  --border-subtle: rgba(28, 27, 26, 0.45);
+  --color-on-surface-variant: #2A241E;
+  --color-outline: #3F3830;
+  --color-secondary: #33363A;
+  --color-primary: #5A4020;
+  --color-tertiary: #54411F;
+}
+html.a11y-alto-contraste main p,
+html.a11y-alto-contraste main li,
+html.a11y-alto-contraste main label { color: var(--charcoal) !important; }
+html.a11y-alto-contraste main a:not(.btn-primary):not(.btn-secondary) { text-decoration: underline; }
+html.a11y-alto-contraste footer p,
+html.a11y-alto-contraste footer a,
+html.a11y-alto-contraste footer li,
+html.a11y-alto-contraste footer span,
+html.a11y-alto-contraste footer h4 { color: #FFFFFF !important; }
+html.a11y-alto-contraste footer a { text-decoration: underline; }
+html.a11y-alto-contraste .glass-card { border-color: rgba(28, 27, 26, 0.45) !important; }

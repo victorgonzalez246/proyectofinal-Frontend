@@ -1,0 +1,131 @@
+/* ============================================================
+   CLIMA Y PIEL — widget de la API externa (landing y portal)
+   Dentro del portal hereda sus tokens; en la landing usa los de respaldo.
+   ============================================================ */
+
+.clima {
+  --clima-bg: var(--p-surface, #FFFFFF);
+  --clima-bg-soft: var(--p-bg, #F5F3EF);
+  --clima-ink: var(--p-ink, #1C1B1A);
+  --clima-ink-soft: var(--p-ink-soft, #4E453B);
+  --clima-line: var(--p-line, rgba(147, 130, 109, 0.20));
+  --clima-accent: var(--p-olive, #5C6651);
+  --clima-alert: var(--p-alert, #9B3D4A);
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: 1.5rem;
+  border: 1px solid var(--clima-line);
+  background: var(--clima-bg);
+  color: var(--clima-ink);
+  font-family: var(--p-sans, 'Plus Jakarta Sans', 'Helvetica Neue', sans-serif);
+}
+
+.clima__cabecera { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.clima__titulo {
+  font-family: var(--p-serif, 'Cormorant Garamond', Georgia, serif);
+  font-size: 1.6rem;
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--clima-ink);
+}
+.clima__recargar {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  color: var(--clima-ink-soft);
+  border: 1px solid var(--clima-line);
+}
+.clima__recargar:hover { color: var(--clima-ink); background: var(--clima-bg-soft); }
+.clima button:focus-visible, .clima a:focus-visible { outline: 3px solid var(--clima-accent); outline-offset: 2px; }
+
+.clima__datos { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.clima__dato { padding: 0.9rem 1rem; border-radius: 1rem; background: var(--clima-bg-soft); }
+.clima__dato dt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--clima-ink-soft);
+}
+.clima__dato dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; margin-top: 0.35rem; }
+.clima__valor { font-family: var(--p-serif, 'Cormorant Garamond', Georgia, serif); font-size: 2rem; line-height: 1; }
+.clima__detalle { font-size: 0.82rem; color: var(--clima-ink-soft); }
+
+/* Nivel UV: siempre con etiqueta de texto, el color solo acompaña */
+.clima__uv {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid currentColor;
+}
+.clima__uv--bajo { color: #2F6B4F; }
+.clima__uv--moderado { color: #7A5A00; }
+.clima__uv--alto { color: #9A4A12; }
+.clima__uv--muy-alto, .clima__uv--extremo { color: var(--clima-alert); }
+.portal[data-theme='dark'] .clima__uv--bajo { color: #8FD1AE; }
+.portal[data-theme='dark'] .clima__uv--moderado { color: #E8C66A; }
+.portal[data-theme='dark'] .clima__uv--alto { color: #F0A46B; }
+
+.clima__subtitulo { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--clima-accent); }
+.clima__consejos { display: grid; gap: 0.5rem; list-style: none; padding: 0; }
+.clima__consejos li {
+  position: relative;
+  padding-left: 1.2rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--clima-ink);
+}
+.clima__consejos li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--clima-accent);
+}
+.clima__fuente { font-size: 0.72rem; color: var(--clima-ink-soft); }
+.clima__fuente a { text-decoration: underline; }
+
+.clima__cargando { display: grid; gap: 0.6rem; }
+.clima__esqueleto {
+  display: block;
+  height: 1rem;
+  border-radius: 0.5rem;
+  background: linear-gradient(90deg, var(--clima-bg-soft), var(--clima-line), var(--clima-bg-soft));
+  background-size: 200% 100%;
+  animation: clima-brillo 1.4s infinite linear;
+}
+.clima__esqueleto--corto { width: 60%; }
+@keyframes clima-brillo { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .clima__esqueleto { animation: none; } }
+.portal[data-motion='reduced'] .clima__esqueleto,
+html.a11y-sin-animaciones .clima__esqueleto { animation: none; }
+
+.clima__error { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; color: var(--clima-ink-soft); font-size: 0.9rem; }
+.clima__error p { flex: 1 1 14rem; }
+.clima__error button {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--clima-line);
+  color: var(--clima-ink);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.clima__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}

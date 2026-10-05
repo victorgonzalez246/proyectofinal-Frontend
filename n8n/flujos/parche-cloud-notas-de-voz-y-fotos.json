@@ -1,0 +1,349 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Configuración').first().json;\nconst item = $input.first().json;\nconst p = item.payload;\nif (p.tipo === 'texto') return [{ json: item }];\nconst toWa = (n) => {\n  const d = String(n || '').replace(/\\D/g, '');\n  return d.length === 8 ? '506' + d : d;\n};\nconst enPruebas = String(cfg.modoPruebas || '').trim().toLowerCase() === 'si';\nconst numerosPrueba = String(cfg.numerosPrueba || '').split(',').map(toWa).filter(Boolean);\nif (enPruebas && !numerosPrueba.includes(toWa(p.from))) return [];\nif ((p.tipo === 'audio' || p.tipo === 'imagen') && !p.mediaId) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];\nreturn [{ json: item }];\n"
+      },
+      "id": "5dd31c09-2b32-4765-a654-b7887c71d402",
+      "name": "Revisar adjunto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        -1320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d2c420a9-9e90-4840-a6f0-a17c38dfde22",
+                    "leftValue": "={{ $json.payload.tipo }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Nota de voz"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f59d4d49-64b8-4aa8-ac67-e4c603b326d6",
+                    "leftValue": "={{ $json.payload.tipo }}",
+                    "rightValue": "imagen",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Foto"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Texto u otro"
+        }
+      },
+      "id": "42649b6f-0af3-4568-a686-61e8c34a83fe",
+      "name": "¿Nota de voz o foto?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1360,
+        -1320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/{{ $('Configuración').first().json.graphApiVersion }}/{{ $json.payload.mediaId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "de1c7fd9-e93c-42ec-a5b6-ad6fa793ce95",
+      "name": "Meta: datos del medio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        -1320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "6efc0cd9-9463-4b8b-a5d2-e3648b716009",
+      "name": "Meta: descargar medio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        -1320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Límites de WhatsApp: audio 16 MB, imagen 5 MB (el tope lo pone WhatsApp; Gemini acepta hasta 20 MB por petición)\nconst LIMITE_MB = { audio: 16, imagen: 5 };\nconst item = $('Revisar adjunto').first().json;\nconst p = item.payload;\nconst info = $('Meta: datos del medio').first().json || {};\nconst entrada = $input.first();\nconst archivo = entrada.binary?.data;\nconst mimeType = String(info.mime_type || archivo?.mimeType || '').split(';')[0].trim();\nconst bytes = Number(info.file_size) || 0;\nconst ok = archivo && !entrada.json?.error && bytes <= LIMITE_MB[p.tipo] * 1024 * 1024\n  && mimeType.startsWith(p.tipo === 'audio' ? 'audio/' : 'image/');\nif (!ok) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];\nreturn [{ json: item, binary: { data: { ...archivo, mimeType } } }];\n"
+      },
+      "id": "aff24da1-430b-4fb2-a738-88e0eb06f004",
+      "name": "Revisar descarga",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        -1320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "77ba01f1-dd08-4735-a0e6-6a9025b68542",
+                    "leftValue": "={{ $json.payload.tipo }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Nota de voz"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Foto o fallo"
+        }
+      },
+      "id": "df874b03-3605-459d-af93-0a4865dce3cd",
+      "name": "¿Es nota de voz?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2240,
+        -1320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemini-3.5-flash"
+        },
+        "text": "Transcribe literalmente esta nota de voz de WhatsApp, en el idioma en que se habla (normalmente español de Costa Rica). Devuelve solo la transcripción: sin comentarios, sin marcas de tiempo y sin etiquetas de hablante. Si no se entiende nada, responde exactamente [inaudible].",
+        "inputType": "binary",
+        "binaryPropertyName": "data",
+        "simplify": true,
+        "options": {}
+      },
+      "id": "0fed82fd-c29d-4369-a03e-b2ac8e41fa3f",
+      "name": "Gemini · Transcribir nota de voz",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        2460,
+        -1320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini - Aura y WhatsApp"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// La transcripción pasa a ser el mensaje (y queda así en la memoria de la conversación)\nconst item = $('Revisar adjunto').first().json;\nconst p = item.payload;\nconst r = $input.first().json || {};\nconst t = (r.content?.parts || []).filter((x) => !x.thought).map((x) => x.text || '').join(' ').replace(/\\s+/g, ' ').trim();\nif (!t || /^\\[?inaudible\\]?\\.?$/i.test(t)) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];\nconst contenido = t.slice(0, 1400);\nreturn [{ json: { ...item, payload: { ...p, contenido, texto: '[Nota de voz transcrita] ' + contenido } } }];\n"
+      },
+      "id": "abda0469-382d-48b9-ab58-1d37e7cfe26d",
+      "name": "Texto de la nota de voz",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2680,
+        -1320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Red de seguridad clínica').first().json.payload;\nconst FALLO = {\n  audio: 'No logré escuchar bien tu nota de voz 🙏 ¿Me la envías de nuevo o me lo escribes?',\n  voice: 'No logré escuchar bien tu nota de voz 🙏 ¿Me la envías de nuevo o me lo escribes?',\n  image: 'No pude abrir tu foto 🙏 ¿Me la envías de nuevo o me cuentas por escrito qué notas?',\n};\nconst texto = p.tipo === 'medio_fallido'\n  ? FALLO[p.tipoOriginal] || 'No pude abrir lo que me enviaste 🙏 ¿Me lo escribes?'\n  : 'Por ahora puedo leer texto, escuchar notas de voz y ver fotos 🙏 ¿Me lo cuentas así?';\nreturn [{ json: { to: p.from, texto } }];\n"
+      },
+      "id": "aa6ff016-1062-4159-a438-4ac8b9a03747",
+      "name": "Respuesta: formato no soportado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        340
+      ]
+    }
+  ],
+  "connections": {
+    "Revisar adjunto": {
+      "main": [
+        [
+          {
+            "node": "¿Nota de voz o foto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Nota de voz o foto?": {
+      "main": [
+        [
+          {
+            "node": "Meta: datos del medio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Meta: datos del medio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Meta: datos del medio": {
+      "main": [
+        [
+          {
+            "node": "Meta: descargar medio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta: descargar medio": {
+      "main": [
+        [
+          {
+            "node": "Revisar descarga",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisar descarga": {
+      "main": [
+        [
+          {
+            "node": "¿Es nota de voz?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es nota de voz?": {
+      "main": [
+        [
+          {
+            "node": "Gemini · Transcribir nota de voz",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Gemini · Transcribir nota de voz": {
+      "main": [
+        [
+          {
+            "node": "Texto de la nota de voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto de la nota de voz": {
+      "main": [
+        []
+      ]
+    },
+    "Respuesta: formato no soportado": {
+      "main": [
+        []
+      ]
+    }
+  }
+}
