@@ -7,6 +7,8 @@ Landing pública, portal privado de pacientes y panel de la doctora para la clí
 - El navegador solo hace `fetch` a los webhooks de n8n, que guarda los datos en Google Sheets, Drive y Calendar.
 - `server.js` es un **simulador de desarrollo** que atiende el mismo contrato con la misma lógica (`api/nucleo.mjs`). No se despliega.
 
+**¿Otra computadora?** Sigue [CONFIGURAR-EN-LAPTOP.md](CONFIGURAR-EN-LAPTOP.md): programas, claves, modo local, pruebas, Vercel y n8n Cloud.
+
 ## Stack
 
 | Capa | Herramienta |
