@@ -133,7 +133,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Límites de WhatsApp: audio 16 MB, imagen 5 MB (también el máximo que acepta Claude por imagen)\nconst LIMITE_MB = { audio: 16, imagen: 5 };\nconst item = $('Revisar adjunto').first().json;\nconst p = item.payload;\nconst info = $('Meta: datos del medio').first().json || {};\nconst entrada = $input.first();\nconst archivo = entrada.binary?.data;\nconst mimeType = String(info.mime_type || archivo?.mimeType || '').split(';')[0].trim();\nconst bytes = Number(info.file_size) || 0;\nconst ok = archivo && !entrada.json?.error && bytes <= LIMITE_MB[p.tipo] * 1024 * 1024\n  && mimeType.startsWith(p.tipo === 'audio' ? 'audio/' : 'image/');\nif (!ok) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];\nreturn [{ json: item, binary: { data: { ...archivo, mimeType } } }];\n"
+        "jsCode": "// Límites de WhatsApp: audio 16 MB, imagen 5 MB (el tope lo pone WhatsApp; Gemini acepta hasta 20 MB por petición)\nconst LIMITE_MB = { audio: 16, imagen: 5 };\nconst item = $('Revisar adjunto').first().json;\nconst p = item.payload;\nconst info = $('Meta: datos del medio').first().json || {};\nconst entrada = $input.first();\nconst archivo = entrada.binary?.data;\nconst mimeType = String(info.mime_type || archivo?.mimeType || '').split(';')[0].trim();\nconst bytes = Number(info.file_size) || 0;\nconst ok = archivo && !entrada.json?.error && bytes <= LIMITE_MB[p.tipo] * 1024 * 1024\n  && mimeType.startsWith(p.tipo === 'audio' ? 'audio/' : 'image/');\nif (!ok) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];\nreturn [{ json: item, binary: { data: { ...archivo, mimeType } } }];\n"
       },
       "id": "aff24da1-430b-4fb2-a738-88e0eb06f004",
       "name": "Revisar descarga",
@@ -214,7 +214,12 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini - Aura y WhatsApp"
+        }
+      }
     },
     {
       "parameters": {

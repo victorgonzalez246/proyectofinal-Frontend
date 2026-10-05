@@ -4,7 +4,7 @@
 // - Flujo "API": recorre el mismo contrato que `npm run verificar` (scripts/contrato.mjs).
 // - Flujo "Cerebro": recibe los eventos reales que emitió la API y se comprueban los WhatsApp
 //   que envía; además el chat ("BAJA" y una emergencia) y el aviso de fallas.
-//   Las ramas con IA no se ejercitan (necesitan credenciales de Anthropic); sí su respaldo sin IA.
+//   Las ramas con IA no se ejercitan (necesitan la credencial de Google Gemini); sí su respaldo sin IA.
 // Requiere n8n instalado (`npm i -g n8n`) o N8N_BIN con la ruta del ejecutable.
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -121,6 +121,8 @@ const cerebroDePrueba = () => {
     }
     if (typeof n.parameters.url === 'string') n.parameters.url = n.parameters.url.replace('https://graph.facebook.com/', `http://localhost:${GRAPH_PORT}/`);
     if (n.name === 'Webhook clínica') n.parameters.authentication = 'none';
+    // Los nodos de Gemini traen su credencial por nombre; aquí no existe y n8n se negaría a ejecutar el flujo
+    delete n.credentials;
   }
   // El disparador de WhatsApp se registra en Meta: aquí lo reemplaza un Webhook que entrega lo mismo
   const trigger = wf.nodes.find((n) => n.name === 'WhatsApp entrante');

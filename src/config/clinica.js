@@ -26,4 +26,4 @@ export const METRICAS_HERO = [
 
 // Versión del aviso de privacidad: se guarda con cada consentimiento para saber qué texto aceptó cada persona.
 // Cámbiala cada vez que se modifique el texto de src/pages/PrivacyPage.jsx
-export const AVISO_VERSION = '2026-10';
+export const AVISO_VERSION = '2026-10-b';

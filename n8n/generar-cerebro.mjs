@@ -138,16 +138,19 @@ const router = (name, position, campo, rutas, fallback) =>
   });
 
 // ── Piezas de IA ──
-// Opus 5.5 razona antes de responder (pensamiento adaptativo, siempre activo) y NO admite temperature:
-// enviarla devuelve 400 y el chat caía a la respuesta de respaldo. Solo Haiku (clasificador) la lleva.
-const MODELO_PRINCIPAL = { __rl: true, mode: 'id', value: 'claude-opus-5-5' };
-const MODELO_RAPIDO = { __rl: true, mode: 'id', value: 'claude-haiku-4-5-20251001' };
+// Los 5 modelos son "Google Gemini Chat Model" (multimodal: las agentes ven las fotos gracias a
+// passthroughBinaryImages). Gemini 3.5 Flash para las dos agentes que conversan; Flash-Lite (más rápido y
+// barato) para clasificar, analizar check-ins y resumir. La credencial se referencia solo por nombre: al
+// importar, n8n la enlaza con la credencial "Google Gemini(PaLM) Api" de ese nombre. La API key vive solo en n8n.
+const MODELO_PRINCIPAL = 'models/gemini-3.5-flash';
+const MODELO_RAPIDO = 'models/gemini-3.5-flash-lite';
+const CRED_GEMINI = { credentials: { googlePalmApi: { name: 'Gemini - Aura y WhatsApp' } } };
 
-const modelo = (name, position, model, target, temperature) => {
-  add(name, '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, position, {
-    model,
+const modelo = (name, position, modelName, target, temperature) => {
+  add(name, '@n8n/n8n-nodes-langchain.lmChatGoogleGemini', 1.1, position, {
+    modelName,
     options: temperature === undefined ? {} : { temperature },
-  });
+  }, CRED_GEMINI);
   link(name, target, 0, 'ai_languageModel');
 };
 
@@ -453,7 +456,7 @@ const META_DESCARGA = add('Meta: descargar medio', 'n8n-nodes-base.httpRequest',
 }, { retryOnFail: true, maxTries: 2, waitBetweenTries: 1000, onError: 'continueRegularOutput' });
 
 const REVISAR_DESCARGA = code('Revisar descarga', [2020, Y_MEDIO], () => {
-  // Límites de WhatsApp: audio 16 MB, imagen 5 MB (también el máximo que acepta Claude por imagen)
+  // Límites de WhatsApp: audio 16 MB, imagen 5 MB (el tope lo pone WhatsApp; Gemini acepta hasta 20 MB por petición)
   const LIMITE_MB = { audio: 16, imagen: 5 };
   const item = $('Revisar adjunto').first().json;
   const p = item.payload;
@@ -470,7 +473,7 @@ const REVISAR_DESCARGA = code('Revisar descarga', [2020, Y_MEDIO], () => {
 
 const RUTA_AUDIO = router('¿Es nota de voz?', [2240, Y_MEDIO], 'payload.tipo', [['audio', 'Nota de voz']], 'Foto o fallo');
 
-// Nodo nativo de Google Gemini (credencial "Google Gemini(PaLM) Api"): transcribe el audio descargado
+// Nodo nativo de Google Gemini (credencial "Gemini - Aura y WhatsApp", la misma de los modelos): transcribe el audio descargado
 const PROMPT_TRANSCRIPCION = 'Transcribe literalmente esta nota de voz de WhatsApp, en el idioma en que se habla (normalmente español de Costa Rica). Devuelve solo la transcripción: sin comentarios, sin marcas de tiempo y sin etiquetas de hablante. Si no se entiende nada, responde exactamente [inaudible].';
 const GEMINI = add('Gemini · Transcribir nota de voz', '@n8n/n8n-nodes-langchain.googleGemini', 1, [2460, Y_MEDIO], {
   resource: 'audio',
@@ -481,7 +484,7 @@ const GEMINI = add('Gemini · Transcribir nota de voz', '@n8n/n8n-nodes-langchai
   binaryPropertyName: 'data',
   simplify: true,
   options: {},
-}, { retryOnFail: true, maxTries: 2, waitBetweenTries: 2000, onError: 'continueRegularOutput' });
+}, { retryOnFail: true, maxTries: 2, waitBetweenTries: 2000, onError: 'continueRegularOutput', ...CRED_GEMINI });
 
 const TEXTO_AUDIO = code('Texto de la nota de voz', [2680, Y_MEDIO], () => {
   // La transcripción pasa a ser el mensaje (y queda así en la memoria de la conversación)
@@ -674,7 +677,7 @@ const ANALISTA = add('Enfermera · Analista emocional', '@n8n/n8n-nodes-langchai
   text: `=${PROMPT_ANALISTA}`,
   hasOutputParser: true,
 }, { onError: 'continueRegularOutput' });
-modelo('Modelo · Analista', [1340, Y_CHECKIN + 200], MODELO_PRINCIPAL, ANALISTA);
+modelo('Modelo · Analista', [1340, Y_CHECKIN + 200], MODELO_RAPIDO, ANALISTA, 0);
 parser('Formato del triaje', [1480, Y_CHECKIN + 200], {
   type: 'object',
   properties: {
@@ -763,7 +766,7 @@ const RESUMIDOR = add('Recepcionista · Resumen ejecutivo', '@n8n/n8n-nodes-lang
   text: `=${PROMPT_RESUMEN}`,
   hasOutputParser: true,
 }, { onError: 'continueRegularOutput' });
-modelo('Modelo · Resumen', [1540, Y_PREP + 200], MODELO_PRINCIPAL, RESUMIDOR);
+modelo('Modelo · Resumen', [1540, Y_PREP + 200], MODELO_RAPIDO, RESUMIDOR, 0.2);
 parser('Formato del resumen', [1680, Y_PREP + 200], {
   type: 'object',
   properties: { punto_1: { type: 'string' }, punto_2: { type: 'string' }, punto_3: { type: 'string' } },
@@ -979,7 +982,7 @@ const nota = (name, position, width, height, content, color) =>
 nota('Nota: cerebro', [-40, -300], 820, 240,
   '## 🧠 Cerebro maestro · Clínica Dra. Laura\n**Entradas:** eventos de la API (citas, confirmaciones, acceso, check-in, SOS, campañas), WhatsApp entrante (chat con agentes y "BAJA"), CRON diarios, respaldo del domingo y **Falla en un flujo**.\nTodo pasa por **Configuración** (edítala una sola vez) y el **Router por acción**.\n**Probar ahora** ejecuta las rutinas diarias. En *Settings → Error workflow* de este flujo y del flujo **API** elige este mismo flujo.');
 nota('Nota: multi-agente', [1100, Y_CHAT - 420], 1480, 180,
-  '## 🤖 Equipo de agentes\n**Red de seguridad (sin IA)** → emergencias directo a la doctora. **Clasificador** → **Agente IA 1 · Enfermera Virtual** (triaje clínico, puede despertar a la doctora) o **Agente IA 2 · Recepcionista VIP** (agenda y reservas). Cada agente tiene su propio modelo, memoria y herramientas: la recepcionista no ve datos clínicos y la enfermera no puede reservar.', 5);
+  '## 🤖 Equipo de agentes\n**Red de seguridad (sin IA)** → emergencias directo a la doctora. **Clasificador** → **Agente IA 1 · Enfermera Virtual** (triaje clínico, puede despertar a la doctora) o **Agente IA 2 · Recepcionista VIP** (agenda y reservas). Cada agente tiene su propio modelo (Google Gemini, credencial *Gemini - Aura y WhatsApp*), memoria y herramientas: la recepcionista no ve datos clínicos y la enfermera no puede reservar.', 5);
 nota('Nota: IA con respaldo', [1100, Y_CHECKIN - 180], 820, 140,
   '### Check-in y resumen con respaldo\nSi la IA falla, el check-in se escala con la regla fija del servidor y la doctora recibe el resumen con los datos crudos. A la IA nunca le llegan teléfonos.', 4);
 

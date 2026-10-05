@@ -1,7 +1,7 @@
 // ============================================================
-// ASISTENTE VIRTUAL: proxy hacia la API de Claude
+// ASISTENTE VIRTUAL: proxy hacia Google Gemini (o, como alternativa sin GEMINI_API_KEY, la API de Claude)
 // El navegador usa @anthropic-ai/sdk apuntando a /api/asistente (mismo origen) y este
-// módulo reenvía a api.anthropic.com agregando la clave, que nunca llega al navegador.
+// módulo reenvía a Gemini (o a api.anthropic.com) agregando la clave, que nunca llega al navegador.
 // El servidor decide el modelo, el prompt de sistema y los límites: el cliente solo aporta
 // la conversación (texto), así nadie puede usar el endpoint para otra cosa.
 // Lo usan el servidor de Vite (desarrollo y preview) y la función de Vercel

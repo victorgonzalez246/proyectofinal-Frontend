@@ -175,7 +175,8 @@ const checkin = (userId, dias, mood, pain, note = '', extra = {}) => {
     ...(needsFollowUp && dias >= -1 ? { estado: 'abierta' } : {}),
     ...(needsFollowUp && dias < -1 ? { estado: 'atendida', respuesta: 'La doctora le escribió por WhatsApp y le indicó cómo continuar.' } : {}),
     ...extra,
-    createdAt: new Date(Date.parse(isoMas(dias, dias === 0 ? '07:45' : '19:00'))).toISOString(),
+    // Las de hoy, a las 7:45 o hace 15 minutos si todavía no es esa hora (nunca en el futuro)
+    createdAt: new Date(Math.min(Date.parse(isoMas(dias, dias === 0 ? '07:45' : '19:00')), Date.now() - 15 * 60 * 1000)).toISOString(),
   });
 };
 const diasDesde = (fecha) => Math.round((Date.parse(`${hoy}T12:00:00Z`) - Date.parse(`${String(fecha).slice(0, 10)}T12:00:00Z`)) / DIA);

@@ -113,6 +113,36 @@ describe('cerebro de n8n: notas de voz', () => {
   });
 });
 
+describe('cerebro de n8n: modelos de IA (Google Gemini)', () => {
+  const CREDENCIAL = { googlePalmApi: { name: 'Gemini - Aura y WhatsApp' } };
+
+  it('los 5 modelos son Gemini Chat Model con el modelo, la temperatura y la credencial esperados', () => {
+    const esperado = {
+      'Modelo · Enfermera': ['models/gemini-3.5-flash', {}],
+      'Modelo · Recepcionista': ['models/gemini-3.5-flash', {}],
+      'Modelo · Clasificador': ['models/gemini-3.5-flash-lite', { temperature: 0 }],
+      'Modelo · Analista': ['models/gemini-3.5-flash-lite', { temperature: 0 }],
+      'Modelo · Resumen': ['models/gemini-3.5-flash-lite', { temperature: 0.2 }],
+    };
+    for (const [nombre, [modelName, options]] of Object.entries(esperado)) {
+      const n = nodo(nombre);
+      expect(n.type).toBe('@n8n/n8n-nodes-langchain.lmChatGoogleGemini');
+      expect(n.typeVersion).toBe(1.1);
+      expect(n.parameters).toEqual({ modelName, options });
+      // Solo el nombre: sin id ni clave en el repo
+      expect(n.credentials).toEqual(CREDENCIAL);
+      expect(flujo.connections[nombre].ai_languageModel[0]).toHaveLength(1);
+    }
+    expect(flujo.nodes.filter((n) => n.type.endsWith('lmChatGoogleGemini'))).toHaveLength(5);
+    expect(nodo('Gemini · Transcribir nota de voz').credentials).toEqual(CREDENCIAL);
+  });
+
+  it('no queda ningún nodo ni referencia de Anthropic/Claude en los flujos', () => {
+    expect(flujo.nodes.some((n) => /anthropic/i.test(n.type))).toBe(false);
+    for (const f of [flujo, parche]) expect(JSON.stringify(f)).not.toMatch(/anthropic|claude/i);
+  });
+});
+
 describe('cerebro de n8n: fotos', () => {
   it('la foto llega al agente como imagen (binario) y el pie de foto como texto', async () => {
     const r = await chat(entrante(FOTO('Así amanecí hoy, día 3')));

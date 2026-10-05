@@ -18,7 +18,7 @@ const secciones = [
   },
   {
     titulo: 'Con quién los compartimos',
-    texto: 'Solo con los proveedores que necesitamos para darte el servicio: WhatsApp (Meta) para enviarte mensajes, Google para la agenda y los documentos de la clínica, n8n para automatizar los avisos, Anthropic (Claude) para la enfermera y la recepcionista virtuales de WhatsApp y Google (Gemini) para Aura, la asistente virtual del sitio. A estos asistentes de inteligencia artificial les enviamos la mínima información necesaria, nunca tu teléfono, y la doctora supervisa su trabajo.',
+    texto: 'Solo con los proveedores que necesitamos para darte el servicio: WhatsApp (Meta) para enviarte mensajes, Google para la agenda y los documentos de la clínica, n8n para automatizar los avisos y Google (Gemini) para los asistentes de inteligencia artificial: la enfermera y la recepcionista virtuales de WhatsApp, la transcripción de tus notas de voz, el análisis de tus fotos y Aura, la asistente virtual del sitio. A estos asistentes de inteligencia artificial les enviamos la mínima información necesaria, nunca tu teléfono, y la doctora supervisa su trabajo.',
   },
   {
     titulo: 'Cuánto tiempo los guardamos',

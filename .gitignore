@@ -38,3 +38,8 @@ datos-demo-sheets.xlsx
 
 # Respaldos de flujos n8n Cloud (contienen secretos)
 n8n/respaldos-cloud/
+
+.vercel
+.env*
+!.env.example
+!.env.n8n

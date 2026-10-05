@@ -53,7 +53,7 @@ Todas las fases de código están hechas y verificadas. Lo que falta requiere tu
 
 ## Pendiente (no es código)
 
-- **Prueba real** con las cuentas de Meta, Google y Anthropic. Las ramas con IA solo se probaron en su respaldo sin IA.
+- **Prueba real** con las cuentas de Meta y Google (Gemini incluido). Las ramas con IA solo se probaron en su respaldo sin IA.
 - **Límite de intentos** en el proxy delante de n8n (Cloudflare u otro).
 
 ## Después

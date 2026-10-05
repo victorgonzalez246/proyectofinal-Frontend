@@ -66,7 +66,7 @@ El archivo cubre: instrucciones previas a cada tratamiento, señales de emergenc
 - [ ] Que una persona asesora legal revise el **aviso de privacidad** ([`src/pages/PrivacyPage.jsx`](../src/pages/PrivacyPage.jsx)) según la Ley 8968. Si cambia el texto, actualiza `AVISO_VERSION` en `src/config/clinica.js`.
 TODO ESTA CORRECTO
 - [ ] Definir el **consentimiento informado** para fotos de evolución y para el uso de asistentes de IA con datos de salud.
-- [ ] Revisar las condiciones de tratamiento de datos de **Meta (WhatsApp)**, **Google** y **Anthropic** antes de usar datos reales.
+- [ ] Revisar las condiciones de tratamiento de datos de **Meta (WhatsApp)** y **Google** (incluye Gemini, que usan los agentes de WhatsApp, la transcripción, las fotos y Aura) antes de usar datos reales.
 - [ ] Evaluar si la base de datos debe inscribirse ante la **PRODHAB** (Agencia de Protección de Datos de los Habitantes). TODO ESTA CORRECTO
 
 ## 🟡 6. Cuentas para poner en producción (n8n es todo el backend)
@@ -79,7 +79,7 @@ La guía paso a paso está en [`n8n/README.md`](../n8n/README.md).
   - [x] Plantillas de Utilidad y Marketing: las 12 están aprobadas (cuenta "Dr.Laura Jimenez", 2 oct 2026).
   - [ ] **Verificar el negocio** (Meta Business Suite → Configuración → Centro de seguridad → Verificación del negocio). Sin eso Meta no deja crear `codigo_acceso` (Autenticación): responde "Esta cuenta de WhatsApp Business no tiene permiso para crear una plantilla de mensaje".
   - [ ] Con el negocio verificado: crear `codigo_acceso` (Autenticación → Código de acceso de un solo uso → *Copiar código*, idioma *Spanish*, recomendación de seguridad, vence en 15 minutos) y pasar `modoPruebas` a `no`. Mientras tanto, el cerebro sigue en `modoPruebas = si` y el código llega como texto a los `numerosPrueba` que escribieron a la clínica en las últimas 24 h.
-- [ ] **Anthropic:** crear una API key (console.anthropic.com).
+- [x] **Google Gemini:** API key de Google AI Studio en la credencial `Gemini - Aura y WhatsApp` de n8n (los 5 modelos y la transcripción) y en `GEMINI_API_KEY` de Vercel (Aura). Ya no se necesita cuenta de Anthropic.
 - [ ] **Google:**
   - [ ] Crear la **hoja de datos** con sus 8 pestañas (incluye `facturas` y `tratamientos`) y la fila de la doctora (con su número real).
   - [ ] Crear la hoja **Base clínica** (pestaña `BaseClinica`) a partir del CSV.

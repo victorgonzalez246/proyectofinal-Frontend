@@ -9,7 +9,7 @@ Según los requisitos, el frontend es **100 % puro** y **n8n es el único backen
 | Frontend | **React 19 + Vite + React Router** (ya en uso) | Mismo proyecto que la landing. Carga diferida del portal y del panel. Build estático para Vercel o Netlify. No tiene SDKs de bases de datos: solo `fetch` a webhooks. |
 | Animación | **framer-motion** | Transiciones del mapa, el check-in y las hojas. Respeta "reducir movimiento". |
 | Backend y orquestador | **n8n**: un único flujo, el *cerebro maestro* | Recibe todos los eventos en un webhook, los enruta con un Switch y ejecuta las rutinas programadas. La clínica ajusta reglas sin tocar código. |
-| Inteligencia | **Claude (Anthropic)** dentro de n8n: Opus 5.5 para los agentes y Haiku 4.5 para clasificar | Dos agentes con responsabilidades separadas (ver sección 3). |
+| Inteligencia | **Google Gemini** dentro de n8n: Gemini 3.5 Flash para los agentes y Gemini 3.5 Flash-Lite para clasificar, analizar check-ins y resumir; también transcribe las notas de voz. Aura (el asistente del sitio) usa Gemini 3.5 Flash-Lite | Dos agentes con responsabilidades separadas (ver sección 3). |
 | Datos | **Google Sheets** gestionado por n8n (Airtable es una alternativa equivalente) | La doctora puede leer y editar la base clínica, el plan de cada paciente y los paquetes sin herramientas técnicas. |
 | Agenda | **Google Calendar** | La agenda real de la doctora: la Recepcionista consulta la disponibilidad y reserva ahí. |
 | Mensajería | **WhatsApp Cloud API (Meta)** | Plantillas aprobadas para lo que inicia la clínica, y texto libre para responder en el chat. |
@@ -44,7 +44,7 @@ Según los requisitos, el frontend es **100 % puro** y **n8n es el único backen
 │            └─ Respaldo semanal de la hoja · aviso de fallas a la doctora                     │
 └───────┬─────────────────────┬──────────────────────┬──────────────────────┬──────────────────┘
         ▼                     ▼                      ▼                      ▼
-  Google Sheets/Drive   Google Calendar        Claude (Anthropic)     WhatsApp Cloud API
+  Google Sheets/Drive   Google Calendar        Google Gemini          WhatsApp Cloud API
   datos, base clínica   agenda de la doctora   solo datos mínimos     paciente · doctora
 ```
 
@@ -115,7 +115,7 @@ Las rutas de un solo recurso llevan el id en la query (`?id=`) y no en la ruta: 
 - **Pendiente antes de producción:**
   - Consentimiento informado para el uso de fotos y para el procesamiento con IA.
   - Bitácora de accesos y política de retención, conforme a la Ley 8968 de Protección de Datos de Costa Rica.
-  - Revisar los términos de tratamiento de datos de Google y Anthropic.
+  - Revisar los términos de tratamiento de datos de Google (Gemini incluido) y Meta.
   - Considerar las limitaciones de Google Sheets como almacén clínico: no tiene control de acceso por fila, así que ese control lo aplica n8n.
 
 ## 6. Probarlo hoy

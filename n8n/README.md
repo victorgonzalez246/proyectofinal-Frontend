@@ -36,7 +36,7 @@ Sitio (React, estático) ──HTTPS──► Flujo API ── Webhook por ruta 
 
 | Acción | Origen | Qué envía |
 |---|---|---|
-| Chat WhatsApp | La paciente escribe | Notas de voz → transcripción con Gemini; fotos → las ve el agente (Claude). Después, red de seguridad sin IA sobre el texto, la transcripción o el pie de foto (emergencias → doctora y 911), "BAJA" → deja de recibir promociones, y si no, Clasificador → **Enfermera Virtual** o **Recepcionista VIP**. Video, documento o ubicación → respuesta corta sin IA. Botones y listas cuentan como texto; reacciones, stickers y estados de entrega se ignoran |
+| Chat WhatsApp | La paciente escribe | Notas de voz → transcripción con Gemini; fotos → las ve el agente (Gemini, multimodal). Después, red de seguridad sin IA sobre el texto, la transcripción o el pie de foto (emergencias → doctora y 911), "BAJA" → deja de recibir promociones, y si no, Clasificador → **Enfermera Virtual** o **Recepcionista VIP**. Video, documento o ubicación → respuesta corta sin IA. Botones y listas cuentan como texto; reacciones, stickers y estados de entrega se ignoran |
 | Check-in | Portal | Analista emocional (IA) + regla fija de respaldo → alerta a la doctora |
 | SOS | Portal | Alerta inmediata a la doctora + contención a la paciente (sin IA) |
 | Cita recibida | Landing | Aviso a la paciente (con enlace a su portal) y a la doctora |
@@ -57,7 +57,7 @@ Sitio (React, estático) ──HTTPS──► Flujo API ── Webhook por ruta 
 | **Tareas** | Triaje 24/7 por WhatsApp y análisis emocional de cada check-in | Agenda por WhatsApp y resumen de 3 puntos antes de cada consulta |
 | **Herramientas** | `ficha_paciente` (perfil clínico), `base_clinica`, `despertar_doctora` | `ficha_recepcion` (sin datos clínicos), `disponibilidad_agenda`, `bloquear_agenda`, `registrar_cita` |
 | **No puede** | Reservar citas ni ver la agenda | Ver historiales clínicos ni responder temas de salud |
-| **Modelo** | Claude Opus 5.5 | Claude Opus 5.5 (el clasificador usa Claude Haiku 4.5) |
+| **Modelo** | Google Gemini 3.5 Flash (el análisis del check-in usa Gemini 3.5 Flash-Lite) | Google Gemini 3.5 Flash (el clasificador y el resumen usan Gemini 3.5 Flash-Lite) |
 
 ### Decisiones de seguridad
 
@@ -69,7 +69,7 @@ Sitio (React, estático) ──HTTPS──► Flujo API ── Webhook por ruta 
 - **Sesiones firmadas (HMAC), sin guardarlas:** la API valida la firma, la expiración y que el usuario siga existiendo con ese rol.
 - **Privacidad en n8n:** el flujo API no guarda ninguna ejecución, porque cada una carga las hojas completas. El cerebro no guarda las exitosas.
 
-> ⚠️ **Antes de producción:** los check-ins, historiales, mensajes y fotos del chat se envían a Anthropic, y las notas de voz a Google (Gemini) para transcribirlas. Se necesita el consentimiento informado de las pacientes (Ley 8968) y revisar las condiciones de uso de datos de Anthropic, Google y Meta.
+> ⚠️ **Antes de producción:** los check-ins, historiales, mensajes, fotos y notas de voz del chat se envían a Google (Gemini): los agentes, el clasificador, el análisis, el resumen y la transcripción usan Gemini. Se necesita el consentimiento informado de las pacientes (Ley 8968) y revisar las condiciones de uso de datos de Google y Meta.
 
 ## 1. Instalar n8n
 
@@ -107,8 +107,7 @@ Además, la hoja **Base clínica** (pestaña `BaseClinica`) se crea desde [`base
 | **Header Auth** · `Clínica · Secreto n8n` | Cerebro: *Webhook clínica*, nodos `API: …`, `ficha_*`, `registrar_cita`. API: *Enviar al cerebro* | Nombre `X-N8N-Secret`, valor = `n8nSecret` de *Configuración API* |
 | **Header Auth** · `WhatsApp Cloud API` | *Enviar WhatsApp*, *Responder por WhatsApp*, `despertar_doctora`, *Meta: datos del medio*, *Meta: descargar medio* | Nombre `Authorization`, valor `Bearer <token permanente de Meta>` (con `whatsapp_business_messaging`, que también permite descargar los medios) |
 | **WhatsApp OAuth API** | *WhatsApp entrante* | Client ID y Client Secret de la app de Meta |
-| **Anthropic** | Los 5 nodos `Modelo · …` | API key de Anthropic |
-| **Google Gemini(PaLM) Api** · `Gemini - Aura y WhatsApp` | *Gemini · Transcribir nota de voz* | API key de Google AI Studio (la misma `GEMINI_API_KEY`). Solo se guarda en n8n, nunca en el repo. En Cloud ya existe |
+| **Google Gemini(PaLM) Api** · `Gemini - Aura y WhatsApp` | Los 5 nodos `Modelo · …` (Google Gemini Chat Model) y *Gemini · Transcribir nota de voz* | API key de Google AI Studio (la misma `GEMINI_API_KEY`). Solo se guarda en n8n, nunca en el repo. En Cloud ya existe |
 | **Google Sheets OAuth2** | API: *Leer hojas*, *Escribir hojas*. Cerebro: `base_clinica` | Cuenta con acceso a las dos hojas |
 | **Google Calendar OAuth2** | `disponibilidad_agenda`, `bloquear_agenda` | Cuenta de la agenda de la doctora |
 | **Google Drive OAuth2** | *Respaldar hoja de datos* | Cuenta con acceso a la hoja de datos y a la carpeta de respaldos |
@@ -213,7 +212,7 @@ npm run probar:n8n    # los dos flujos en un n8n real y local (necesita n8n inst
 - **Cerebro:** recibe los eventos reales que emitió la API y comprueba cada WhatsApp: cita recibida, acceso de paciente y doctora, SOS, check-in, confirmación, cancelación y campaña. Además, el chat ("BAJA", una emergencia, y notas de voz, fotos y video con un simulador de los medios de Meta) y el aviso a la doctora cuando Google Sheets falla.
 
 **Queda por verificar con cuentas reales:**
-- las ramas con IA (sin credenciales de Anthropic solo se prueba su respaldo sin IA);
+- las ramas con IA (sin la credencial de Gemini solo se prueba su respaldo sin IA);
 - el envío real por la API de Meta;
 - el acceso real a Google (Sheets, Calendar, Drive).
 
@@ -233,10 +232,12 @@ Reimportar el JSON pisa los secretos, `apiUrl`, `modoPruebas`, `numerosPrueba` y
 1. Abre el nodo **Configuración**.
 2. En `graphApiVersion` cambia `v21.0` por `v26.0`. Nada más: todos los nodos de Meta leen la versión de ahí.
 
-**B. Credencial de Gemini** (transcribe las notas de voz)
+**B. Credencial de Gemini** (los 5 modelos de los agentes y la transcripción de las notas de voz)
 
 1. En Cloud **ya existe** la credencial `Gemini - Aura y WhatsApp` (tipo *Google Gemini(PaLM) Api*): no hay que crear nada. En una instalación nueva: *Overview → Credentials → Create credential → Google Gemini(PaLM) Api*.
-2. *Host*: `https://generativelanguage.googleapis.com` (el que trae). *API Key*: la `GEMINI_API_KEY` (de Google AI Studio). La key vive solo en n8n: no la escribas en el repo ni en un nodo. Los modelos Claude siguen con su credencial actual (la gestionada del AI Gateway de n8n) y *Modelo · Analista* y *Modelo · Resumen* se quedan en Claude Haiku 4.5: no los cambies.
+2. *Host*: `https://generativelanguage.googleapis.com` (el que trae). *API Key*: la `GEMINI_API_KEY` (de Google AI Studio). La key vive solo en n8n: no la escribas en el repo ni en un nodo.
+
+> **Modelos ya en Gemini (oct 2026).** En Cloud, los 5 nodos `Modelo · …` ya son *Google Gemini Chat Model* (antes eran Claude con la credencial gestionada del AI Gateway de n8n): *Modelo · Enfermera* y *Modelo · Recepcionista* → `models/gemini-3.5-flash`; *Modelo · Clasificador* (temperatura 0), *Modelo · Analista* (0) y *Modelo · Resumen* (0.2) → `models/gemini-3.5-flash-lite`. Ningún nodo usa ya Anthropic. Para asignar la credencial a mano: abre cada nodo `Modelo · …` → *Credential to connect with* → **Gemini - Aura y WhatsApp**. Al importar el JSON del repo no hace falta: los nodos traen la credencial **por nombre** (sin id ni key) y n8n la enlaza sola si existe una credencial *Google Gemini(PaLM) Api* con ese nombre exacto (comprobado con `n8n import:workflow`). Si no existe, créala antes o asígnala en los 6 nodos de Gemini: mientras falte, n8n no ejecuta el cerebro (por eso `probar:n8n` la quita de su copia).
 3. El token de Meta (credencial `WhatsApp Cloud API`) ya sirve para descargar audios y fotos: Meta pide el mismo token con permiso `whatsapp_business_messaging` ([Media API](https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media)). La URL de cada medio dura 5 minutos; el flujo la usa al instante.
 
 **C. Nodos nuevos: pegarlos de una vez**
@@ -344,6 +345,6 @@ Reimportar el JSON pisa los secretos, `apiUrl`, `modoPruebas`, `numerosPrueba` y
 - Foto con pie de foto → la Enfermera comenta la foto. Un video o un documento → «puedo leer texto, escuchar notas de voz y ver fotos…».
 - Desde un número que **no** está en `numerosPrueba`: un audio o una foto no se descargan ni se responden.
 
-**Límites de tamaño.** WhatsApp limita los audios a 16 MB y las fotos a 5 MB (lo mismo que acepta Claude por imagen); *Revisar descarga* rechaza lo que pase de ahí con una respuesta amable. En n8n Cloud el límite real es la memoria de la instancia: 320 MiB en Trial/Starter, 640 MiB en Pro-1 y 1280 MiB en Pro-2 (ver *Cloud data management* en la documentación de n8n). Un audio o una foto de WhatsApp caben de sobra, pero no conviene procesar muchos a la vez en Starter. El agente admite hasta 50 MB por imagen.
+**Límites de tamaño.** WhatsApp limita los audios a 16 MB y las fotos a 5 MB (Gemini acepta más: hasta 20 MB por petición); *Revisar descarga* rechaza lo que pase de ahí con una respuesta amable. En n8n Cloud el límite real es la memoria de la instancia: 320 MiB en Trial/Starter, 640 MiB en Pro-1 y 1280 MiB en Pro-2 (ver *Cloud data management* en la documentación de n8n). Un audio o una foto de WhatsApp caben de sobra, pero no conviene procesar muchos a la vez en Starter. El agente admite hasta 50 MB por imagen.
 
-**Privacidad.** El nodo nativo de Gemini sube el audio a la *Files API* de Google, que lo borra sola a las 48 h. Las fotos van a Anthropic junto con el mensaje. Ninguna de las dos se guarda en n8n: las ejecuciones exitosas del cerebro no se conservan.
+**Privacidad.** El nodo nativo de Gemini sube el audio a la *Files API* de Google, que lo borra sola a las 48 h. Las fotos van a Google (Gemini) junto con el mensaje, en la misma petición al modelo. Ninguna de las dos se guarda en n8n: las ejecuciones exitosas del cerebro no se conservan.

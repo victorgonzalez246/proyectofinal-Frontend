@@ -925,7 +925,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Límites de WhatsApp: audio 16 MB, imagen 5 MB (también el máximo que acepta Claude por imagen)\nconst LIMITE_MB = { audio: 16, imagen: 5 };\nconst item = $('Revisar adjunto').first().json;\nconst p = item.payload;\nconst info = $('Meta: datos del medio').first().json || {};\nconst entrada = $input.first();\nconst archivo = entrada.binary?.data;\nconst mimeType = String(info.mime_type || archivo?.mimeType || '').split(';')[0].trim();\nconst bytes = Number(info.file_size) || 0;\nconst ok = archivo && !entrada.json?.error && bytes <= LIMITE_MB[p.tipo] * 1024 * 1024\n  && mimeType.startsWith(p.tipo === 'audio' ? 'audio/' : 'image/');\nif (!ok) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];\nreturn [{ json: item, binary: { data: { ...archivo, mimeType } } }];\n"
+        "jsCode": "// Límites de WhatsApp: audio 16 MB, imagen 5 MB (el tope lo pone WhatsApp; Gemini acepta hasta 20 MB por petición)\nconst LIMITE_MB = { audio: 16, imagen: 5 };\nconst item = $('Revisar adjunto').first().json;\nconst p = item.payload;\nconst info = $('Meta: datos del medio').first().json || {};\nconst entrada = $input.first();\nconst archivo = entrada.binary?.data;\nconst mimeType = String(info.mime_type || archivo?.mimeType || '').split(';')[0].trim();\nconst bytes = Number(info.file_size) || 0;\nconst ok = archivo && !entrada.json?.error && bytes <= LIMITE_MB[p.tipo] * 1024 * 1024\n  && mimeType.startsWith(p.tipo === 'audio' ? 'audio/' : 'image/');\nif (!ok) return [{ json: { ...item, payload: { ...p, tipo: 'medio_fallido' } } }];\nreturn [{ json: item, binary: { data: { ...archivo, mimeType } } }];\n"
       },
       "id": "aff24da1-430b-4fb2-a738-88e0eb06f004",
       "name": "Revisar descarga",
@@ -1006,7 +1006,12 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini - Aura y WhatsApp"
+        }
+      }
     },
     {
       "parameters": {
@@ -1253,23 +1258,24 @@
     },
     {
       "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "id",
-          "value": "claude-haiku-4-5-20251001"
-        },
+        "modelName": "models/gemini-3.5-flash-lite",
         "options": {
           "temperature": 0
         }
       },
       "id": "c902f3ec-5f93-4f08-ac23-31cd9d4ee8d3",
       "name": "Modelo · Clasificador",
-      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-      "typeVersion": 1.6,
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
       "position": [
         1600,
         -220
-      ]
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini - Aura y WhatsApp"
+        }
+      }
     },
     {
       "parameters": {
@@ -1293,21 +1299,22 @@
     },
     {
       "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "id",
-          "value": "claude-opus-5-5"
-        },
+        "modelName": "models/gemini-3.5-flash",
         "options": {}
       },
       "id": "c03680bb-bd1a-4152-a327-ecc9ceda08eb",
       "name": "Modelo · Enfermera",
-      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-      "typeVersion": 1.6,
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
       "position": [
         1780,
         -300
-      ]
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini - Aura y WhatsApp"
+        }
+      }
     },
     {
       "parameters": {
@@ -1403,21 +1410,22 @@
     },
     {
       "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "id",
-          "value": "claude-opus-5-5"
-        },
+        "modelName": "models/gemini-3.5-flash",
         "options": {}
       },
       "id": "8be6c467-6b34-4b3a-af39-ccb494c5186d",
       "name": "Modelo · Recepcionista",
-      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-      "typeVersion": 1.6,
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
       "position": [
         1780,
         140
-      ]
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini - Aura y WhatsApp"
+        }
+      }
     },
     {
       "parameters": {
@@ -1585,21 +1593,24 @@
     },
     {
       "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "id",
-          "value": "claude-opus-5-5"
-        },
-        "options": {}
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {
+          "temperature": 0
+        }
       },
       "id": "d3f0bc3c-e8e9-4285-a321-29a2c599db3b",
       "name": "Modelo · Analista",
-      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-      "typeVersion": 1.6,
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
       "position": [
         1340,
         660
-      ]
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini - Aura y WhatsApp"
+        }
+      }
     },
     {
       "parameters": {
@@ -1714,21 +1725,24 @@
     },
     {
       "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "id",
-          "value": "claude-opus-5-5"
-        },
-        "options": {}
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {
+          "temperature": 0.2
+        }
       },
       "id": "e0caea2a-25a1-4673-a5fb-d398bb8b58bb",
       "name": "Modelo · Resumen",
-      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-      "typeVersion": 1.6,
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
       "position": [
         1540,
         1380
-      ]
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini - Aura y WhatsApp"
+        }
+      }
     },
     {
       "parameters": {
@@ -2032,7 +2046,7 @@
     },
     {
       "parameters": {
-        "content": "## 🤖 Equipo de agentes\n**Red de seguridad (sin IA)** → emergencias directo a la doctora. **Clasificador** → **Agente IA 1 · Enfermera Virtual** (triaje clínico, puede despertar a la doctora) o **Agente IA 2 · Recepcionista VIP** (agenda y reservas). Cada agente tiene su propio modelo, memoria y herramientas: la recepcionista no ve datos clínicos y la enfermera no puede reservar.",
+        "content": "## 🤖 Equipo de agentes\n**Red de seguridad (sin IA)** → emergencias directo a la doctora. **Clasificador** → **Agente IA 1 · Enfermera Virtual** (triaje clínico, puede despertar a la doctora) o **Agente IA 2 · Recepcionista VIP** (agenda y reservas). Cada agente tiene su propio modelo (Google Gemini, credencial *Gemini - Aura y WhatsApp*), memoria y herramientas: la recepcionista no ve datos clínicos y la enfermera no puede reservar.",
         "width": 1480,
         "height": 180,
         "color": 5
