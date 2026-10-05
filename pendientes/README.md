@@ -3,7 +3,7 @@
 Todo lo que se podía resolver desde el código ya está hecho y se comprueba con `npm run verificar`.
 Aquí queda **solo lo que requiere tus cuentas, tus decisiones o datos reales**, en orden de prioridad.
 
-Marca cada casilla al terminar. El plan de desarrollo que sigue está en [proximos-desarrollos.md](proximos-desarrollos.md).
+Marca cada casilla al terminar. El plan de desarrollo que sigue está en [proximos-desarrollos.md](proximos-desarrollos.md). Lo que viene después de la presentación (Chatwoot, producción con pacientes reales) está en [hoja-de-ruta-ecosistema.md](hoja-de-ruta-ecosistema.md).
 
 ---
 
