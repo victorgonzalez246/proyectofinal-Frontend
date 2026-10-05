@@ -1,0 +1,133 @@
+/* ============================================================
+   LECTOR DE VOZ — Botón flotante + controles de lectura
+   ============================================================ */
+
+.lector {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+/* Botón principal "Leer página" */
+.lector-btn--principal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  gap: 0.5rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: 99px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  background: var(--p-olive, #6B7F5E);
+  color: var(--p-on-strong, #fff);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lector-btn--principal:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+
+.lector-btn--principal:active {
+  transform: scale(0.97);
+}
+
+.lector-btn__texto {
+  white-space: nowrap;
+}
+
+/* Panel de controles (cuando está leyendo) */
+.lector-controles {
+  background: var(--p-surface, #F8F9F5);
+  border: 1px solid var(--p-line, #ddd);
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14);
+  overflow: hidden;
+  min-width: 14rem;
+}
+
+.lector-progreso {
+  height: 3px;
+  background: var(--p-line, #ddd);
+}
+
+.lector-progreso__barra {
+  height: 100%;
+  background: var(--p-olive, #6B7F5E);
+  transition: width 0.3s ease;
+  border-radius: 0 99px 99px 0;
+}
+
+.lector-botones {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.65rem;
+}
+
+/* Botones individuales de control */
+.lector-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: transparent;
+  color: var(--p-ink, #1a1a1a);
+  font-family: inherit;
+  transition: background 0.15s ease;
+}
+
+.lector-btn:hover {
+  background: var(--p-olive-soft, rgba(107, 127, 94, 0.12));
+}
+
+.lector-btn--vel {
+  font-size: 0.78rem;
+  font-weight: 700;
+  width: auto;
+  padding: 0 0.6rem;
+  border-radius: 99px;
+  background: var(--p-olive-soft, rgba(107, 127, 94, 0.1));
+}
+
+.lector-btn--detener {
+  color: var(--p-alert, #c44);
+  margin-left: auto;
+}
+
+.lector-btn--detener:hover {
+  background: rgba(200, 60, 60, 0.1);
+}
+
+/* Resaltado del texto que se está leyendo */
+.lector-resaltado {
+  background: color-mix(in srgb, var(--p-olive, #6B7F5E) 15%, transparent) !important;
+  outline: 2px solid var(--p-olive, #6B7F5E);
+  outline-offset: 3px;
+  border-radius: 4px;
+  transition: background 0.2s ease, outline 0.2s ease;
+}
+
+
+[data-motion="reduced"] .lector-btn--principal {
+  transition: none;
+}
+
+[data-motion="reduced"] .lector-resaltado {
+  transition: none;
+}
+
+[data-motion="reduced"] .lector-progreso__barra {
+  transition: none;
+}

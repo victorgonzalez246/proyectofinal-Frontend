@@ -100,6 +100,25 @@
 }
 .p-skip:focus { top: 0.75rem; }
 
+/* Clase utilitaria: visible solo para lectores de pantalla (TalkBack, VoiceOver, NVDA) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Foco mejorado en alto contraste para TalkBack + teclado */
+[data-contrast="high"] :focus-visible {
+  outline: 3px solid var(--p-ink);
+  outline-offset: 2px;
+}
+
 /* ── Modo discreto ───────────────────────────────────────── */
 .sensitive {
   transition: filter 0.35s var(--p-ease), opacity 0.35s var(--p-ease);

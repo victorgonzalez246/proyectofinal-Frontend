@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 import { House, Route, Images, ListChecks, Gem, Receipt, Pill, Eye, EyeOff, Moon, Sun, Accessibility } from 'lucide-react';
@@ -9,8 +9,21 @@ import { usePreferences } from './usePreferences.js';
 import SosButton from './components/SosButton.jsx';
 import SettingsSheet from './components/SettingsSheet.jsx';
 import AsistenteVirtual from '../components/asistente/AsistenteVirtual.jsx';
+import { detenerLectura } from '../components/ui/lectura.js';
 import { RECOVERY_WINDOW_DAYS } from './config.js';
 import { daysBetween } from './lib/format.js';
+
+// Mapa de rutas a títulos legibles para el anunciador de TalkBack / VoiceOver
+const TITULOS_PAGINA = {
+  '/portal': 'Inicio',
+  '/portal/mapa': 'Mapa de belleza',
+  '/portal/cuidados': 'Cuidados',
+  '/portal/evolucion': 'Evolución',
+  '/portal/clinica': 'Mi clínica',
+  '/portal/pagos': 'Mis pagos',
+  '/portal/tratamientos': 'Tratamientos',
+  '/portal/facturas': 'Mis facturas',
+};
 // Nota: los nombres de los archivos de marca están cruzados; logo-isotipo.png es el logo blanco con transparencia
 import logoColor from '../assets/brand/logo-main.png';
 import logoWhite from '../assets/brand/logo-isotipo.png';
@@ -91,6 +104,23 @@ export default function PortalLayout() {
     [user, state, load, toggleCare, addCheckin, recoveryDay, inRecovery, prefs]
   );
 
+  // ── Anunciador de ruta para lectores de pantalla (TalkBack, VoiceOver) ──
+  // Cuando el usuario navega, se actualiza un <div aria-live> con el nombre
+  // de la sección para que el lector de pantalla la anuncie en voz alta.
+  const [anuncio, setAnuncio] = useState('');
+  const mainRef = useRef(null);
+  useEffect(() => {
+    detenerLectura(); // la lectura en voz alta es de la sección que se deja
+    const titulo = TITULOS_PAGINA[location.pathname] || '';
+    if (titulo) {
+      // Pequeño delay para que el live region detecte el cambio
+      const t = setTimeout(() => setAnuncio(`Navegaste a: ${titulo}`), 150);
+      // Mover el foco al main para que TalkBack empiece a leer desde el contenido
+      mainRef.current?.focus();
+      return () => clearTimeout(t);
+    }
+  }, [location.pathname]);
+
   return (
     <MotionConfig reducedMotion={prefs.reduceMotion ? 'always' : 'user'}>
       <div
@@ -100,6 +130,16 @@ export default function PortalLayout() {
         data-contrast={prefs.contrast}
         data-motion={prefs.reduceMotion ? 'reduced' : 'full'}
       >
+        {/* Anunciador invisible para lectores de pantalla */}
+        <div
+          className="sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {anuncio}
+        </div>
+
         <a href="#portal-main" className="p-skip">Saltar al contenido</a>
         <div className="p-shell">
           <header className="p-header">
@@ -149,7 +189,7 @@ export default function PortalLayout() {
             </p>
           </nav>
 
-          <main id="portal-main" className="p-main" tabIndex={-1}>
+          <main id="portal-main" ref={mainRef} className="p-main" tabIndex={-1}>
             <PortalContext.Provider value={value}>
               {state.loading ? (
                 <p className="p-small" role="status">Cargando tu portal…</p>

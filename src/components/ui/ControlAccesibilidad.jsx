@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Accessibility, X } from 'lucide-react';
+import LectorVoz from './LectorVoz.jsx';
+import SelectorDaltonismo from './SelectorDaltonismo.jsx';
+import GuiaLectorPantalla from './GuiaLectorPantalla.jsx';
 import './accesibilidad.css';
 
 const TAMANOS = [
@@ -23,11 +26,12 @@ function Interruptor({ id, checked, onChange, describedBy }) {
 }
 
 /**
- * Selector de accesibilidad: tamaño de texto, alto contraste y reducir animaciones.
+ * Selector de accesibilidad: tamaño de texto, alto contraste, reducir animaciones, daltonismo,
+ * lectura en voz alta y guía de TalkBack / VoiceOver.
  * Usa las mismas preferencias que el portal (usePreferences), así se conservan en todo el sitio.
- * @param {{ prefs: object, update: (patch: object) => void, variante?: 'flotante' | 'cabecera' }} props
+ * @param {{ prefs: object, update: (patch: object) => void, variante?: 'flotante' | 'cabecera', contenedorLector?: string }} props
  */
-export default function ControlAccesibilidad({ prefs, update, variante = 'flotante' }) {
+export default function ControlAccesibilidad({ prefs, update, variante = 'flotante', contenedorLector }) {
   const [abierto, setAbierto] = useState(false);
   const botonRef = useRef(null);
   const panelRef = useRef(null);
@@ -58,7 +62,8 @@ export default function ControlAccesibilidad({ prefs, update, variante = 'flotan
     };
   }, [abierto]);
 
-  const personalizado = prefs.textScale !== 1 || prefs.contrast === 'high' || prefs.reduceMotion;
+  const daltonismo = prefs.daltonismo || 'ninguno';
+  const personalizado = prefs.textScale !== 1 || prefs.contrast === 'high' || prefs.reduceMotion || daltonismo !== 'ninguno';
 
   return (
     <div className={`a11y a11y--${variante}`}>
@@ -134,11 +139,20 @@ export default function ControlAccesibilidad({ prefs, update, variante = 'flotan
         </div>
         <p className="a11y-ayuda" id={`${movimientoId}-ayuda`}>Detiene los movimientos decorativos.</p>
 
+        <div className="a11y-seccion">
+          <SelectorDaltonismo valor={daltonismo} onChange={(modo) => update({ daltonismo: modo })} />
+        </div>
+
+        <div className="a11y-seccion">
+          <LectorVoz contenedorId={contenedorLector || 'portal-main'} />
+          <GuiaLectorPantalla />
+        </div>
+
         {personalizado && (
           <button
             type="button"
             className="a11y-restablecer"
-            onClick={() => update({ textScale: 1, contrast: 'normal', reduceMotion: false })}
+            onClick={() => update({ textScale: 1, contrast: 'normal', reduceMotion: false, daltonismo: 'ninguno' })}
           >
             Restablecer
           </button>

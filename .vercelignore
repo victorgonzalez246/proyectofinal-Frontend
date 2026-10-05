@@ -17,4 +17,5 @@ datos-demo-sheets.xlsx
 # Nunca subir secretos: en Vercel las variables se configuran en el proyecto
 .env
 .env.local
-.env.*.local
+.env*
+!.env.example

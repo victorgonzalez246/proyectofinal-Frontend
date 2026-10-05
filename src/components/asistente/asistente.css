@@ -258,3 +258,7 @@ html.a11y-sin-animaciones .asis-escribiendo span { animation: none !important; }
 @media (forced-colors: active) {
   .asis-lanzador, .asis-enviar, .asis-panel { border: 1px solid CanvasText; }
 }
+
+/* Controles de lectura en voz alta cuando Aura la activa desde el chat */
+.asis-lectura { padding: 0.6rem 0.75rem 0; border-top: 1px solid var(--asis-line); }
+.asis-lectura .lector-controles { min-width: 0; box-shadow: none; }

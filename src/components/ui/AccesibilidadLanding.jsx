@@ -18,7 +18,7 @@ export default function AccesibilidadLanding({ children }) {
   return (
     <MotionConfig reducedMotion={prefs.reduceMotion ? 'always' : 'user'}>
       {children}
-      <ControlAccesibilidad prefs={prefs} update={update} variante="flotante" />
+      <ControlAccesibilidad prefs={prefs} update={update} variante="flotante" contenedorLector="contenido" />
     </MotionConfig>
   );
 }

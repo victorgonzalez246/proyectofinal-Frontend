@@ -121,3 +121,84 @@
   .a11y-switch { border: 1px solid CanvasText; }
   .a11y-switch[aria-checked='true']::after { background: CanvasText; }
 }
+
+/* Panel con más opciones: en pantallas bajas se desplaza por dentro en vez de salirse */
+.a11y-panel { max-height: calc(100dvh - 11.5rem); overflow-y: auto; overscroll-behavior: contain; }
+.a11y--cabecera .a11y-panel { max-height: calc(100dvh - 5.5rem); }
+.a11y-seccion { margin-top: 0.5rem; padding-top: 0.85rem; border-top: 1px solid var(--a11y-line); display: grid; gap: 0.6rem; }
+
+/* ============================================================
+   DALTONISMO (panel de accesibilidad y ajustes del portal)
+   ============================================================ */
+.dalt { border: 0; margin: 0; padding: 0; min-width: 0; }
+.dalt__titulo {
+  padding: 0;
+  margin-bottom: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--p-ink-soft, #4E453B);
+}
+.dalt__opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; }
+.dalt__opcion {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--p-line-strong, rgba(147, 130, 109, 0.30));
+  background: var(--p-surface, #FFFFFF);
+  color: var(--p-ink, #1C1B1A);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.dalt__opcion--ancha { grid-column: 1 / -1; align-items: center; }
+.dalt__opcion:hover { background: var(--p-bg, #F5F3EF); }
+/* El radio nativo sigue ahí para TalkBack y el teclado; se ve la tarjeta */
+.dalt__opcion input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.dalt__opcion:has(input:checked) {
+  border-color: var(--p-olive, #5C6651);
+  background: var(--p-olive-soft, rgba(92, 102, 81, 0.10));
+  box-shadow: inset 0 0 0 1px var(--p-olive, #5C6651);
+}
+.dalt__opcion:has(input:focus-visible) { outline: 3px solid var(--p-olive, #5C6651); outline-offset: 2px; }
+.dalt__muestra {
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.1rem;
+  border-radius: 50%;
+  background: conic-gradient(#D0473F 0 25%, #4E9A4A 0 50%, #3F6FC4 0 75%, #E3B23C 0);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.dalt__opcion--ancha .dalt__muestra { margin-top: 0; }
+.dalt__muestra[data-modo='acromatopsia'] { filter: grayscale(1); }
+.dalt__texto { display: grid; gap: 0.1rem; min-width: 0; }
+.dalt__nombre { font-size: 0.84rem; font-weight: 600; line-height: 1.2; }
+.dalt__hint { font-size: 0.7rem; line-height: 1.25; color: var(--p-ink-soft, #4E453B); }
+
+/* ============================================================
+   GUÍA TALKBACK / VOICEOVER
+   ============================================================ */
+.guia-lp { border-radius: 0.85rem; background: var(--p-bg, #F5F3EF); color: var(--p-ink, #1C1B1A); }
+.guia-lp summary {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  padding: 0 0.85rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 0.85rem;
+}
+.guia-lp summary:focus-visible { outline: 3px solid var(--p-olive, #5C6651); outline-offset: 2px; }
+.guia-lp__cuerpo { display: grid; gap: 0.5rem; padding: 0 0.85rem 0.85rem; font-size: 0.8rem; line-height: 1.45; color: var(--p-ink-soft, #4E453B); }
+.guia-lp__cuerpo strong { color: var(--p-ink, #1C1B1A); }
+.guia-lp__cuerpo ul { display: grid; gap: 0.35rem; padding-left: 1.1rem; list-style: disc; }
+
+@media (forced-colors: active) {
+  .dalt__opcion:has(input:checked) { border: 2px solid Highlight; }
+}
