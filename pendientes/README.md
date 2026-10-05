@@ -75,7 +75,7 @@ La guía paso a paso está en [`n8n/README.md`](../n8n/README.md).
 
 - [ ] **n8n 2.x publicado por HTTPS** (n8n Cloud o un servidor), con `NODE_FUNCTION_ALLOW_BUILTIN=crypto`.
 - [ ] **Meta / WhatsApp Business:**
-  - [ ] Crear la app, conectar el número y generar un token permanente.
+  - [x] Crear la app, conectar el número y generar un token permanente.
   - [x] Plantillas de Utilidad y Marketing: las 12 están aprobadas (cuenta "Dr.Laura Jimenez", 2 oct 2026).
   - [ ] **Verificar el negocio** (Meta Business Suite → Configuración → Centro de seguridad → Verificación del negocio). Sin eso Meta no deja crear `codigo_acceso` (Autenticación): responde "Esta cuenta de WhatsApp Business no tiene permiso para crear una plantilla de mensaje".
   - [ ] Con el negocio verificado: crear `codigo_acceso` (Autenticación → Código de acceso de un solo uso → *Copiar código*, idioma *Spanish*, recomendación de seguridad, vence en 15 minutos) y pasar `modoPruebas` a `no`. Mientras tanto, el cerebro sigue en `modoPruebas = si` y el código llega como texto a los `numerosPrueba` que escribieron a la clínica en las últimas 24 h.

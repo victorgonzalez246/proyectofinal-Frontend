@@ -105,7 +105,7 @@ Además, la hoja **Base clínica** (pestaña `BaseClinica`) se crea desde [`base
 | Credencial (tipo en n8n) | Se usa en | Qué poner |
 |---|---|---|
 | **Header Auth** · `Clínica · Secreto n8n` | Cerebro: *Webhook clínica*, nodos `API: …`, `ficha_*`, `registrar_cita`. API: *Enviar al cerebro* | Nombre `X-N8N-Secret`, valor = `n8nSecret` de *Configuración API* |
-| **Header Auth** · `WhatsApp Cloud API` | *Enviar WhatsApp*, *Responder por WhatsApp*, `despertar_doctora`, *Meta: datos del medio*, *Meta: descargar medio* | Nombre `Authorization`, valor `Bearer <token permanente de Meta>` (con `whatsapp_business_messaging`, que también permite descargar los medios) |
+| **Header Auth** · `WhatsApp Cloud API` (en Cloud se llama `Header Auth account`) | *Enviar WhatsApp*, *Responder por WhatsApp*, `despertar_doctora`, *Meta: datos del medio*, *Meta: descargar medio* | Nombre `Authorization`, valor `Bearer <token permanente de Meta>` (con `whatsapp_business_messaging`, que también permite descargar los medios) |
 | **WhatsApp OAuth API** | *WhatsApp entrante* | Client ID y Client Secret de la app de Meta |
 | **Google Gemini(PaLM) Api** · `Gemini - Aura y WhatsApp` | Los 5 nodos `Modelo · …` (Google Gemini Chat Model) y *Gemini · Transcribir nota de voz* | API key de Google AI Studio (la misma `GEMINI_API_KEY`). Solo se guarda en n8n, nunca en el repo. En Cloud ya existe |
 | **Google Sheets OAuth2** | API: *Leer hojas*, *Escribir hojas*. Cerebro: `base_clinica` | Cuenta con acceso a las dos hojas |
