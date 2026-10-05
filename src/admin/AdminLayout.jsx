@@ -4,6 +4,7 @@ import { CalendarCheck, CalendarDays, ChartColumn, Users, BellRing, Megaphone, B
 import { useAuth } from '../hooks/useAuth.js';
 import { usePreferences } from '../portal/usePreferences.js';
 import AsistenteVirtual from '../components/asistente/AsistenteVirtual.jsx';
+import { detenerLectura } from '../components/ui/lectura.js';
 import { contextoParaAura } from './contextoAura.js';
 import ControlAccesibilidad from '../components/ui/ControlAccesibilidad.jsx';
 // Nota: los nombres de los archivos de marca están cruzados; logo-isotipo.png es el logo blanco con transparencia
@@ -51,6 +52,7 @@ export default function AdminLayout() {
 
   // Anunciador de ruta para TalkBack / VoiceOver
   useEffect(() => {
+    detenerLectura(); // la lectura en voz alta es de la sección que se deja
     const titulo = TITULOS_ADMIN[location.pathname] || '';
     if (titulo) {
       const t = setTimeout(() => setAnuncio(`Navegaste a: ${titulo}`), 150);

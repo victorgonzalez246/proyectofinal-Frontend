@@ -1,8 +1,12 @@
-import { Fragment, useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
 import { Sparkles, X, SendHorizontal, Square, RotateCcw, MessageCircle } from 'lucide-react';
 import { preguntarAlAsistente } from '../../services/asistenteService.js';
 import { CLINICA } from '../../config/clinica.js';
+import { actualizarPreferencias } from '../../portal/usePreferences.js';
+import LectorVoz from '../ui/LectorVoz.jsx';
+import { detenerLectura, estadoLectura, leerPagina, pausarLectura, reanudarLectura, suscribirLectura } from '../ui/lectura.js';
+import { interpretarComando, respuestaComando } from './comandosAccesibilidad.js';
 import './asistente.css';
 
 // Textos por perfil: pacientes (landing y portal) y la doctora (panel, con los datos del panel como contexto)
@@ -15,6 +19,7 @@ const TEXTOS = {
       '¿Cómo es la primera valoración?',
       'Cuidados después del ácido hialurónico',
       '¿Cómo agendo una cita?',
+      'Lee la página en voz alta',
     ],
     lanzador: '¿Dudas? Pregúntale a Aura',
     subtitulo: 'Orientación general con IA · no reemplaza la valoración médica',
@@ -34,6 +39,12 @@ const TEXTOS = {
     placeholder: 'Pregúntele a Aura sobre su panel…',
   },
 };
+
+// Contenido que lee el lector de voz según dónde está Aura
+const CONTENEDOR_LECTURA = { landing: 'contenido', portal: 'portal-main', admin: 'admin-main' };
+
+// Texto plano para el anuncio de lectores de pantalla (sin marcas de negrita ni viñetas)
+const textoPlano = (t) => t.replace(/\*\*/g, '').replace(/^\s*[-*•]\s+/gm, '').trim();
 
 // Formato mínimo y seguro (sin innerHTML): **negritas**, listas con "- " y párrafos
 function Negritas({ texto }) {
@@ -80,6 +91,9 @@ export default function AsistenteVirtual({ variante = 'landing', obtenerContexto
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
+  const [anuncio, setAnuncio] = useState(''); // respuesta completa para TalkBack / VoiceOver, una sola vez
+  const lectura = useSyncExternalStore(suscribirLectura, estadoLectura, estadoLectura);
+  const contenedorLectura = CONTENEDOR_LECTURA[variante] || 'contenido';
   const abortRef = useRef(null);
   const lanzadorRef = useRef(null);
   const campoRef = useRef(null);
@@ -115,24 +129,52 @@ export default function AsistenteVirtual({ variante = 'landing', obtenerContexto
   // Cancela una respuesta en curso si el componente se desmonta
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  // Órdenes de accesibilidad (daltonismo, lectura, contraste, texto): las cumple el navegador, sin IA
+  const ejecutarComando = (pregunta, cmd) => {
+    let lecturaOk = true;
+    if (cmd.tipo === 'daltonismo') actualizarPreferencias({ daltonismo: cmd.modo });
+    if (cmd.tipo === 'contraste') actualizarPreferencias({ contrast: cmd.activo ? 'high' : 'normal' });
+    if (cmd.tipo === 'texto') actualizarPreferencias({ textScale: cmd.escala });
+    if (cmd.tipo === 'lectura') {
+      if (cmd.accion === 'leer') lecturaOk = leerPagina(contenedorLectura);
+      if (cmd.accion === 'detener') detenerLectura();
+      if (cmd.accion === 'pausar') pausarLectura();
+      if (cmd.accion === 'reanudar') reanudarLectura();
+    }
+    const respuesta = respuestaComando(cmd, { lecturaOk });
+    setMensajes((prev) => [...prev, { role: 'user', content: pregunta }, { role: 'assistant', content: respuesta }]);
+    // Si empieza la lectura en voz alta no se anuncia nada: las dos voces se pisarían
+    if (!(cmd.tipo === 'lectura' && cmd.accion === 'leer' && lecturaOk)) setAnuncio(`Aura respondió: ${textoPlano(respuesta)}`);
+  };
+
   const enviar = async (texto) => {
     const pregunta = texto.trim();
     if (!pregunta || enviando) return;
     setError('');
     setAviso('');
+    setAnuncio('');
     setBorrador('');
+    const cmd = interpretarComando(pregunta);
+    if (cmd) {
+      ejecutarComando(pregunta, cmd);
+      campoRef.current?.focus();
+      return;
+    }
     const historial = [...mensajes, { role: 'user', content: pregunta }];
     setMensajes([...historial, { role: 'assistant', content: '' }]);
     setEnviando(true);
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const agregar = (fragmento) =>
+    let completo = '';
+    const agregar = (fragmento) => {
+      completo += fragmento;
       setMensajes((prev) => {
         const ultimo = prev.at(-1);
         if (ultimo?.role !== 'assistant') return prev; // la conversación se reinició
         return [...prev.slice(0, -1), { ...ultimo, content: ultimo.content + fragmento }];
       });
+    };
 
     try {
       const contexto = obtenerContexto
@@ -140,6 +182,7 @@ export default function AsistenteVirtual({ variante = 'landing', obtenerContexto
         : '';
       const { aviso: nota } = await preguntarAlAsistente(historial, agregar, controller.signal, { perfil, contexto });
       setAviso(nota);
+      if (completo.trim()) setAnuncio(`Aura respondió: ${textoPlano(completo)}`);
     } catch (err) {
       setError(err.message);
       setBorrador(pregunta); // la pregunta vuelve al campo para reintentar
@@ -161,6 +204,7 @@ export default function AsistenteVirtual({ variante = 'landing', obtenerContexto
     setMensajes([]);
     setError('');
     setAviso('');
+    setAnuncio('');
     campoRef.current?.focus();
   };
 
@@ -220,7 +264,9 @@ export default function AsistenteVirtual({ variante = 'landing', obtenerContexto
           </div>
         </header>
 
-        <div className="asis-mensajes" role="log" aria-live="polite" aria-relevant="additions text" aria-busy={enviando}>
+        {/* El historial no se anuncia mientras llega (TalkBack leería cada fragmento):
+            la respuesta completa se anuncia una vez, en la región de estado de abajo */}
+        <div className="asis-mensajes" role="log" aria-live="off" aria-busy={enviando}>
           <div className="asis-msg asis-msg--asistente">
             <TextoFormateado texto={textos.bienvenida} />
           </div>
@@ -265,6 +311,14 @@ export default function AsistenteVirtual({ variante = 'landing', obtenerContexto
           )}
           <div ref={finRef} />
         </div>
+
+        <p className="asis-sr" role="status" aria-live="polite" aria-atomic="true">{anuncio}</p>
+
+        {lectura.estado !== 'inactivo' && (
+          <div className="asis-lectura">
+            <LectorVoz contenedorId={contenedorLectura} />
+          </div>
+        )}
 
         <form className="asis-form" onSubmit={onSubmit}>
           <label htmlFor={campoId} className="asis-sr">Escribe tu pregunta</label>

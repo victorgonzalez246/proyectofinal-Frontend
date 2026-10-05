@@ -9,6 +9,7 @@ import { usePreferences } from './usePreferences.js';
 import SosButton from './components/SosButton.jsx';
 import SettingsSheet from './components/SettingsSheet.jsx';
 import AsistenteVirtual from '../components/asistente/AsistenteVirtual.jsx';
+import { detenerLectura } from '../components/ui/lectura.js';
 import { RECOVERY_WINDOW_DAYS } from './config.js';
 import { daysBetween } from './lib/format.js';
 
@@ -109,6 +110,7 @@ export default function PortalLayout() {
   const [anuncio, setAnuncio] = useState('');
   const mainRef = useRef(null);
   useEffect(() => {
+    detenerLectura(); // la lectura en voz alta es de la sección que se deja
     const titulo = TITULOS_PAGINA[location.pathname] || '';
     if (titulo) {
       // Pequeño delay para que el live region detecte el cambio
