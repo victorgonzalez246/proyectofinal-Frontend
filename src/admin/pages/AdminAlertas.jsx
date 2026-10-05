@@ -5,7 +5,7 @@ import { Phone } from 'lucide-react';
 import { adminService } from '../../services/adminService.js';
 import { formatDateTime } from '../../portal/lib/format.js';
 import { useCarga } from '../useCarga.js';
-import { whatsappLink } from '../lib.js';
+import { distintivoAlerta, whatsappLink } from '../lib.js';
 import Estado from '../components/Estado.jsx';
 
 const MOTIVOS_SOS = { dolor: 'Dolor', inflamacion: 'Inflamación', aspecto: 'Cambio de aspecto', duda: 'Duda' };
@@ -29,14 +29,15 @@ function AlertaCard({ alerta, onCambio }) {
   };
 
   const esSos = alerta.tipo === 'sos';
+  const distintivo = distintivoAlerta(alerta);
   return (
     <article className="p-panel a-item">
       <div className="a-item__head">
         <div>
           <p className="p-subtitle">{alerta.paciente?.name || 'Paciente'}</p>
-          <p className="p-small">{formatDateTime(alerta.createdAt)}</p>
+          <p className="p-small">{formatDateTime(alerta.createdAt)}{distintivo.detalle && ` · ${distintivo.detalle}`}</p>
         </div>
-        <span className={esSos ? 'p-chip p-chip--alert' : 'p-chip p-chip--rose'}>{esSos ? 'SOS' : 'Check-in'}</span>
+        <span className={distintivo.chip}>{distintivo.etiqueta}</span>
       </div>
 
       <div className="a-item__meta">
@@ -84,7 +85,7 @@ export default function AdminAlertas() {
     <>
       <header className="p-page-head">
         <h1 className="p-display">Alertas</h1>
-        <p className="p-lead">SOS del portal y check-ins que la regla fija marcó para seguimiento. Cada una ya te llegó por WhatsApp.</p>
+        <p className="p-lead">SOS del portal, check-ins que la regla fija marcó para seguimiento y alertas del chat de WhatsApp (emergencias, avisos de la Enfermera IA y mensajes que la IA no pudo responder). Cada una ya te llegó por WhatsApp.</p>
       </header>
 
       <div className="a-toolbar">

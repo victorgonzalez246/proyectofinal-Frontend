@@ -130,8 +130,26 @@ const cerebroDePrueba = () => {
   delete trigger.webhookId;
   wf.nodes.push({ parameters: { httpMethod: 'POST', path: 'prueba/whatsapp', options: {} }, id: 'b0b0b0b0-0000-4000-a000-000000000001', name: 'WhatsApp (prueba)', type: 'n8n-nodes-base.webhook', typeVersion: 2, position: [-200, 200], webhookId: 'b0b0b0b0-0000-4000-a000-000000000002' });
   wf.connections['WhatsApp (prueba)'] = { main: [[{ node: 'WhatsApp entrante', type: 'main', index: 0 }]] };
+  // Sin Gemini, la Enfermera se simula con lo que devuelve el agente real (returnIntermediateSteps):
+  // para ENFERMERA_DESPIERTA usó despertar_doctora; para los demás números, la IA no respondió.
+  const enfermera = wf.nodes.find((n) => n.name === 'Agente IA 1 · Enfermera Virtual');
+  Object.assign(enfermera, {
+    type: 'n8n-nodes-base.code',
+    typeVersion: 2,
+    parameters: {
+      jsCode: `const p = $('Red de seguridad clínica').first().json.payload;
+if (p.from !== '${ENFERMERA_DESPIERTA}') return [{ json: { error: 'Sin IA en la prueba' } }];
+return [{ json: { output: 'Ya le escribí a la doctora para que te contacte.', intermediateSteps: [{ action: { tool: 'despertar_doctora', toolInput: { motivo: 'Zona morada y dolor que aumenta al día 2' }, toolCallId: 'call_1', type: 'tool_call' }, observation: '{"messages":[{"id":"wamid.x"}]}' }] } }];`,
+    },
+  });
+  for (const tipos of Object.values(wf.connections)) {
+    for (const [tipo, salidas] of Object.entries(tipos)) {
+      if (tipo !== 'main') tipos[tipo] = salidas.map((s) => s.filter((c) => c.node !== enfermera.name));
+    }
+  }
   return wf;
 };
+const ENFERMERA_DESPIERTA = '50686665566';
 const mensajeWhatsapp = (from, texto) => ({
   object: 'whatsapp_business_account',
   entry: [{ changes: [{ value: { contacts: [{ profile: { name: 'Prueba' } }], messages: [{ from, id: `wamid.in.${Date.now()}`, type: 'text', text: { body: texto } }] } }] }],
@@ -202,7 +220,7 @@ try {
 
   // ── Flujo API ──
   console.log('\n═══ Flujo API: contrato completo ═══');
-  await probarContrato({ api: API, secreto: SECRET, receptor, ok });
+  const { sesionDoc } = await probarContrato({ api: API, secreto: SECRET, receptor, ok });
 
   console.log('\nParticularidades de n8n');
   const preflight = await fetch(`${API}/admin/pacientes`, {
@@ -260,6 +278,28 @@ try {
   ok(Boolean(await esperarWhatsapp((m) => m.type === 'text' && m.to === '50686665544' && m.text.body.includes('nota de voz'))), 'Nota de voz: si Gemini no responde, se le pide amablemente que lo escriba');
   await adjunto('50686665555', { type: 'image', image: { id: 'media.no-existe' } });
   ok(Boolean(await esperarWhatsapp((m) => m.type === 'text' && m.to === '50686665555' && m.text.body.includes('No pude abrir tu foto'))), 'Foto: si Meta no la entrega, respuesta amable');
+
+  console.log('\nAlertas en el panel de la doctora (cerebro → POST /n8n/alerta → API)');
+  const alertaEnPanel = async (cumple) => {
+    for (let i = 0; i < 40; i += 1) {
+      const r = await call('GET', '/admin/alertas', { token: sesionDoc });
+      const a = Array.isArray(r.data) ? r.data.find((x) => x.tipo === 'whatsapp' && cumple(x)) : null;
+      if (a) return a;
+      await new Promise((res) => setTimeout(res, 500));
+    }
+    return null;
+  };
+  const termina = (tel) => (a) => String(a.paciente?.phone || '').replace(/\D/g, '').endsWith(tel);
+  const deEmergencia = await alertaEnPanel((a) => a.subtipo === 'emergencia' && termina('86665544')(a));
+  ok(Boolean(deEmergencia) && deEmergencia.paciente?.id && deEmergencia.nota.includes('no puedo respirar'), 'Emergencia del chat: la alerta queda en el panel, enlazada a la paciente');
+  const sinRespuesta = await alertaEnPanel((a) => a.subtipo === 'ia_sin_respuesta' && termina('86665522')(a));
+  ok(Boolean(sinRespuesta) && !sinRespuesta.paciente?.id && sinRespuesta.paciente?.name === 'Prueba', 'IA sin respuesta: la alerta queda en el panel con nombre y teléfono de WhatsApp (sin ficha)');
+  await chat(ENFERMERA_DESPIERTA, 'Tengo la zona morada y me duele cada vez más');
+  ok(Boolean(await esperarWhatsapp((m) => m.type === 'text' && m.to === ENFERMERA_DESPIERTA && m.text.body.includes('Ya le escribí'))), 'despertar_doctora: la paciente recibe la respuesta de la Enfermera');
+  const deEnfermera = await alertaEnPanel((a) => a.subtipo === 'enfermera' && termina(ENFERMERA_DESPIERTA.slice(-8))(a));
+  ok(deEnfermera?.motivo === 'Zona morada y dolor que aumenta al día 2' && deEnfermera.estado === 'abierta', 'despertar_doctora: la alerta queda en el panel con el motivo que escribió la IA');
+  const atendidaWa = deEnfermera && await call('PATCH', `/admin/alertas?id=${deEnfermera.id}`, { token: sesionDoc, body: { estado: 'atendida', respuesta: 'La llamé' } });
+  ok(atendidaWa?.status === 200 && atendidaWa.data?.estado === 'atendida', 'La doctora marca atendida la alerta de WhatsApp');
 
   console.log('\nFallas');
   lecturasQueFallan = 3; // Google Sheets no responde en los 3 intentos de "Leer hojas"

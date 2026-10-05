@@ -212,7 +212,7 @@
         -1320
       ],
       "retryOnFail": true,
-      "maxTries": 2,
+      "maxTries": 3,
       "waitBetweenTries": 2000,
       "onError": "continueRegularOutput",
       "credentials": {

@@ -251,3 +251,72 @@ describe('núcleo: facturas', () => {
     expect(ingresosPorMes.at(-1)).toMatchObject({ mes: hoy.slice(0, 7), total: 339000 });
   });
 });
+
+describe('núcleo: alertas del chat de WhatsApp (POST /n8n/alerta)', () => {
+  const N8N = { 'x-n8n-secret': 'n8n-de-test' };
+  const alerta = (db, body, headers = N8N) => llamar(db, 'POST', '/n8n/alerta', { body, headers });
+
+  it('exige el secreto de n8n', () => {
+    const db = nuevaDb();
+    expect(alerta(db, { telefono: '50688880001', tipo: 'emergencia', motivo: 'x' }, {}).status).toBe(401);
+    expect(alerta(db, { telefono: '50688880001', tipo: 'emergencia', motivo: 'x' }, { 'x-n8n-secret': 'otro' }).status).toBe(401);
+    expect(db.sosAlerts).toEqual([]);
+  });
+
+  it('valida teléfono, tipo y motivo, y no guarda nada si faltan', () => {
+    const db = nuevaDb();
+    expect(alerta(db, { telefono: '123', tipo: 'emergencia', motivo: 'Dolor' }).status).toBe(400);
+    expect(alerta(db, { telefono: '50688880001', tipo: 'inventado', motivo: 'Dolor' }).status).toBe(400);
+    expect(alerta(db, { telefono: '50688880001', tipo: 'enfermera', motivo: '   ' }).status).toBe(400);
+    expect(db.sosAlerts).toEqual([]);
+  });
+
+  it('una paciente registrada (WhatsApp con 506) queda enlazada a su ficha y se ve en Alertas y Hoy', () => {
+    const db = nuevaDb();
+    const r = alerta(db, { telefono: '50688880001', nombre: 'Vale', tipo: 'enfermera', motivo: 'Hinchazón que aumenta al día 3', nota: 'Escribió: me siento muy hinchada', origen: 'whatsapp' });
+    expect(r.status).toBe(201);
+    expect(r.body).toMatchObject({ ok: true, pacienteRegistrada: true });
+    expect(r.eventos).toEqual([]); // el WhatsApp a la doctora ya lo envió el cerebro
+    expect(db.sosAlerts[0]).toMatchObject({ userId: 'pac', origen: 'whatsapp', tipoAlerta: 'enfermera', status: 'abierta', telefono: '+506 8888 0001' });
+    const doctora = entrar(db, '8888 8888').body.token;
+    const [a] = llamar(db, 'GET', '/admin/alertas?estado=abierta', { token: doctora }).body;
+    expect(a).toMatchObject({
+      id: r.body.id, tipo: 'whatsapp', origen: 'whatsapp', subtipo: 'enfermera', estado: 'abierta',
+      motivo: 'Hinchazón que aumenta al día 3', nota: 'Escribió: me siento muy hinchada',
+      paciente: { id: 'pac', name: 'Paciente Uno', phone: '+506 8888 0001' },
+    });
+    const hoy = llamar(db, 'GET', '/admin/hoy', { token: doctora }).body;
+    expect(hoy.alertasAbiertas).toBe(1);
+    expect(hoy.alertas[0].id).toBe(r.body.id);
+  });
+
+  it('un número sin ficha se guarda con su nombre y teléfono, y la doctora la marca atendida', () => {
+    const db = nuevaDb();
+    const r = alerta(db, { telefono: '+506 7011-2233', nombre: 'Andrea', tipo: 'ia_sin_respuesta', motivo: 'La IA no pudo responder', nota: 'Hola, ¿tienen campo el viernes?' });
+    expect(r.status).toBe(201);
+    expect(r.body.pacienteRegistrada).toBe(false);
+    expect(db.sosAlerts[0].userId).toBeUndefined();
+    const doctora = entrar(db, '8888 8888').body.token;
+    const [a] = llamar(db, 'GET', '/admin/alertas', { token: doctora }).body;
+    expect(a.paciente).toEqual({ name: 'Andrea', phone: '+506 7011-2233' });
+    expect(a.subtipo).toBe('ia_sin_respuesta');
+    const atendida = llamar(db, 'PATCH', `/admin/alertas?id=${r.body.id}`, { token: doctora, body: { estado: 'atendida', respuesta: 'Le escribí' } });
+    expect(atendida.status).toBe(200);
+    expect(atendida.body).toMatchObject({ estado: 'atendida', respuesta: 'Le escribí', tipo: 'whatsapp' });
+    expect(llamar(db, 'GET', '/admin/hoy', { token: doctora }).body.alertasAbiertas).toBe(0);
+  });
+
+  it('limita longitudes y no confunde las alertas de WhatsApp con los SOS del portal', () => {
+    const db = nuevaDb();
+    alerta(db, { telefono: '70112233', nombre: 'N'.repeat(500), tipo: 'emergencia', motivo: 'M'.repeat(2000), nota: 'x'.repeat(5000) });
+    const guardada = db.sosAlerts[0];
+    expect(guardada.nombre).toHaveLength(80);
+    expect(guardada.reason).toHaveLength(300);
+    expect(guardada.note).toHaveLength(1000);
+    const paciente = entrar(db, '8888 0001').body.token;
+    llamar(db, 'POST', '/me/sos', { token: paciente, body: { reason: 'dolor', note: 'Duele' } });
+    const doctora = entrar(db, '8888 8888').body.token;
+    const tipos = llamar(db, 'GET', '/admin/alertas', { token: doctora }).body.map((a) => a.tipo).sort();
+    expect(tipos).toEqual(['sos', 'whatsapp']);
+  });
+});

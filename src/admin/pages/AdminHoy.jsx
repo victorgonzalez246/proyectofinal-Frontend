@@ -3,6 +3,7 @@ import { adminService } from '../../services/adminService.js';
 import { formatDate, formatDateTime, greeting } from '../../portal/lib/format.js';
 import { useCarga } from '../useCarga.js';
 import Estado from '../components/Estado.jsx';
+import { distintivoAlerta } from '../lib.js';
 
 export default function AdminHoy() {
   const { data, loading, error, reload } = useCarga(adminService.getHoy);
@@ -74,17 +75,20 @@ export default function AdminHoy() {
                 <p className="p-empty">Ninguna paciente necesita atención ahora.</p>
               ) : (
                 <div className="a-list">
-                  {data.alertas.map((alerta) => (
-                    <article key={alerta.id} className="p-panel a-item">
-                      <div className="a-item__head">
-                        <p className="p-subtitle">{alerta.paciente?.name || 'Paciente'}</p>
-                        <span className={alerta.tipo === 'sos' ? 'p-chip p-chip--alert' : 'p-chip p-chip--rose'}>
-                          {alerta.tipo === 'sos' ? 'SOS' : 'Check-in'}
-                        </span>
-                      </div>
-                      <p className="p-small">{alerta.motivo} · {formatDateTime(alerta.createdAt)}</p>
-                    </article>
-                  ))}
+                  {data.alertas.map((alerta) => {
+                    const distintivo = distintivoAlerta(alerta);
+                    return (
+                      <article key={alerta.id} className="p-panel a-item">
+                        <div className="a-item__head">
+                          <p className="p-subtitle">{alerta.paciente?.name || 'Paciente'}</p>
+                          <span className={distintivo.chip}>{distintivo.etiqueta}</span>
+                        </div>
+                        <p className="p-small">
+                          {distintivo.detalle && `${distintivo.detalle} · `}{alerta.motivo} · {formatDateTime(alerta.createdAt)}
+                        </p>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </section>

@@ -87,6 +87,7 @@ export const TRAMOS_ANTICIPACION = [
   { desde: 15, hasta: Infinity, etiqueta: '15+ días' },
 ];
 const MOTIVOS_ALERTA = { dolor: 'Dolor fuerte', inflamacion: 'Inflamación', aspecto: 'Aspecto', duda: 'Duda urgente' };
+const SUBTIPOS_WHATSAPP_METRICAS = { emergencia: 'emergencia', enfermera: 'Enfermera IA', ia_sin_respuesta: 'sin respuesta de la IA' };
 
 export function analiticaOperativa(citas = [], pacientes = [], alertas = [], { meses = 6, hoy = new Date() } = {}) {
   const rango = ultimosMeses(meses, hoy);
@@ -147,7 +148,9 @@ export function analiticaOperativa(citas = [], pacientes = [], alertas = [], { m
   const atendidasAlertas = alertas.filter((a) => a.estado === 'atendida').length;
   const motivos = new Map();
   for (const a of alertas) {
-    const motivo = a.tipo === 'sos' ? MOTIVOS_ALERTA[a.motivo] || 'Otro' : 'Check-in con molestias';
+    const motivo = a.tipo === 'sos'
+      ? MOTIVOS_ALERTA[a.motivo] || 'Otro'
+      : a.tipo === 'whatsapp' ? `WhatsApp: ${SUBTIPOS_WHATSAPP_METRICAS[a.subtipo] || 'alerta'}` : 'Check-in con molestias';
     motivos.set(motivo, (motivos.get(motivo) || 0) + 1);
   }
 

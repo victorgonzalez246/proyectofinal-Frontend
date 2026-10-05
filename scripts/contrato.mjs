@@ -181,6 +181,25 @@ export async function probarContrato({ api, secreto, receptor, ok }) {
   const conResumen = await call('GET', '/admin/citas?estado=confirmada', { token: sesionDoc });
   ok(resumen.status === 200 && conResumen.data?.find?.((c) => c.id === reservada.data?.id)?.resumen?.puntos?.length === 3, 'El resumen de 3 puntos queda en el panel');
 
+  console.log('\nAlertas del chat de WhatsApp (POST /n8n/alerta)');
+  const alertaWa = { telefono: '50688880001', nombre: 'Valeria', tipo: 'enfermera', motivo: 'Hinchazón que aumenta al día 3', nota: 'Escribió: me siento muy hinchada', origen: 'whatsapp' };
+  ok((await call('POST', '/n8n/alerta', { body: alertaWa })).status === 401, 'Registrar una alerta exige el secreto de n8n');
+  ok((await call('POST', '/n8n/alerta', { secret: secreto, body: { ...alertaWa, tipo: 'inventado' } })).status === 400, 'Una alerta con un tipo desconocido se rechaza');
+  const deEnfermera = await call('POST', '/n8n/alerta', { secret: secreto, body: alertaWa });
+  ok(deEnfermera.status === 201 && deEnfermera.data?.pacienteRegistrada === true, 'La alerta de la Enfermera IA se registra y se enlaza con la paciente por su WhatsApp');
+  const sinFicha = await call('POST', '/n8n/alerta', { secret: secreto, body: { telefono: '50670112233', nombre: 'Andrea', tipo: 'ia_sin_respuesta', motivo: 'La IA no pudo responder', nota: 'Hola', origen: 'whatsapp' } });
+  ok(sinFicha.status === 201 && sinFicha.data?.pacienteRegistrada === false, 'Un número sin ficha también queda registrado');
+  const bandejaWa = await call('GET', '/admin/alertas?estado=abierta', { token: sesionDoc });
+  const enBandeja = (id) => bandejaWa.data?.find?.((a) => a.id === id);
+  ok(enBandeja(deEnfermera.data?.id)?.tipo === 'whatsapp' && enBandeja(deEnfermera.data?.id)?.subtipo === 'enfermera' && enBandeja(deEnfermera.data?.id)?.paciente?.id === 'pac-demo-1',
+    'La doctora ve la alerta de WhatsApp en su bandeja, con su ficha');
+  ok(enBandeja(sinFicha.data?.id)?.paciente?.name === 'Andrea' && enBandeja(sinFicha.data?.id)?.paciente?.phone === '50670112233' && !enBandeja(sinFicha.data?.id)?.paciente?.id,
+    'La alerta sin ficha muestra nombre y teléfono de WhatsApp');
+  const hoyWa = await call('GET', '/admin/hoy', { token: sesionDoc });
+  ok(hoyWa.data?.alertas?.some?.((a) => a.id === deEnfermera.data?.id), 'Las alertas de WhatsApp aparecen en el resumen de Hoy');
+  const atendidaWa = await call('PATCH', `/admin/alertas?id=${sinFicha.data?.id}`, { token: sesionDoc, body: { estado: 'atendida', respuesta: 'Le escribí por WhatsApp' } });
+  ok(atendidaWa.status === 200 && atendidaWa.data?.estado === 'atendida', 'La doctora marca atendida una alerta de WhatsApp');
+
   console.log('\nFacturas');
   const nuevaFactura = {
     idPaciente: 'pac-demo-1',
